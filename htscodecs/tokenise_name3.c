@@ -576,6 +576,9 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
     size_t i;
     trie_t *t;
     int from = -1, p3 = -1;
+    *exact = 0;
+    *fixed_len = 0;
+    *is_fixed = 0;
 
     // Horrid hack for the encoder only.
     // We optimise per known name format here.
