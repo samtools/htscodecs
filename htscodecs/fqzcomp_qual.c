@@ -277,8 +277,7 @@ typedef struct {
     unsigned int qtot, qlen;
 } fqz_state;
 
-
-void dump_table(unsigned int *tab, int size, char *name) {
+static void dump_table(unsigned int *tab, int size, char *name) {
     int i, last = -99, run = 0;
     fprintf(stderr, "\t%s\t{", name);
     for (i = 0; i < size; i++) {
@@ -313,7 +312,7 @@ void dump_table(unsigned int *tab, int size, char *name) {
     fprintf(stderr, "}\n");
 }
 
-void dump_map(unsigned int *map, int size, char *name) {
+static void dump_map(unsigned int *map, int size, char *name) {
     int i, c = 0;
     fprintf(stderr, "\t%s\t{", name);
     for (i = 0; i < size; i++)
@@ -322,7 +321,8 @@ void dump_map(unsigned int *map, int size, char *name) {
     fprintf(stderr, "}\n");
 }
 
-void dump_params(fqz_gparams *gp) {
+#pragma GCC diagnostic ignored "-Wunused-function"
+static void dump_params(fqz_gparams *gp) {
     fprintf(stderr, "Global params = {\n");
     fprintf(stderr, "\tvers\t%d\n", gp->vers);
     fprintf(stderr, "\tgflags\t0x%02x\n", gp->gflags);
@@ -368,7 +368,7 @@ typedef struct {
     SIMPLE_MODEL(2,_)     dup;
 } fqz_model;
 
-int fqz_create_models(fqz_model *m, fqz_gparams *gp) {
+static int fqz_create_models(fqz_model *m, fqz_gparams *gp) {
     int i;
 
     if (!(m->qual = malloc(sizeof(*m->qual) * CTX_SIZE)))
@@ -387,7 +387,7 @@ int fqz_create_models(fqz_model *m, fqz_gparams *gp) {
     return 0;
 }
 
-void fqz_destroy_models(fqz_model *m) {
+static void fqz_destroy_models(fqz_model *m) {
     free(m->qual);
 }
 
@@ -757,6 +757,7 @@ int fqz_store_parameters1(fqz_param *pm, unsigned char *comp) {
     return comp_idx;
 }
 
+static 
 int fqz_store_parameters(fqz_gparams *gp, unsigned char *comp) {
     int comp_idx = 0;
     comp[comp_idx++] = gp->vers; // Format number
@@ -974,10 +975,14 @@ int fqz_pick_parameters(fqz_gparams *gp,
     return 0;
 }
 
-void fqz_free_parameters(fqz_gparams *gp) {
+static void fqz_free_parameters(fqz_gparams *gp) {
     if (gp && gp->p) free(gp->p);
 }
 
+/*
+ * Test main still kept here as it's a bit more advanced than the one
+ * we put in the tests directory.  TODO: replace that version with this.
+ */
 #ifdef TEST_MAIN
 static uint64_t manual_strats[10] = {0};
 static int manual_nstrat = 0;
@@ -1123,6 +1128,7 @@ int fqz_manual_parameters(fqz_gparams *gp,
 }
 #endif
 
+static
 unsigned char *compress_block_fqz2f(int vers,
 				    int level,
 				    fqz_slice *s,
@@ -1416,6 +1422,7 @@ int fqz_read_parameters1(fqz_param *pm, unsigned char *in, size_t in_size) {
     return in_idx;
 }
 
+static
 int fqz_read_parameters(fqz_gparams *gp, unsigned char *in, size_t in_size) {
     int in_idx = 0;
     int i;
@@ -1471,6 +1478,7 @@ int fqz_read_parameters(fqz_gparams *gp, unsigned char *in, size_t in_size) {
     return -1;
 }
 
+static
 unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 				      unsigned char *in,
 				      size_t in_size,

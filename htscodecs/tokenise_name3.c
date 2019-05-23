@@ -104,6 +104,7 @@
 #include "arith_dynamic.h"
 #include "rANS_static4x16.h"
 #include "tokenise_name3.h"
+#include "varint.h"
 
 // 128 is insufficient for SAM names (max 256 bytes) as
 // we may alternate a0a0a0a0a0 etc.  However if we fail,
@@ -162,7 +163,7 @@ typedef struct {
     int max_names;
 } name_context;
 
-name_context *create_context(int max_names) {
+static name_context *create_context(int max_names) {
     if (max_names <= 0)
 	return NULL;
 
@@ -189,8 +190,7 @@ name_context *create_context(int max_names) {
     return ctx;
 }
 
-void free_trie(trie_t *t);
-void free_context(name_context *ctx) {
+static void free_context(name_context *ctx) {
     if (!ctx)
 	return;
 
@@ -260,40 +260,6 @@ static int append_uint32_var(char *cp, uint32_t i) {
  x1:*cp++ = i / 10        + '0', i %= 10;
  x0:*cp++ = i             + '0';
 
-    return cp-op;
-}
-
-//-----------------------------------------------------------------------------
-// Simple variable sized unsigned integers
-// FIXME: almost identical to u7tou32 and u32tou7.
-// Put these in some common location
-static int i7put(uint8_t *cp, uint64_t i) {
-    uint8_t *op = cp;
-
-    do {
-	*cp++ = (i&0x7f) + ((i>=0x80)<<7);
-	i >>= 7;
-    } while (i);
-
-    return cp-op;
-}
-
-static int i7get(uint8_t *cp, uint64_t *i, uint8_t *cp_end) {
-    uint8_t *op = cp, c;
-    uint32_t j = 0, s = 0;
-
-    if (cp >= cp_end) {
-	*i = 0;
-	return 0;
-    }
-
-    do {
-	c = *cp++;
-	j |= (c & 0x7f) << s;
-	s += 7;
-    } while ((c & 0x80) && cp < cp_end);
-
-    *i = j;
     return cp-op;
 }
 
@@ -486,22 +452,11 @@ static int encode_token_diff(name_context *ctx, uint32_t val) {
 typedef struct trie {
     char c;
     int count;
-    //struct trie *next[128];
     struct trie *next, *sibling;
     int n; // Nth line
 } trie_t;
 
-//static trie_t *t_head = NULL;
-
-void free_trie(trie_t *t) {
-    trie_t *x, *n;
-    for (x = t->next; x; x = n) {
-	n = x->sibling;
-	free_trie(x);
-    }
-    free(t);
-}
-
+static
 int build_trie(name_context *ctx, char *data, size_t len, int n) {
     int nlines = 0;
     size_t i;
@@ -615,6 +570,7 @@ void dump_trie(trie_t *t, int depth) {
 }
 #endif
 
+static
 int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, int *is_fixed, int *fixed_len) {
     int nlines = 0;
     size_t i;
@@ -1181,7 +1137,7 @@ static int arith_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *ou
     if (arith_compress_to(in, in_len, out+6, &olen, method) == NULL)
 	return -1;
 
-    nb = i7put(out, olen);
+    nb = u32tou7(out, olen);
     memmove(out+nb, out+6, olen);
     *out_len = olen+nb;
 
@@ -1193,8 +1149,8 @@ static int arith_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *ou
 static int64_t arith_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
     unsigned int olen = *out_len;
 
-    uint64_t clen;
-    int nb = i7get(in, &clen, in+in_len);
+    uint32_t clen;
+    int nb = u7tou32(in, in+in_len, &clen);
     //fprintf(stderr, "Arith decode %x\n", in[nb]);
     if (arith_uncompress_to(in+nb, in_len-nb, out, &olen) == NULL)
 	return -1;
@@ -1207,7 +1163,7 @@ static int rans_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out
     if (rans_compress_to_4x16(in, in_len, out+6, &olen, method) == NULL)
 	return -1;
 
-    nb = i7put(out, olen);
+    nb = u32tou7(out, olen);
     memmove(out+nb, out+6, olen);
     *out_len = olen+nb;
 
@@ -1219,8 +1175,8 @@ static int rans_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out
 static int64_t rans_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
     unsigned int olen = *out_len;
 
-    uint64_t clen;
-    int nb = i7get(in, &clen, in+in_len);
+    uint32_t clen;
+    int nb = u7tou32(in, in+in_len, &clen);
     //fprintf(stderr, "Arith decode %x\n", in[nb]);
     if (rans_uncompress_to_4x16(in+nb, in_len-nb, out, &olen) == NULL)
 	return -1;
@@ -1281,21 +1237,21 @@ static int compress(uint8_t *in, uint64_t in_len, int level, int use_arith,
 }
 
 static uint64_t uncompressed_size(uint8_t *in, uint64_t in_len) {
-    uint64_t clen, ulen;
+    uint32_t clen, ulen;
 
     // in[0] in part of buffer written by us
-    int nb = i7get(in, &clen, in+in_len);
+    int nb = u7tou32(in, in+in_len, &clen);
 
     // in[nb] is part of buffer written to by arith_dynamic.
-    i7get(in+nb+1, &ulen, in+in_len);
+    u7tou32(in+nb+1, in+in_len, &ulen);
 
     return ulen;
 }
 
 static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
 		      uint8_t *out, uint64_t *out_len) {
-    uint64_t clen;
-    i7get(in, &clen, in+in_len);
+    uint32_t clen;
+    u7tou32(in, in+in_len, &clen);
     return use_arith
 	? arith_decode(in, in_len, out, out_len)
 	: rans_decode(in, in_len, out, out_len);
@@ -1654,107 +1610,3 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
     free_context(ctx);
     return NULL;
 }
-
-
-
-#ifdef TEST_TOKENISER
-//-----------------------------------------------------------------------------
-// main() implementation for testing
-
-// Large enough for whole file for now.
-#ifndef BLK_SIZE
-#define BLK_SIZE 1*1024*1024
-#endif
-static char blk[BLK_SIZE*2]; // temporary fix for decoder, which needs more space
-
-static int encode(int argc, char **argv) {
-    FILE *fp;
-    int len, i, j, level = 9;
-    name_context *ctx;
-    int use_arith = 1;
-
-    if (argc > 1 && argv[1][0] == '-') {
-	level = atoi(argv[1]+1);
-	if (level > 10) {
-	    level -= 10;
-	    use_arith = 0;
-	}
-	argc -= 1;
-	argv++;
-    }
-
-    if (argc > 1) {
-	fp = fopen(argv[1], "r");
-	if (!fp) {
-	    perror(argv[1]);
-	    return 1;
-	}
-    } else {
-	fp = stdin;
-    }
-
-    int blk_offset = 0;
-    int blk_num = 0;
-    for (;;) {
-	int last_start = 0;
-
-	len = fread(blk+blk_offset, 1, BLK_SIZE-blk_offset, fp);
-	if (len <= 0)
-	    break;
-	len += blk_offset;
-
-	int out_len;
-	uint8_t *out = encode_names(blk, len, level, use_arith, &out_len, &last_start);
-	if (write(1, &out_len, 4) < 4) exit(1);
-	if (write(1, out, out_len) < out_len) exit(1);   // encoded data
-	free(out);
-
-	if (len > last_start)
-	    memmove(blk, &blk[last_start], len - last_start);
-	blk_offset = len - last_start;
-	blk_num++;
-    }
-
-    if (fclose(fp) < 0) {
-	perror("closing file");
-	return 1;
-    }
-
-    return 0;
-}
-
-static int decode(int argc, char **argv) {
-    uint32_t in_sz, out_sz;
-    while (fread(&in_sz, 1, 4, stdin) == 4) {
-	uint8_t *in = malloc(in_sz), *out;
-	if (!in)
-	    return -1;
-
-	if (fread(in, 1, in_sz, stdin) != in_sz) {
-	    free(in);
-	    return -1;
-	}
-
-	if ((out = decode_names(in, in_sz, &out_sz)) == NULL) {
-	    free(in);
-	    return -1;
-	}
-
-	if (write(1, out, out_sz) < out_sz) exit(1);
-
-	free(in);
-	free(out);
-    }
-
-    return 0;
-}
-
-int main(int argc, char **argv) {
-
-    if (argc > 1 && strcmp(argv[1], "-d") == 0)
-	return decode(argc-1, argv+1);
-    else
-	return encode(argc, argv);
-}
-
-#endif // TEST_TOKENISER

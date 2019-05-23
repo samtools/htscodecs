@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 Genome Research Ltd.
+ * Copyright (c) 2017, 2019 Genome Research Ltd.
  * Author(s): James Bonfield
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -34,6 +34,10 @@
 #ifndef _TOKENISE_NAME3_H_
 #define _TOKENISE_NAME3_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Converts a line or \0 separated block of reading names to a compressed buffer.
  * The code can only encode whole lines and will not attempt a partial line.
@@ -53,5 +57,9 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
  * Returns NULL on failure.
  */
 uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _TOKENISE_NAME3_H_ */
