@@ -170,9 +170,11 @@ static int read_array(unsigned char *in, size_t in_size, unsigned int *array, in
 		return -1;
 	    int copy = in[++i];
 	    z += run * copy;
-	    while (copy-- && z < size)
+	    while (copy-- && z < size && j < 1024)
 		R[j++] = run;
 	}
+	if (j >= 1024)
+	    return -1;
 	last = run;
     }
     nb = i;

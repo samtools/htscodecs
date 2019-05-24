@@ -1199,12 +1199,14 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	return NULL;
 
     if (*in & X_4) {
-	unsigned int ulen, olen, clen4[4];
-	int c_meta_len = 1, i, j;
+	unsigned int ulen, olen, clen4[4], c_meta_len = 1;
+	int i, j;
 
 	// Decode lengths
 	c_meta_len += u7tou32(in+c_meta_len, in_end, &ulen);
 	if (!out) {
+	    if (ulen >= INT_MAX)
+		return NULL;
 	    if (!(out_free = out = malloc(ulen)))
 		return NULL;
 	    *out_size = ulen;
@@ -1214,8 +1216,13 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	    return NULL;
 	}
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 4; i++) {
 	    c_meta_len += u7tou32(in+c_meta_len, in_end, &clen4[i]);
+	    if (c_meta_len > in_size || clen4[i] > in_size) {
+		free(out_free);
+		return NULL;
+	    }
+	}
 
 	//fprintf(stderr, "    x4 meta %d\n", c_meta_len); //c-size
 

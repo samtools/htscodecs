@@ -267,6 +267,15 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
     if (out_sz >= INT_MAX)
 	return NULL; // protect against some overflow cases
 
+    // For speeding up the fuzzer only.
+    // Small input can lead to large uncompressed data.
+    // We reject this as it just slows things up instead of testing more code
+    // paths (once we've verified a few times for large data).
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    if (out_sz > 100000)
+	return NULL;
+#endif
+
     out_buf = malloc(out_sz);
     if (!out_buf)
 	return NULL;

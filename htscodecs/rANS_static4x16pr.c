@@ -1611,6 +1611,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 
     /* Load in the static tables */
     unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    unsigned char *c_freq = NULL;
     int i, j = -999;
     unsigned int x, y;
 
@@ -1663,7 +1664,6 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 
     // compressed header? If so uncompress it
     unsigned char *tab_end = NULL;
-    unsigned char *c_freq = NULL;
     unsigned char *c_freq_end = cp_end;
     if (*cp++ == 1) {
 	uint32_t u_freq_sz, c_freq_sz;
@@ -1726,8 +1726,8 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 
     if (tab_end)
 	cp = tab_end;
-    if (c_freq)
-	free(c_freq);
+    free(c_freq);
+    c_freq = NULL;
 
     if (cp+16 > cp_end)
 	goto err;
@@ -1816,6 +1816,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     free(sfb_);
 #endif
     free(out_free);
+    free(c_freq);
 
     return NULL;
 }
@@ -2014,8 +2015,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	return NULL;
 
     if (*in & X_4) {
-	unsigned int ulen, olen, clen4[4];
-	int c_meta_len = 1, i, j;
+	unsigned int ulen, olen, clen4[4], c_meta_len = 1;
+	int i, j;
 
 	// Decode lengths
 	c_meta_len += u7tou32(in+c_meta_len, in_end, &ulen);
@@ -2031,8 +2032,13 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    return NULL;
 	}
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 4; i++) {
 	    c_meta_len += u7tou32(in+c_meta_len, in_end, &clen4[i]);
+	    if (c_meta_len > in_size || clen4[i] > in_size) {
+		free(out_free);
+		return NULL;
+	    }
+	}
 
 	//fprintf(stderr, "    x4 meta %d\n", c_meta_len); //c-size
 

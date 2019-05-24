@@ -1018,7 +1018,8 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 	    break;
 
 	case N_ALPHA:
-	    len2 = decode_token_alpha(ctx, ntok, &name[len], name_len - len);
+	    if ((len2 = decode_token_alpha(ctx, ntok, &name[len], name_len - len)) < 0)
+		return -1;
 	    //fprintf(stderr, "Tok %d ALPHA %.*s\n", ntok, len2, &name[len]);
 	    ctx->lc[cnum].last_token_type[ntok] = N_ALPHA;
 	    ctx->lc[cnum].last_token_str [ntok] = len;
