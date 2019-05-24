@@ -1218,7 +1218,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 
 	for (i = 0; i < 4; i++) {
 	    c_meta_len += u7tou32(in+c_meta_len, in_end, &clen4[i]);
-	    if (c_meta_len > in_size || clen4[i] > in_size) {
+	    if (c_meta_len > in_size || clen4[i] > in_size || clen4[i] < 1) {
 		free(out_free);
 		return NULL;
 	    }
