@@ -61,6 +61,9 @@
 #include <string.h>
 #include <limits.h>
 #include <sys/time.h>
+#ifndef NO_THREADS
+#include <pthread.h>
+#endif
 
 #include "rANS_static.h"
 
@@ -636,6 +639,48 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
     return out_buf;
 }
 
+#ifndef NO_THREADS
+/*
+ * Thread local storage per thread in the pool.
+ * This avoids needing to memset/calloc D and syms in the decoder,
+ * which can be speed things this decoder up a little (~10%).
+ */
+static pthread_once_t rans_once = PTHREAD_ONCE_INIT;
+static pthread_key_t rans_key;
+
+typedef struct {
+    ari_decoder *D;
+    RansDecSymbol32 (*syms)[256];
+} thread_data;
+
+static void rans_tb_free(void *vp) {
+    thread_data *tb = (thread_data *)vp;
+    if (!tb)
+	return;
+    free(tb->D);
+    free(tb->syms);
+    free(tb);
+}
+
+static thread_data *rans_tb_alloc(void) {
+    thread_data *tb = malloc(sizeof(*tb));
+    if (!tb)
+	return NULL;
+    tb->D = calloc(256, sizeof(*tb->D));
+    tb->syms = calloc(256, sizeof(*tb->syms));
+    if (!tb->D || !tb->syms) {
+	rans_tb_free(tb);
+	return NULL;
+    }
+
+    return tb;
+}
+
+static void rans_tls_init(void) {
+    pthread_key_create(&rans_key, rans_tb_free);
+}
+#endif
+
 static
 unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 				  unsigned int *out_size) {
@@ -647,13 +692,26 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     unsigned int out_sz, in_sz;
     char *out_buf = NULL;
     // D[] is 1Mb and syms[][] is 0.5Mb.
+#ifndef NO_THREADS
+    pthread_once(&rans_once, rans_tls_init);
+    thread_data *tb = pthread_getspecific(rans_key);
+    if (!tb) {
+	if (!(tb = rans_tb_alloc()))
+	    return NULL;
+	pthread_setspecific(rans_key, tb);
+    }
+    ari_decoder *const D = tb->D;
+    RansDecSymbol32 (*const syms)[256] = tb->syms;
+#else
 #ifdef USE_HEAP
     //ari_decoder *const D = malloc(256 * sizeof(*D));
     ari_decoder *const D = calloc(256, sizeof(*D));
     RansDecSymbol32 (*const syms)[256] = malloc(256 * sizeof(*syms));
+    for (i = 1; i < 256; i++) memset(&syms[i][0], 0, sizeof(syms[0][0]));
 #else
     ari_decoder D[256] = {{{0}}}; //256*4k    => 1.0Mb
     RansDecSymbol32 syms[256][256+6] = {{{0}}}; //256*262*8 => 0.5Mb
+#endif
 #endif
     int16_t map[256], map_i = 0;
     
@@ -682,7 +740,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 	return NULL;
 #endif
 
-#ifdef USE_HEAP
+#if defined(USE_HEAP) && !defined(NO_THREADS)
     if (!D || !syms) goto cleanup;
     /* These memsets prevent illegal memory access in syms due to
        broken compressed data.  As D is calloc'd, all illegal transitions
@@ -862,7 +920,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     *out_size = out_sz;
 
  cleanup:
-#ifdef USE_HEAP
+#if defined(USE_HEAP) && !defined(NO_THREADS)
     if (D)
         free(D);
 
