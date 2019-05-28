@@ -31,11 +31,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef __APPLE__
-// MacOS X default stack size for pthreads is 512K. PUNY!
-// Unfortunately it's a small (3% ish) performance hit, so
-// to squeeze the most out of things we try to use the stack
-// where possible.
+#if defined(NO_THREADS) && defined(__APPLE__)
+// When pthreads is available, we use a single malloc, otherwise we'll
+// (normally) use the stack instead.
+//
+// However the MacOS X default stack size can be tiny (512K), albeit
+// I think only when threading?  We request malloc/free for the large
+// local arrays instead to avoid this, but it does have a performance hit.
 #define USE_HEAP
 #endif
 
@@ -740,7 +742,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 	return NULL;
 #endif
 
-#if defined(USE_HEAP) && !defined(NO_THREADS)
+#if defined(USE_HEAP)
     if (!D || !syms) goto cleanup;
     /* These memsets prevent illegal memory access in syms due to
        broken compressed data.  As D is calloc'd, all illegal transitions
@@ -920,7 +922,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     *out_size = out_sz;
 
  cleanup:
-#if defined(USE_HEAP) && !defined(NO_THREADS)
+#if defined(USE_HEAP)
     if (D)
         free(D);
 
