@@ -1635,11 +1635,19 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 	// Compute new quality context
 	last = fqz_update_ctx(pm, &state, Q);
     }
+
+    if (rec >= nrec) {
+	nrec *= 2;
+	rev_a = realloc(rev_a, nrec);
+	len_a = realloc(len_a, nrec*sizeof(int));
+	if (!rev_a || !len_a)
+	    goto err;
+    }
     rev_a[rec] = rev;
     len_a[rec] = len;
 
     if (gp.gflags & GFLAG_DO_REV) {
-	for (i = rec = 0; i < len; i += len_a[rec++]) {
+	for (i = rec = 0; i < len && rec < nrec; i += len_a[rec++]) {
 	    if (!rev_a[rec])
 		continue;
 

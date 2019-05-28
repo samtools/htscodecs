@@ -2040,6 +2040,15 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    }
 	}
 
+	// We can call this with a larger buffer, but once we've determined
+	// how much we really use we limit it so the recursion becomes easier
+	// to limit.
+	if (c_meta_len + clen4[0] + clen4[1] + clen4[2] + clen4[3] > in_size) {
+	    free(out_free);
+	    return NULL;
+	}
+	in_size = c_meta_len + clen4[0] + clen4[1] + clen4[2] + clen4[3];
+
 	//fprintf(stderr, "    x4 meta %d\n", c_meta_len); //c-size
 
 	// Uncompress the 4 streams
