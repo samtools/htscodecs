@@ -447,7 +447,6 @@ static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q
 static inline
 void qual_stats(fqz_slice *s,
 		unsigned char *in, size_t in_size,
-		unsigned int *q_len,
 		fqz_param *pm,
 		uint32_t qhist[256],
 		int one_param) {
@@ -482,7 +481,7 @@ void qual_stats(fqz_slice *s,
     }
 
     // Dedup detection and histogram stats gathering
-    int *avg_qual = malloc((s->num_records+1) * sizeof(int));
+    int *avg_qual = calloc((s->num_records+1), sizeof(int));
     if (!avg_qual)
 	return;
 
@@ -791,8 +790,7 @@ int fqz_pick_parameters(fqz_gparams *gp,
 			int level,
 			fqz_slice *s,
 			unsigned char *in,
-			size_t in_size,
-			unsigned int *q_len) {
+			size_t in_size) {
     //approx sqrt(delta), must be sequential
     int dsqr[] = {
 	0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -800,20 +798,9 @@ int fqz_pick_parameters(fqz_gparams *gp,
 	5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
 	6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
     };
+    uint32_t qhist[256] = {0};
 
     if (strat >= nstrats) strat = nstrats-1;
-
-    // Compute quality length per sequence.
-    // This isn't just s->crecs[i].len as some times we emit extra QS
-    // records, eg for feature code B.  Instead look at the .qual field.
-    size_t i;
-    for (i = 0; i < s->num_records; i++) {
-	q_len[i] = (i < s->num_records-1)
-	    ? s->crecs[i+1].qual - s->crecs[i].qual
-	    : in_size - s->crecs[i].qual;
-    }
-
-    uint32_t qhist[256] = {0};
 
     // Start with 1 set of parameters.
     // FIXME: add support for multiple params later.
@@ -847,15 +834,27 @@ int fqz_pick_parameters(fqz_gparams *gp,
     pm->do_r2 = strat_opts[strat][10];
     pm->do_qa = strat_opts[strat][11];
 
+    // Validity check input lengths and buffer size
+    size_t tlen = 0, i;
+    for (i = 0; i < s->num_records; i++) {
+	if (tlen + s->crecs[i].len > in_size)
+	    // Oversized buffer
+	    s->crecs[i].len = in_size - tlen;
+	tlen += s->crecs[i].len;
+    }
+    if (s->num_records > 0 && tlen < in_size)
+	// Undersized buffer
+	s->crecs[s->num_records-1].len += in_size - tlen;
+
     // Quality metrics, for all recs
-    qual_stats(s, in, in_size, q_len, pm, qhist, -1);
+    qual_stats(s, in, in_size, pm, qhist, -1);
 
     pm->store_qmap = (pm->nsym <= 8 && pm->nsym*2 < pm->max_sym);
 
     // Check for fixed length.
-    pm->first_len = q_len[0];
+    pm->first_len = s->crecs[0].len;
     for (i = 1; i < s->num_records; i++) {
-	if (q_len[i] != pm->first_len)
+	if (s->crecs[i].len != pm->first_len)
 	    break;
     }
     pm->fixed_len = (i == s->num_records);
@@ -997,8 +996,7 @@ int fqz_manual_parameters(fqz_gparams *gp,
 			  int vers,
 			  fqz_slice *s,
 			  unsigned char *in,
-			  size_t in_size,
-			  unsigned int *q_len) {
+			  size_t in_size) {
     int i, p;
     int dsqr[] = {
 	0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -1042,7 +1040,7 @@ int fqz_manual_parameters(fqz_gparams *gp,
 	uint32_t qhist[256] = {0};
 
 	// qual stats for seqs using this parameter only
-	qual_stats(s, in, in_size, q_len, pm, qhist, p);
+	qual_stats(s, in, in_size, pm, qhist, p);
 	int max_sel = pm->max_sel;
 
 	// Update max_sel running total. Eg with 4 sub-params:
@@ -1151,27 +1149,20 @@ unsigned char *compress_block_fqz2f(int vers,
     if (!comp)
 	return NULL;
 
-    unsigned int *q_len = (unsigned int *)malloc(s->num_records * sizeof(*q_len));
-    if (!q_len) {
-	free(comp);
-	return NULL;
-    }
-
     // Pick and store params
 #ifdef TEST_MAIN
     // FIXME: add params to argument list so any tool can compute these externally.
     if (manual_nstrat > 1) { 
-	if (fqz_manual_parameters(&gp, vers & 0xff,
-				  s, in, in_size, q_len) < 0)
+	if (fqz_manual_parameters(&gp, vers & 0xff, s, in, in_size) < 0)
 	    return NULL;
    } else {
 	if (fqz_pick_parameters(&gp, vers & 0xff, vers >> 8, level,
-				s, in, in_size, q_len) < 0)
+				s, in, in_size) < 0)
 	    return NULL;
     }
 #else
     if (fqz_pick_parameters(&gp, vers & 0xff, vers >> 8, level,
-			    s, in, in_size, q_len) < 0)
+			    s, in, in_size) < 0)
 	return NULL;
 #endif
     //dump_params(&gp);
@@ -1246,10 +1237,7 @@ unsigned char *compress_block_fqz2f(int vers,
 
 	    //fprintf(stderr, "sel %d param %d\n", state.s, x);
 
-	    // Quality buffer maybe longer than sum of reads if we've
-	    // inserted a specific base + quality pair.
-	    int len = rec < s->num_records
-		? s->crecs[rec].len : in_size - s->crecs[s->num_records-1].qual;
+	    int len = s->crecs[rec].len;
 	    if (!pm->fixed_len || pm->first_len) {
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[0], &rc, (len>> 0) & 0xff);
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[1], &rc, (len>> 8) & 0xff);
@@ -1344,7 +1332,6 @@ unsigned char *compress_block_fqz2f(int vers,
 
     fqz_destroy_models(&model);
     fqz_free_parameters(&gp);
-    free(q_len);
 
     return comp;
 }
@@ -1723,10 +1710,8 @@ fqz_slice *fake_slice(size_t buf_len, int *len, int *r2, int *sel, int nlen) {
     for (i = 0; i < fixed_slice.num_records; i++) {
 	int idx = i < nlen ? i : nlen-1;
 	fixed_slice.crecs[i].len = len[idx];
-	fixed_slice.crecs[i].qual = tlen;
 	fixed_slice.crecs[i].flags = r2 ? r2[idx]*FQZ_FREAD2 : 0;
 	fixed_slice.crecs[i].flags |= sel ? (sel[idx]<<16) : 0;
-	tlen += len[idx];
     }
 
     return &fixed_slice;

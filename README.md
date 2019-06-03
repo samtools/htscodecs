@@ -170,7 +170,6 @@ name. (Is this useful?  Probably not.)
 
 typedef struct {
     int len;
-    int qual; // FIXME: merge len and qual.  Artificial
     int flags;
 } fqz_rec;
 
@@ -190,11 +189,10 @@ separator.  In order to achieve maximum compression it needs to know
 where these separators are, so they must be passed in via the
 `fqz_rec` struct.
 
-For now there are two length fields (just set them the same?), but
-this will be changed.  The reason is one holds the actual length and
-the other the quality string length as encoded in CRAM; this may be
-subtly different depending on the CRAM features being encoded, but
-it's this latter value that matters.
+The summation of length fields should match the input uncomp_size
+field.  Note the len fields may not actually be the length of the
+original sequences as some CRAM features may additional quality values
+(eg the "B" feature).
 
 It can also be beneficial to supply per-record flags so fqzcomp can
 determine whether orientation (complement strand) helps and whether

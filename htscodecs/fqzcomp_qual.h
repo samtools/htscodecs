@@ -57,7 +57,6 @@ extern "C" {
  */
 typedef struct {
     int len;
-    int qual; // FIXME: merge len and qual.  Artificial
     int flags;
 } fqz_rec;
 

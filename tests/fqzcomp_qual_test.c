@@ -18,16 +18,14 @@ static fqz_slice fixed_slice = {0};
 fqz_slice *fake_slice(size_t buf_len, int *len, int *r2, int *sel, int nlen) {
     fixed_slice.num_records = (nlen == 1) ? (buf_len+len[0]-1) / len[0] : nlen;
     assert(fixed_slice.num_records <= MAX_REC);
-    int i, tlen = 0;
+    int i;
     if (!fixed_slice.crecs)
 	fixed_slice.crecs = malloc(MAX_REC * sizeof(*fixed_slice.crecs));
     for (i = 0; i < fixed_slice.num_records; i++) {
 	int idx = i < nlen ? i : nlen-1;
 	fixed_slice.crecs[i].len = len[idx];
-	fixed_slice.crecs[i].qual = tlen;
 	fixed_slice.crecs[i].flags = r2 ? r2[idx]*FQZ_FREAD2 : 0;
 	fixed_slice.crecs[i].flags |= sel ? (sel[idx]<<16) : 0;
-	tlen += len[idx];
     }
 
     return &fixed_slice;
