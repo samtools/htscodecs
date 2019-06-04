@@ -38,36 +38,144 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /* Bit flags, deliberately mirroring BAM ones */
 #define FQZ_FREVERSE 16
 #define FQZ_FREAD2 128
 
-/* Maximum length of an individual quality string.
- * If longer than this, simply break it up into
- * smaller portions.
- */
-#ifndef MAX_SEQ
-#  define MAX_SEQ 100000
-#endif
+/* Current FQZ format version */
+#define FQZ_VERS 5
 
-/* A single record.
+#define FQZ_MAX_STRAT 3
+
+/*
+ * Minimal per-record information taken from a cram slice.
+ *
  * To compress we need to know the junction from one quality string to
- * the next (len, qual), whether it is first/second read and whether it is
+ * the next (len), whether it is first/second read and whether it is
  * reverse complemented (flags).
  */
 typedef struct {
-    int len;
-    int flags;
-} fqz_rec;
-
-typedef struct {
     int num_records;
-    fqz_rec *crecs;
+    uint32_t *len;    // of size num_records
+    uint32_t *flags;  // of size num_records
 } fqz_slice;
 
-char *fqz_compress(int vers, fqz_slice *s, char *in, size_t uncomp_size,
-                   size_t *comp_size, int level);
-char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size, int *lengths);
+
+// Global flags
+static const int GFLAG_MULTI_PARAM = 1;
+static const int GFLAG_HAVE_STAB   = 2;
+static const int GFLAG_DO_REV      = 4;
+
+// Param flags
+// Add PFLAG_HAVE_DMAP and a dmap[] for delta incr?
+static const int PFLAG_DO_DEDUP    = 2;
+static const int PFLAG_DO_LEN      = 4;
+static const int PFLAG_DO_SEL      = 8;
+static const int PFLAG_HAVE_QMAP   = 16;
+static const int PFLAG_HAVE_PTAB   = 32;
+static const int PFLAG_HAVE_DTAB   = 64;
+static const int PFLAG_HAVE_QTAB   = 128;
+
+/*
+ * FQZ parameters.  These may be simply passed in as NULL to fqz_compress
+ * and it'll automatically choose, but if we wish to have complete control
+ * then this (long) struct contains all the details.
+ *
+ * TODO: document all this!
+ */
+
+// A single parameter block
+typedef struct {
+    // Starting context value
+    uint16_t context;
+
+    // flags
+    unsigned int pflags;
+    unsigned int do_sel, do_dedup, store_qmap, fixed_len;
+    unsigned char use_qtab, use_dtab, use_ptab;
+
+    // context bits and locations
+    unsigned int qbits, qloc;
+    unsigned int pbits, ploc;
+    unsigned int dbits, dloc;
+    unsigned int sbits, sloc;
+
+    // models
+    int max_sym, nsym, max_sel;
+
+    // tables / maps
+    unsigned int qmap[256];
+    unsigned int qtab[256];
+    unsigned int ptab[1024];
+    unsigned int dtab[256];
+
+    // Not stored paramters, but computed as part of encoder
+    // parameterisation.
+    int qshift;
+    int pshift;
+    int dshift;
+    int sshift;
+    unsigned int qmask; // (1<<qbits)-1
+    int do_r2, do_qa;
+} fqz_param;
+
+// The global params, which is a collection of parameter blocks plus
+// a few pieces of meta-data.
+typedef struct {
+    int vers;               // Format version; Set to FQZ_VERS
+    unsigned int gflags;    // global param flags
+    int nparam;             // Number of fqz_param blocks
+    int max_sel;            // Number of selector values
+    unsigned int stab[256]; // Selector to parameter no. table
+
+    int max_sym;            // max symbol value across all sub-params
+
+    fqz_param *p;           // 1 or more parameter blocks
+} fqz_gparams;
+
+
+/** Compress a block of quality values.
+ *
+ * @param vers          The CRAM version number (<<8) plus fqz strategy (0-3)
+ * @param s             Length and flag data CRAM per-record
+ * @param in            Buffer of concatenated quality values (no separator)
+ * @param in_size       Size of in buffer
+ * @param out_size      Size of returned output
+ * @param strat         FQZ compression strategy (0 to FQZ_MAX_STRAT)
+ * @param gp            Optional fqzcomp paramters (may be NULL).
+ *
+ * @return              The compressed quality buffer on success,
+ *                      NULL on failure.
+ */
+char *fqz_compress(int vers, fqz_slice *s, char *in, size_t in_size,
+                   size_t *out_size, int strat, fqz_gparams *gp);
+
+/** Decompress a block of quality values.
+ *
+ * @param in            Buffer of compressed quality values
+ * @param in_size       Size of in buffer
+ * @param out_size      Size of returned output
+ * @param lengths       Optional array filled out with record lengths.
+ *                      May be NULL.  If not, preallocate it to correct size.
+ *
+ * @return              The uncompressed concatenated qualities on success,
+ *                      NULL on failure.
+ */
+char *fqz_decompress(char *in, size_t in_size, size_t *out_size,
+                     int *lengths, int nlengths);
+
+/** A utlity function to analyse a quality buffer to gather statistical
+ *  information.  This is written into qhist and pm.  This function is only
+ *  useful if you intend on passing your own fqz_gparams block to
+ *  fqz_compress.
+ */
+void fqz_qual_stats(fqz_slice *s,
+		    unsigned char *in, size_t in_size,
+		    fqz_param *pm,
+		    uint32_t qhist[256],
+		    int one_param);
 
 #ifdef __cplusplus
 }

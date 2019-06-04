@@ -74,21 +74,6 @@
 #  define MAX(a,b) ((a)>(b)?(a):(b))
 #endif
 
-// Global flags
-static const int GFLAG_MULTI_PARAM = 1;
-static const int GFLAG_HAVE_STAB   = 2;
-static const int GFLAG_DO_REV      = 4;
-
-// Param flags
-// Add PFLAG_HAVE_DMAP and a dmap[] for delta incr?
-static const int PFLAG_DO_DEDUP    = 2;
-static const int PFLAG_DO_LEN      = 4;
-static const int PFLAG_DO_SEL      = 8;
-static const int PFLAG_HAVE_QMAP   = 16;
-static const int PFLAG_HAVE_PTAB   = 32;
-static const int PFLAG_HAVE_DTAB   = 64;
-static const int PFLAG_HAVE_QTAB   = 128;
-
 #define QMAX 256
 #define QBITS 12
 #define QSIZE (1<<QBITS)
@@ -219,57 +204,7 @@ static int nstrats = sizeof(strat_opts) / sizeof(*strat_opts);
 #   define _mm_prefetch(a,b)
 #endif
 
-// A single parameter block
 typedef struct {
-    // Starting context value
-    uint16_t context;
-
-    // flags
-    unsigned int pflags;
-    unsigned int do_sel, do_dedup, store_qmap, fixed_len;
-    unsigned char use_qtab, use_dtab, use_ptab;
-    int first_len; // FIXME: move to state
-
-    // context bits and locations
-    unsigned int qbits, qloc;
-    unsigned int pbits, ploc;
-    unsigned int dbits, dloc;
-    unsigned int sbits, sloc;
-
-    // models
-    int max_sym, nsym, max_sel;
-
-    // tables / maps
-    unsigned int qmap[256];
-    unsigned int qtab[256];
-    unsigned int ptab[1024];
-    unsigned int dtab[256];
-
-    // Not stored paramters, but computed as part of encoder
-    // parameterisation.
-    int qshift;
-    int pshift;
-    int dshift;
-    int sshift;
-    unsigned int qmask; // (1<<qbits)-1
-    int do_r2, do_qa;
-} fqz_param;
-
-// Some global params and a collection of parameter blocks
-typedef struct {
-    int vers;               // Format version
-    unsigned int gflags;    // global params
-    int nparam;             // Number of parameter blocks
-    int max_sel;            // Number of selector values
-    unsigned int stab[256]; // Selector to parameter no. table
-
-    int max_sym;            // max across all sub-params
-
-    fqz_param *p;           // 1 or more parameter blocks
-} fqz_gparams;
-
-typedef struct {
-    // FIXME: add last_len here
     unsigned int qctx;  // quality sub-context
     unsigned int p;     // pos (bytes remaining)
     unsigned int add_d; // whether to update delta (skip first cycle)
@@ -277,6 +212,7 @@ typedef struct {
     unsigned int prevq; // previous quality
     unsigned int s;     // selector
     unsigned int qtot, qlen;
+    unsigned int first_len;
 } fqz_state;
 
 static void dump_table(unsigned int *tab, int size, char *name) {
@@ -444,12 +380,11 @@ static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q
 // One_param is -1 to gather stats on all data, or >= 0 to gather data
 // on one specific selector parameter.  Used only in TEST_MAIN via
 // fqz_manual_parameters at the moment.
-static inline
-void qual_stats(fqz_slice *s,
-		unsigned char *in, size_t in_size,
-		fqz_param *pm,
-		uint32_t qhist[256],
-		int one_param) {
+void fqz_qual_stats(fqz_slice *s,
+		    unsigned char *in, size_t in_size,
+		    fqz_param *pm,
+		    uint32_t qhist[256],
+		    int one_param) {
 #define NP 128
     uint32_t qhistb[NP][256] = {{0}};  // both
     uint32_t qhist1[NP][256] = {{0}};  // READ1 only
@@ -471,12 +406,12 @@ void qual_stats(fqz_slice *s,
     int max_sel = 0;
     int has_r2 = 0;
     for (rec = 0; rec < s->num_records; rec++) {
-	if (one_param >= 0 && (s->crecs[rec].flags >> 16) != one_param)
+	if (one_param >= 0 && (s->flags[rec] >> 16) != one_param)
 	    continue;
 	num_rec++;
-	if (max_sel < (s->crecs[rec].flags >> 16))
-	    max_sel = (s->crecs[rec].flags >> 16);
-	if (s->crecs[rec].flags & FQZ_FREAD2)
+	if (max_sel < (s->flags[rec] >> 16))
+	    max_sel = (s->flags[rec] >> 16);
+	if (s->flags[rec] & FQZ_FREAD2)
 	    has_r2 = 1;
     }
 
@@ -487,14 +422,14 @@ void qual_stats(fqz_slice *s,
 
     rec = i = j = 0;
     while (i < in_size) {
-	if (one_param >= 0 && (s->crecs[rec].flags >> 16) != one_param) {
+	if (one_param >= 0 && (s->flags[rec] >> 16) != one_param) {
 	    avg_qual[rec] = 0;
-	    i += s->crecs[rec++].len;
+	    i += s->len[rec++];
 	    continue;
 	}
 	if (rec < s->num_records) {
-	    j = s->crecs[rec].len;
-	    dir = s->crecs[rec].flags & FQZ_FREAD2 ? 1 : 0;
+	    j = s->len[rec];
+	    dir = s->flags[rec] & FQZ_FREAD2 ? 1 : 0;
 	    if (i > 0 && j == last_len
 		&& !memcmp(in+i-last_len, in+i, j))
 		do_dedup++; // cache which records are dup?
@@ -586,12 +521,12 @@ void qual_stats(fqz_slice *s,
 	int qcnt2[4][NP] = {{0}};
 	int qcnt1   [NP] = {0};
         while (i < in_size) {
-	    if (one_param >= 0 && (s->crecs[rec].flags >> 16) != one_param) {
-		i += s->crecs[rec++].len;
+	    if (one_param >= 0 && (s->flags[rec] >> 16) != one_param) {
+		i += s->len[rec++];
 		continue;
 	    }
 	    if (rec < s->num_records)
-		j = s->crecs[rec].len;
+		j = s->len[rec];
 	    else
 		j = in_size - i;
 	    last_len = j;
@@ -636,15 +571,15 @@ void qual_stats(fqz_slice *s,
 	    e4 + s->num_records/4 < e1*qm) {
 	    //fprintf(stderr, "do q4\n");
 	    for (i = 0; i < s->num_records; i++) {
-		//fprintf(stderr, "%d -> %d -> %d, %d\n", (int)i, avg_qual[i], avg[MIN(2559, avg_qual[i])], s->crecs[i].flags>>16);
-		s->crecs[i].flags |= avg[MIN(2559, avg_qual[i])] <<16;
+		//fprintf(stderr, "%d -> %d -> %d, %d\n", (int)i, avg_qual[i], avg[MIN(2559, avg_qual[i])], s->flags[i]>>16);
+		s->flags[i] |= avg[MIN(2559, avg_qual[i])] <<16;
 	    }
 	    pm->do_sel = 1;
 	    max_sel = 3;
 	} else if ((pm->do_qa == -1 || pm->do_qa >= 2) && e2 + s->num_records/8 < e1*qm) {
 	    //fprintf(stderr, "do q2\n");
 	    for (i = 0; i < s->num_records; i++)
-		s->crecs[i].flags |= (avg[MIN(2559, avg_qual[i])]>>1) <<16;
+		s->flags[i] |= (avg[MIN(2559, avg_qual[i])]>>1) <<16;
 	    pm->do_sel = 1;
 	    max_sel = 1;
 	}
@@ -700,15 +635,15 @@ void qual_stats(fqz_slice *s,
 	double qm = pm->do_r2 > 0 ? 1 : 0.95;
 	if (e2 + (8+s->num_records/8) < e1*qm) {
 	    for (rec = 0; rec < s->num_records; rec++) {
-		if (one_param >= 0 && (s->crecs[rec].flags >> 16) != one_param)
+		if (one_param >= 0 && (s->flags[rec] >> 16) != one_param)
 		    continue;
-		int sel = s->crecs[rec].flags >> 16;
-		s->crecs[rec].flags =  (s->crecs[rec].flags & 0xffff)
-		    | ((s->crecs[rec].flags & FQZ_FREAD2)
+		int sel = s->flags[rec] >> 16;
+		s->flags[rec] =  (s->flags[rec] & 0xffff)
+		    | ((s->flags[rec] & FQZ_FREAD2)
 		       ? ((sel*2)+1) << 16
 		       : ((sel*2)+0) << 16);
-		if (max_sel < (s->crecs[rec].flags>>16))
-		    max_sel = (s->crecs[rec].flags>>16);
+		if (max_sel < (s->flags[rec]>>16))
+		    max_sel = (s->flags[rec]>>16);
 	    }
 	}
     }
@@ -787,7 +722,6 @@ static inline
 int fqz_pick_parameters(fqz_gparams *gp,
 			int vers,
 			int strat,
-			int level,
 			fqz_slice *s,
 			unsigned char *in,
 			size_t in_size) {
@@ -805,7 +739,7 @@ int fqz_pick_parameters(fqz_gparams *gp,
     // Start with 1 set of parameters.
     // FIXME: add support for multiple params later.
     memset(gp, 0, sizeof(*gp));
-    gp->vers = 5; // FQZ format number
+    gp->vers = FQZ_VERS;
 
     if (!(gp->p = calloc(1, sizeof(fqz_param))))
 	return -1;
@@ -837,35 +771,34 @@ int fqz_pick_parameters(fqz_gparams *gp,
     // Validity check input lengths and buffer size
     size_t tlen = 0, i;
     for (i = 0; i < s->num_records; i++) {
-	if (tlen + s->crecs[i].len > in_size)
+	if (tlen + s->len[i] > in_size)
 	    // Oversized buffer
-	    s->crecs[i].len = in_size - tlen;
-	tlen += s->crecs[i].len;
+	    s->len[i] = in_size - tlen;
+	tlen += s->len[i];
     }
     if (s->num_records > 0 && tlen < in_size)
 	// Undersized buffer
-	s->crecs[s->num_records-1].len += in_size - tlen;
+	s->len[s->num_records-1] += in_size - tlen;
 
     // Quality metrics, for all recs
-    qual_stats(s, in, in_size, pm, qhist, -1);
+    fqz_qual_stats(s, in, in_size, pm, qhist, -1);
 
     pm->store_qmap = (pm->nsym <= 8 && pm->nsym*2 < pm->max_sym);
 
     // Check for fixed length.
-    pm->first_len = s->crecs[0].len;
+    uint32_t first_len = s->len[0];
     for (i = 1; i < s->num_records; i++) {
-	if (s->crecs[i].len != pm->first_len)
+	if (s->len[i] != first_len)
 	    break;
     }
     pm->fixed_len = (i == s->num_records);
-    pm->first_len = 1; // used as boolean condition now
     pm->use_qtab = 0; // unused by current encoder
 
     if (strat >= nstrats-1)
 	goto manually_set; // used in TEST_MAIN for debugging
 
     if (pm->pshift < 0)
-	pm->pshift = MAX(0, log((double)s->crecs[0].len/(1<<pm->pbits))/log(2)+.5);
+	pm->pshift = MAX(0, log((double)s->len[0]/(1<<pm->pbits))/log(2)+.5);
 
     if (pm->nsym <= 4) {
 	// NovaSeq
@@ -967,8 +900,8 @@ int fqz_pick_parameters(fqz_gparams *gp,
     if (gp->max_sel) {
 	int max = 0;
 	for (i = 0; i < s->num_records; i++) {
-	    if (max < (s->crecs[i].flags >> 16))
-		max = (s->crecs[i].flags >> 16);
+	    if (max < (s->flags[i] >> 16))
+		max = (s->flags[i] >> 16);
 	}
 	gp->max_sel = max;
     }
@@ -980,162 +913,16 @@ static void fqz_free_parameters(fqz_gparams *gp) {
     if (gp && gp->p) free(gp->p);
 }
 
-/*
- * Test main still kept here as it's a bit more advanced than the one
- * we put in the tests directory.  TODO: replace that version with this.
- */
-#ifdef TEST_MAIN
-static uint64_t manual_strats[10] = {0};
-static int manual_nstrat = 0;
-
-/*
- * Manually specified strategies held in global manual_strats[].
- */
-static inline
-int fqz_manual_parameters(fqz_gparams *gp,
-			  int vers,
-			  fqz_slice *s,
-			  unsigned char *in,
-			  size_t in_size) {
-    int i, p;
-    int dsqr[] = {
-	0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3,
-	4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5,
-	5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-	6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
-    };
-
-    gp->vers = 5;
-    gp->nparam = manual_nstrat;
-    gp->gflags = GFLAG_MULTI_PARAM | GFLAG_HAVE_STAB;
-    for (i = 0; i < 256; i++)
-	gp->stab[i] = 0;
-
-    // Fill these out later
-    gp->max_sel = 0;
-    gp->max_sym = 0;
-    gp->p = malloc(gp->nparam * sizeof(*gp->p));
-
-    for (p = 0; p < gp->nparam; p++) {
-	fqz_param *pm = &gp->p[p];
-	uint64_t st = manual_strats[p];
-
-	pm->do_qa  = st & 15; st >>= 4;
-	pm->do_r2  = st & 15; st >>= 4;
-	pm->dloc   = st & 15; st >>= 4;
-	pm->ploc   = st & 15; st >>= 4;
-	pm->sloc   = st & 15; st >>= 4;
-	pm->qloc   = st & 15; st >>= 4;
-	pm->dshift = st & 15; st >>= 4;
-	pm->dbits  = st & 15; st >>= 4;
-	pm->pshift = st & 15; st >>= 4;
-	pm->pbits  = st & 15; st >>= 4;
-	pm->qshift = st & 15; st >>= 4;
-	pm->qbits  = st & 15; st >>= 4;
-
-	// Gather some stats, as per qual_stats func.
-	// r in rec count.
-	// i = index to in[]
-	// j = index within this rec
-	uint32_t qhist[256] = {0};
-
-	// qual stats for seqs using this parameter only
-	qual_stats(s, in, in_size, pm, qhist, p);
-	int max_sel = pm->max_sel;
-
-	// Update max_sel running total. Eg with 4 sub-params:
-	//
-	// sel    param no.   => new
-	// 0      0              0
-	// 0/1    1              1,2
-	// 0/1    2              3,4
-	// 0      3              5
-	for (i = gp->max_sel; i < gp->max_sel + max_sel+1; i++)
-	    gp->stab[i] = p;
-	gp->max_sel += max_sel+1;
-
-	pm->fixed_len = pm->fixed_len > 0;
-	pm->first_len = 1;
-	pm->use_qtab = 0;  // unused by current encoder
-	pm->store_qmap = pm->nsym <= 8;
-
-	// Adjust parameters based on quality stats.
-	// FIXME:  dup from fqz_pick_parameters.
-	for (i = 0; i < sizeof(dsqr)/sizeof(*dsqr); i++)
-	    if (dsqr[i] > (1<<pm->dbits)-1)
-		dsqr[i] = (1<<pm->dbits)-1;
-
-	if (pm->store_qmap) {
-	    int j;
-	    for (i = j = 0; i < 256; i++)
-		if (qhist[i])
-		    pm->qmap[i] = j++;
-		else
-		    pm->qmap[i] = INT_MAX;
-	    pm->max_sym = pm->nsym;
-	} else {
-	    pm->nsym = 255;
-	    for (i = 0; i < 256; i++)
-		pm->qmap[i] = i;
-	}
-	if (gp->max_sym < pm->max_sym)
-	    gp->max_sym = pm->max_sym;
-
-	// Produce ptab from pshift.
-	if (pm->qbits) {
-	    for (i = 0; i < 256; i++) {
-		pm->qtab[i] = i; // 1:1
-
-		// Alternative mappings:
-		//qtab[i] = i > 30 ? MIN(max_sym,i)-15 : i/2;  // eg for 9827 BAM
-	    }
-
-	}
-	pm->qmask = (1<<pm->qbits)-1;
-
-	if (pm->pbits) {
-	    for (i = 0; i < 1024; i++)
-		pm->ptab[i] = MIN((1<<pm->pbits)-1, i>>pm->pshift);
-
-	    // Alternatively via analysis of quality distributions we
-	    // may select a bunch of positions that are special and
-	    // have a non-uniform ptab[].
-	    // Manual experimentation on a NovaSeq run saved 2.8% here.
-	}
-
-	if (pm->dbits) {
-	    for (i = 0; i < 256; i++)
-		pm->dtab[i] = dsqr[MIN(sizeof(dsqr)/sizeof(*dsqr)-1, i>>pm->dshift)];
-	}
-
-	pm->use_ptab = (pm->pbits > 0);
-	pm->use_dtab = (pm->dbits > 0);
-
-	pm->pflags =
-	    (pm->use_qtab   ?PFLAG_HAVE_QTAB :0)|
-	    (pm->use_dtab   ?PFLAG_HAVE_DTAB :0)|
-	    (pm->use_ptab   ?PFLAG_HAVE_PTAB :0)|
-	    (pm->do_sel     ?PFLAG_DO_SEL    :0)|
-	    (pm->fixed_len  ?PFLAG_DO_LEN    :0)|
-	    (pm->do_dedup   ?PFLAG_DO_DEDUP  :0)|
-	    (pm->store_qmap ?PFLAG_HAVE_QMAP :0);
-    }
-
-    for (i = gp->max_sel; i < 256; i++)
-	gp->stab[i] = gp->stab[gp->max_sel-1];
-
-    return 0;
-}
-#endif
-
 static
 unsigned char *compress_block_fqz2f(int vers,
-				    int level,
+				    int strat,
 				    fqz_slice *s,
 				    unsigned char *in,
 				    size_t in_size,
-				    size_t *out_size) {
-    fqz_gparams gp;
+				    size_t *out_size,
+				    fqz_gparams *gp) {
+    fqz_gparams local_gp;
+    int free_params = 0;
 
     unsigned int last = 0;
     size_t i, j;
@@ -1150,30 +937,22 @@ unsigned char *compress_block_fqz2f(int vers,
 	return NULL;
 
     // Pick and store params
-#ifdef TEST_MAIN
-    // FIXME: add params to argument list so any tool can compute these externally.
-    if (manual_nstrat > 1) { 
-	if (fqz_manual_parameters(&gp, vers & 0xff, s, in, in_size) < 0)
+    if (!gp) {
+	gp = &local_gp;
+	if (fqz_pick_parameters(gp, vers, strat, s, in, in_size) < 0)
 	    return NULL;
-   } else {
-	if (fqz_pick_parameters(&gp, vers & 0xff, vers >> 8, level,
-				s, in, in_size) < 0)
-	    return NULL;
+	free_params = 1;
     }
-#else
-    if (fqz_pick_parameters(&gp, vers & 0xff, vers >> 8, level,
-			    s, in, in_size) < 0)
-	return NULL;
-#endif
-    //dump_params(&gp);
+
+    //dump_params(gp);
     comp_idx = u32tou7(comp, in_size);
-    comp_idx += fqz_store_parameters(&gp, comp+comp_idx);
+    comp_idx += fqz_store_parameters(gp, comp+comp_idx);
 
     fqz_param *pm;
 
     // Optimise tables to remove shifts in loop (NB: cannot do this in next vers)
-    for (j = 0; j < gp.nparam; j++) {
-	pm = &gp.p[j];
+    for (j = 0; j < gp->nparam; j++) {
+	pm = &gp->p[j];
 
 	for (i = 0; i < 1024; i++)
 	    pm->ptab[i] <<= pm->ploc;
@@ -1184,21 +963,21 @@ unsigned char *compress_block_fqz2f(int vers,
 
     // Create models and initialise range coder
     fqz_model model;
-    if (fqz_create_models(&model, &gp) < 0)
+    if (fqz_create_models(&model, gp) < 0)
 	return NULL;
 
     RC_SetOutput(&rc, (char *)comp+comp_idx);
     RC_StartEncode(&rc);
 
     // For CRAM3.1, reverse upfront if needed
-    pm = &gp.p[0];
-    if (gp.gflags & GFLAG_DO_REV) {
+    pm = &gp->p[0];
+    if (gp->gflags & GFLAG_DO_REV) {
 	i = rec = j = 0;
 	while (i < in_size) {
 	    int len = rec < s->num_records-1
-		? s->crecs[rec].len : in_size - i;
+		? s->len[rec] : in_size - i;
 
-	    if (s->crecs[rec].flags & FQZ_FREVERSE) {
+	    if (s->flags[rec] & FQZ_FREVERSE) {
 		// Reverse complement sequence - note: modifies buffer
 		int I,J;
 		unsigned char *cp = in+i;
@@ -1217,44 +996,45 @@ unsigned char *compress_block_fqz2f(int vers,
     }
 
     fqz_state state = {0};
-    pm = &gp.p[0];
+    pm = &gp->p[0];
     state.p = 0;
+    state.first_len = 1;
     int x;
 
     for (i = 0; i < in_size; i++) {
 	if (state.p == 0) {
-	    if (pm->do_sel || (gp.gflags & GFLAG_MULTI_PARAM)) {
+	    if (pm->do_sel || (gp->gflags & GFLAG_MULTI_PARAM)) {
 		state.s = rec < s->num_records
-		    ? s->crecs[rec].flags >> 16 // reuse spare bits
+		    ? s->flags[rec] >> 16 // reuse spare bits
 		    : 0;
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.sel, &rc, state.s);
 		//fprintf(stderr, "State %d\n", state.s);
 	    } else {
 		state.s = 0;
 	    }
-	    x = (gp.gflags & GFLAG_HAVE_STAB) ? gp.stab[state.s] : state.s;
-	    pm = &gp.p[x];
+	    x = (gp->gflags & GFLAG_HAVE_STAB) ? gp->stab[state.s] : state.s;
+	    pm = &gp->p[x];
 
 	    //fprintf(stderr, "sel %d param %d\n", state.s, x);
 
-	    int len = s->crecs[rec].len;
-	    if (!pm->fixed_len || pm->first_len) {
+	    int len = s->len[rec];
+	    if (!pm->fixed_len || state.first_len) {
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[0], &rc, (len>> 0) & 0xff);
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[1], &rc, (len>> 8) & 0xff);
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[2], &rc, (len>>16) & 0xff);
 		SIMPLE_MODEL(256,_encodeSymbol)(&model.len[3], &rc, (len>>24) & 0xff);
 		//fprintf(stderr, "Len %d\n", len);
-		pm->first_len = 0;
+		state.first_len = 0;
 	    }
 
-	    if (gp.gflags & GFLAG_DO_REV) {
+	    if (gp->gflags & GFLAG_DO_REV) {
 		// no need to reverse complement for V4.0 as the core format
 		// already has this feature.
-		if (s->crecs[rec].flags & FQZ_FREVERSE)
+		if (s->flags[rec] & FQZ_FREVERSE)
 		    SIMPLE_MODEL(2,_encodeSymbol)(&model.revcomp, &rc, 1);
 		else
 		    SIMPLE_MODEL(2,_encodeSymbol)(&model.revcomp, &rc, 0);
-		//fprintf(stderr, "Rev %d\n", (s->crecs[rec].flags & FQZ_FREVERSE) ? 1 : 0);
+		//fprintf(stderr, "Rev %d\n", (s->flags[rec] & FQZ_FREVERSE) ? 1 : 0);
 	    }
 
 	    rec++;
@@ -1299,14 +1079,14 @@ unsigned char *compress_block_fqz2f(int vers,
     RC_FinishEncode(&rc);
 
     // For CRAM3.1, undo our earlier reversal step
-    if (gp.gflags & GFLAG_DO_REV) {
+    if (gp->gflags & GFLAG_DO_REV) {
 	i = rec = j = 0;
 	while (i < in_size) {
 	    int len = rec < s->num_records-1
-		? s->crecs[rec].len
+		? s->len[rec]
 		: in_size - i;
 
-	    if (s->crecs[rec].flags & FQZ_FREVERSE) {
+	    if (s->flags[rec] & FQZ_FREVERSE) {
 		// Reverse complement sequence - note: modifies buffer
 		int I,J;
 		unsigned char *cp = in+i;
@@ -1325,13 +1105,14 @@ unsigned char *compress_block_fqz2f(int vers,
 
     // Clear selector abuse of flags
     for (rec = 0; rec < s->num_records; rec++)
-	s->crecs[rec].flags &= 0xffff;
+	s->flags[rec] &= 0xffff;
 
     *out_size = comp_idx + RC_OutSize(&rc);
     //fprintf(stderr, "%d -> %d\n", (int)in_size, (int)*out_size);
 
     fqz_destroy_models(&model);
-    fqz_free_parameters(&gp);
+    if (free_params)
+	fqz_free_parameters(gp);
 
     return comp;
 }
@@ -1406,8 +1187,6 @@ int fqz_read_parameters1(fqz_param *pm, unsigned char *in, size_t in_size) {
 	for (i = 0; i < 256; i++)
 	    pm->dtab[i] = 0;
 
-    pm->first_len = 1;
-
     return in_idx;
 }
 
@@ -1421,7 +1200,7 @@ int fqz_read_parameters(fqz_gparams *gp, unsigned char *in, size_t in_size) {
 
     // Format version
     gp->vers = in[in_idx++];
-    if (gp->vers != 5)
+    if (gp->vers != FQZ_VERS)
 	return -1;
 
     // Global glags
@@ -1472,7 +1251,8 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 				      unsigned char *in,
 				      size_t in_size,
 				      size_t *out_size,
-				      int *lengths) {
+				      int *lengths,
+				      int nlengths) {
     fqz_gparams gp;
     fqz_param *pm;
     char *rev_a = NULL;
@@ -1536,6 +1316,7 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
     state.qctx = 0;
     state.p = 0;
     state.s = 0;
+    state.first_len = 1;
 
     int rev = 0;
     int last_len = 0;
@@ -1564,19 +1345,19 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 	    pm = &gp.p[x];
 
 	    int len = last_len;
-	    if (!pm->fixed_len || pm->first_len) {
+	    if (!pm->fixed_len || state.first_len) {
 		len  = SIMPLE_MODEL(256,_decodeSymbol)(&model.len[0], &rc);
 		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[1], &rc)<<8;
 		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[2], &rc)<<16;
 		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[3], &rc)<<24;
 		//fprintf(stderr, "Len %d\n", len);
-		pm->first_len = 0;
+		state.first_len = 0;
 		last_len = len;
 	    }
 	    if (len > *out_size-i || len <= 0)
 		goto err;
 
-	    if (lengths)
+	    if (lengths && rec < nlengths)
 		lengths[rec] = len;
 
 	    if (gp.gflags & GFLAG_DO_REV) {
@@ -1673,250 +1454,13 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 }
 
 char *fqz_compress(int vers, fqz_slice *s, char *in, size_t uncomp_size,
-		   size_t *comp_size, int level) {
-    return (char *)compress_block_fqz2f(vers, level, s, (unsigned char *)in,
-					uncomp_size, comp_size);
+		   size_t *comp_size, int strat, fqz_gparams *gp) {
+    return (char *)compress_block_fqz2f(vers, strat, s, (unsigned char *)in,
+					uncomp_size, comp_size, gp);
 }
 
 char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size,
-		     int *lengths) {
+		     int *lengths, int nlengths) {
     return (char *)uncompress_block_fqz2f(NULL, (unsigned char *)in,
-					  comp_size, uncomp_size, lengths);
+					  comp_size, uncomp_size, lengths, nlengths);
 }
-
-
-/* -----------------------------------------------------------------------------
- * A command line test program to drive the fqzcomp codec.
- *
- * FIXME: upgrade to use fqz_compress instead of compress_block_fqz2f
- */
-#ifdef TEST_MAIN
-
-#include <unistd.h>
-#include <fcntl.h>
-
-#ifndef MAX_REC
-#define MAX_REC 1000000
-#endif
-
-static fqz_slice fixed_slice = {0};
-
-fqz_slice *fake_slice(size_t buf_len, int *len, int *r2, int *sel, int nlen) {
-    fixed_slice.num_records = (nlen == 1) ? (buf_len+len[0]-1) / len[0] : nlen;
-    assert(fixed_slice.num_records <= MAX_REC);
-    int i, tlen = 0;
-    if (!fixed_slice.crecs)
-	fixed_slice.crecs = malloc(MAX_REC * sizeof(*fixed_slice.crecs));
-    for (i = 0; i < fixed_slice.num_records; i++) {
-	int idx = i < nlen ? i : nlen-1;
-	fixed_slice.crecs[i].len = len[idx];
-	fixed_slice.crecs[i].flags = r2 ? r2[idx]*FQZ_FREAD2 : 0;
-	fixed_slice.crecs[i].flags |= sel ? (sel[idx]<<16) : 0;
-    }
-
-    return &fixed_slice;
-}
-
-#define BS 1024*1024
-static unsigned char *load(char *fn, size_t *lenp) {
-    unsigned char *data = NULL;
-    uint64_t dsize = 0;
-    uint64_t dcurr = 0;
-    signed int len;
-
-    //build_rcp_freq();
-
-    int fd = open(fn, O_RDONLY);
-    if (!fd) {
-	perror(fn);
-	return NULL;
-    }
-
-    do {
-	if (dsize - dcurr < BS) {
-	    dsize = dsize ? dsize * 2 : BS;
-	    data = realloc(data, dsize);
-	}
-
-	len = read(fd, data + dcurr, BS);
-	if (len > 0)
-	    dcurr += len;
-    } while (len > 0);
-
-    if (len == -1) {
-	perror("read");
-    }
-    close(fd);
-
-    *lenp = dcurr;
-    return data;
-}
-
-#define BLK_SIZE 300*1000000
-//#define BLK_SIZE 100*100000
-
-int count_lines(unsigned char *in, size_t len) {
-    size_t i;
-    int lines = 0;
-
-    for (i = 0; i < len; i++)
-	if (in[i] == '\n')
-	    lines++;
-
-    return lines;
-}
-
-// QUAL [is_read2 [selector]]
-void parse_lines(unsigned char *in, size_t len,
-		 int *rec_len, int *rec_r2, int *rec_sel, size_t *new_len) {
-    size_t i, j, start;
-    int rec = 0;
-
-    for (start = i = j = 0; i < len; i++) {
-	if (in[i] == '\n' || in[i] == ' ' || in[i] == '\t') {
-	    rec_len[rec] = i-start;
-
-	    // Read2 marker
-	    while (i < len && in[i] != '\n' && isspace(in[i]))
-		i++;
-
-	    if (in[i] != '\n')
-		rec_r2[rec] = atoi((char *)&in[i]);
-	    else
-		rec_r2[rec] = 0;
-
-	    while (i < len && !isspace(in[i]))
-		i++;
-
-	    // selector
-	    while (i < len && in[i] != '\n' && isspace(in[i]))
-		i++;
-
-	    if (in[i] != '\n')
-		rec_sel[rec] = atoi((char *)&in[i]);
-	    else
-		rec_sel[rec] = 0;
-
-	    while (i < len && in[i] != '\n')
-		i++;
-
-	    start = i+1;
-	    rec++;
-	} else {
-	    in[j++] = in[i]-33; // ASCII phred to qual
-	}
-    }
-    *new_len = j;
-}
-
-int main(int argc, char **argv) {
-    unsigned char *in, *out;
-    size_t in_len, out_len;
-    int decomp = 0, vers = 4;
-
-    while (argc > 1 && argv[1][0] == '-') {
-	if (argc > 1 && strcmp(argv[1], "-d") == 0) {
-	    decomp = 1;
-	    argv++;
-	    argc--;
-	}
-	if (argc > 2 && strcmp(argv[1], "-s") == 0) {
-	    vers += atoi(argv[2])*256;
-	    argv+=2;
-	    argc-=2;
-	}
-	if (argc > 2 && strcmp(argv[1], "-x") == 0) {
-	    // Examples: -x 0x5570000d5014 q40+dir = 30686053
-	    //           -x 0x5270000d5014 q4+dir  =  7165913
-	    uint64_t x = strtol(argv[2], NULL, 0);
-	    manual_strats[manual_nstrat++] = x;
-	    int olen = strlen(argv[2])-2; // -2 for "0x"
-	    argv+=2;
-	    argc-=2;
-	    int z;
-	    for (z=0; z<olen; z++) {
-		strat_opts[nstrats-1][(olen-1)-z] = x&15;
-		x>>=4;
-	    }
-	    vers = (nstrats-1)*256 + 4;
-	}
-    }
-    in = load(argc > 1 ? argv[1] : "/dev/stdin", &in_len);
-    if (!in)
-	exit(1);
-
-    int blk_size = BLK_SIZE; // MAX
-    if (argc > 3)
-	blk_size = atoi(argv[3]);
-    if (blk_size > BLK_SIZE)
-	blk_size = BLK_SIZE;
-
-    if (decomp) {
-	unsigned char *in2 = in;
-	while (in_len > 0) {
-	    // Read sizes as 32-bit
-	    size_t out_len = *(uint32_t *)in2;  in2 += 4;
-	    size_t in2_len = *(uint32_t *)in2;  in2 += 4;
-
-	    fprintf(stderr, "out_len %ld, in_len %ld\n", out_len, in2_len);
-
-	    int fake_len = 99999; // we don't care; it'll be corrected
-	    fqz_slice *s = fake_slice(out_len, &fake_len, NULL, NULL, 1);
-	    out = uncompress_block_fqz2f(s, in2, in_len-8, &out_len);
-
-	    // Convert from binary back to ASCII with newlines
-	    int i, j;
-	    for (i = j = 0; i < s->num_records; i++) {
-		int k;
-		char seq[MAX_SEQ];
-		for (k = 0; k < s->crecs[i].len; k++)
-		    seq[k] = out[j+k]+33;
-		seq[k] = 0;
-		puts(seq);
-		j += s->crecs[i].len;
-	    }
-	    free(out);
-	    in2 += in2_len;
-	    in_len -= in2_len+8;
-
-	    break; // One cycle only until we fix blocking to be \n based
-	}
-    } else {
-	// Convert from ASCII newline separated file to binary block.
-	// We return an array of line lengths and optionally param selectors.
-	int nlines = count_lines(in, in_len);
-	fprintf(stderr, "nlines=%d\n", nlines);
-	int *rec_len = calloc(nlines, sizeof(*rec_len));
-	int *rec_r2  = calloc(nlines, sizeof(*rec_r2));
-	int *rec_sel = calloc(nlines, sizeof(*rec_sel));
-	parse_lines(in, in_len, rec_len, rec_r2, rec_sel, &in_len);
-
-	unsigned char *in2 = in;
-	long t_out = 0;
-	out = NULL;
-	while (in_len > 0) {
-	    // FIXME: blk_size no longer working in test.  One cycle only!
-	    size_t in2_len = in_len <= blk_size ? in_len : blk_size;
-	    fqz_slice *s = fake_slice(in2_len, rec_len, rec_r2, rec_sel, nlines);
-	    out = compress_block_fqz2f(vers, 0, s, in2, in2_len, &out_len);
-
-	    // Write out 32-bit sizes.
-	    uint32_t u32;
-	    u32 = in2_len; if (write(1, &u32, 4) != 4) return 1;
-	    u32 = out_len; if (write(1, &u32, 4) != 4) return 1;
-	    if (write(1, out, out_len) < 0) return 1;
-	    in_len -= in2_len;
-	    in2 += in2_len;
-	    t_out += out_len+16;
-
-	    break; // One cycle only until we fix blocking to be \n based
-	}
-	free(out);
-	fprintf(stderr, "Total output = %ld\n", t_out);
-    }
-
-    free(in);
-
-    return 0;
-}
-#endif

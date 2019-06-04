@@ -17,7 +17,7 @@
 
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     size_t uncomp_size;
-    char *uncomp = fqz_decompress((char *)in, in_size, &uncomp_size, NULL);
+    char *uncomp = fqz_decompress((char *)in, in_size, &uncomp_size, NULL, 0);
     if (uncomp)
 	free(uncomp);
     

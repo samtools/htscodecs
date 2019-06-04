@@ -166,28 +166,23 @@ name. (Is this useful?  Probably not.)
 #define FQZ_FREVERSE 16
 #define FQZ_FREAD2 128
 
-#define MAX_SEQ 100000
-
-typedef struct {
-    int len;
-    int flags;
-} fqz_rec;
-
 typedef struct {
     int num_records;
-    fqz_rec *crecs;
+    uint32_t *len;    // of size num_records
+    uint32_t *flags;  // of size num_records
 } fqz_slice;
 
 char *fqz_compress(int vers, fqz_slice *s, char *in, size_t uncomp_size,
-                   size_t *comp_size, int level);
-char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size, int *lengths);
+                   size_t *comp_size, int strat, fqz_gparams *gp);
+char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size,
+                     int *lengths, int nlengths);
 ```
 
 This is derived from the quality compression in fqzcomp.  The input
 buffer is a concatenated block of quality strings, without any
 separator.  In order to achieve maximum compression it needs to know
 where these separators are, so they must be passed in via the
-`fqz_rec` struct.
+`fqz_slice` struct.
 
 The summation of length fields should match the input uncomp_size
 field.  Note the len fields may not actually be the length of the
@@ -198,3 +193,16 @@ It can also be beneficial to supply per-record flags so fqzcomp can
 determine whether orientation (complement strand) helps and whether
 the READ1 vs READ2 quality distributions differ.  These are just
 sub-fields from BAM FLAG.
+
+The fqz_gparams will normally be passed in as NULL and the encoder
+will automatically select parameters.  If you wish to fine tune the
+compression methods, see the fqz_params and fqz_gparams structures in
+the header file.  You may also find the fqz_qual_stats() utility
+function helpful for gathering statistics on your quality values.
+
+For decompression, the lengths array is optional and may be specified
+as NULL.  If passed in, it must be of size nlengths and it will be
+filled out with the decoded length of each quality string.  Note
+regardless of whether lengths is NULL or not, the buffer returned will
+be concatenated values so there is no way to tell where one record
+finishes and the next starts.  (CRAM itself knows this via other means.)
