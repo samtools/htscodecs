@@ -50,6 +50,11 @@ The fqzcomp test format is one quality values per line, with an
 optional additional parameter (0 or 1) to indicate READ1 or READ2 flag
 status.
 
+There is a larger set of test data in the htscodecs-corpus repository
+(https://github.com/jkbonfield/htscodecs-corpus).  If this is cloned
+into the tests subdirectory of htscodecs then the htscodecs "make
+check" will also use that larger data set for testing purposes.
+
 
 API
 ---

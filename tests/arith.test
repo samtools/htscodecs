@@ -5,15 +5,22 @@ then
     mkdir $out
 fi
 
-for f in $srcdir/dat/*
+for f in `ls -1 $srcdir/dat/q* $srcdir/htscodecs-corpus/dat/q* 2>/dev/null`
 do 
+    comp=${f%/*/*}/dat/arith/${f##*/}
     tr -d '\012' < $f > $out/arith-nl
     for o in 0 1 64 65 128 129 192 193 8 9
     do
         echo -n Testing arith_dynamic -o$o on $f "	"
-        ./arith_dynamic -o$o $out/arith-nl $out/arith.comp 2>>$out/arith.stderr
+
+	# Round trip
+        ./arith_dynamic -o$o $out/arith-nl $out/arith.comp 2>>$out/arith.stderr || exit 1
 	wc -c < $out/arith.comp
-        ./arith_dynamic -d $out/arith.comp $out/arith.uncomp  2>>$out/arith.stderr
+        ./arith_dynamic -d $out/arith.comp $out/arith.uncomp  2>>$out/arith.stderr || exit 1
+        cmp $out/arith-nl $out/arith.uncomp || exit 1
+
+	# Precompressed data
+        ./arith_dynamic -d $comp.$o $out/arith.uncomp  2>>$out/arith.stderr || exit 1
         cmp $out/arith-nl $out/arith.uncomp || exit 1
     done
 done
