@@ -382,7 +382,7 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
 	? 1.05*size + 257*3 + 4
 	: 1.05*size + 257*257*3 + 4 + 257*3+4) +
 	((order & X_PACK) ? 1 : 0) +
-	((order & X_RLE) ? 1 + 257*3+4: 0) + 5;
+	((order & X_RLE) ? 1 + 257*3+4: 0) + 20;
 }
 
 // Compresses in_size bytes from 'in' to *out_size bytes in 'out'.
@@ -400,7 +400,7 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     RansState rans3;
     uint8_t* ptr;
     int F[256+MAGIC] = {0}, i, j, tab_size = 0, rle, x;
-    int bound = rans_compress_bound_4x16(in_size,0)-5; // -5 for order/size
+    int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
 
     if (!out) {
 	*out_size = bound;
@@ -558,14 +558,44 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
     RansDecInit(&R[2], &cp); if (R[2] < RANS_BYTE_L) goto err;
     RansDecInit(&R[3], &cp); if (R[3] < RANS_BYTE_L) goto err;
 
+// Simple version is comparable to below, but only with -O3
+//
+//    for (i = 0; cp < cp_end-8 && i < (out_sz&~7); i+=8) {
+//        for(j=0; j<8;j++) {
+//	    RansState m = RansDecGet(&R[j%4], TF_SHIFT);
+//	    R[j%4] = sfreq[m] * (R[j%4] >> TF_SHIFT) + sbase[m];
+//	    out[i+j] = ssym[m];
+//	    RansDecRenorm(&R[j%4], &cp);
+//        }
+//    }
+
     for (i = 0; cp < cp_end-8 && i < (out_sz&~7); i+=8) {
-        for(j=0; j<8;j++) {
-            RansState m = RansDecGet(&R[j%4], TF_SHIFT);
-	    R[j%4] = sfreq[m] * (R[j%4] >> TF_SHIFT) + sbase[m];
-	    out[i+j] = ssym[m];
-	    RansDecRenorm(&R[j%4], &cp);
-        }
+	for (j = 0; j < 8; j+=4) {
+	    RansState m0 = RansDecGet(&R[0], TF_SHIFT);
+	    RansState m1 = RansDecGet(&R[1], TF_SHIFT);
+	    R[0] = sfreq[m0] * (R[0] >> TF_SHIFT) + sbase[m0];
+	    R[1] = sfreq[m1] * (R[1] >> TF_SHIFT) + sbase[m1];
+
+	    RansDecRenorm(&R[0], &cp);
+	    RansDecRenorm(&R[1], &cp);
+
+	    out[i+j+0] = ssym[m0];
+	    out[i+j+1] = ssym[m1];
+
+	    RansState m3 = RansDecGet(&R[2], TF_SHIFT);
+	    RansState m4 = RansDecGet(&R[3], TF_SHIFT);
+
+	    R[2] = sfreq[m3] * (R[2] >> TF_SHIFT) + sbase[m3];
+	    R[3] = sfreq[m4] * (R[3] >> TF_SHIFT) + sbase[m4];
+
+	    out[i+j+2] = ssym[m3];
+	    out[i+j+3] = ssym[m4];
+
+	    RansDecRenorm(&R[2], &cp);
+	    RansDecRenorm(&R[3], &cp);
+	}
     }
+
     // remainder
     for (; i < out_sz; i++) {
         RansState m = RansDecGet(&R[i%4], TF_SHIFT);
@@ -799,7 +829,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     unsigned char *cp, *out_end, *op;
     unsigned int tab_size;
     RansEncSymbol syms[256][256];
-    int bound = rans_compress_bound_4x16(in_size,1)-5; // -5 for order/size
+    int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
 
     if (!out) {
 	*out_size = bound;
@@ -1286,7 +1316,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	int pmeta_len;
 	uint64_t packed_len;
 	packed = hts_pack(in, in_size, out+c_meta_len, &pmeta_len, &packed_len);
-	if (!packed || (pmeta_len == 1 && out[c_meta_len] == 1)) {
+	if (!packed || (pmeta_len == 1 && out[c_meta_len] > 16)) {
 	    out[0] &= ~X_PACK;
 	    do_pack = 0;
 	    free(packed);
