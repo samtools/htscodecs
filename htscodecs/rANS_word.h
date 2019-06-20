@@ -73,14 +73,12 @@ static inline void RansEncInit(RansState* r)
 // Renormalize the encoder. Internal function.
 static inline RansState RansEncRenorm(RansState x, uint8_t** pptr, uint32_t freq, uint32_t scale_bits)
 {
-    uint32_t x_max = ((RANS_BYTE_L >> scale_bits) << 8) * freq; // this turns into a shift.
+    uint32_t x_max = ((RANS_BYTE_L >> scale_bits) << 16) * freq; // this turns into a shift.
     if (x >= x_max) {
-        uint8_t* ptr = *pptr;
-        do {
-            *--ptr = (uint8_t) (x & 0xff);
-            x >>= 8;
-        } while (x >= x_max);
-        *pptr = ptr;
+        uint16_t* ptr = (uint16_t *)*pptr;
+        *--ptr = (uint16_t) (x & 0xffff);
+        x >>= 16;
+        *pptr = (uint8_t *)ptr;
     }
     return x;
 }
