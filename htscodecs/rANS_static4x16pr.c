@@ -223,7 +223,7 @@ static void normalise_freq_shift(int *F, int size, int max_tot) {
     if (size == 0 || size == max_tot)
 	return;
 
-    uint shift = 0, i;
+    int shift = 0, i;
     while (size < max_tot)
 	size*=2, shift++;
 

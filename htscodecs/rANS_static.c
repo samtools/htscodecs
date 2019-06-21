@@ -266,7 +266,7 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
     
     in_sz  = ((in[0])<<0) | ((in[1])<<8) | ((in[2])<<16) | ((in[3])<<24);
     out_sz = ((in[4])<<0) | ((in[5])<<8) | ((in[6])<<16) | ((in[7])<<24);
-    if (in_sz != in_size-9 || out_sz < 0 || in_sz < 0)
+    if (in_sz != in_size-9)
 	return NULL;
 
     if (out_sz >= INT_MAX)
@@ -727,7 +727,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 
     in_sz  = ((in[0])<<0) | ((in[1])<<8) | ((in[2])<<16) | ((in[3])<<24);
     out_sz = ((in[4])<<0) | ((in[5])<<8) | ((in[6])<<16) | ((in[7])<<24);
-    if (in_sz != in_size-9 || in_sz < 0 || out_sz < 0)
+    if (in_sz != in_size-9)
 	return NULL;
 
     if (out_sz >= INT_MAX)
