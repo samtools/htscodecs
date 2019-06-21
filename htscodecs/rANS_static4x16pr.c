@@ -789,17 +789,7 @@ static uint8_t *rle_encode(uint8_t *data, int64_t len,
 	    i--;
 	    run_len = i-run_len;
 
-	    // Output 7-bits at a time in lowest bit order.
-	    // (For faster decode.)
-	    int s = 0, X = run_len;
-	    do {
-		s += 7;
-		X >>= 7;
-	    } while (X);
-	    do {
-		s -= 7;
-		out_meta[j++] = ((run_len>>s)&0x7f) + (s?128:0);
-	    } while (s);
+	    j += u32tou7(&out_meta[j], run_len);
 	}
     }
     
@@ -838,15 +828,10 @@ static uint8_t *rle_decode(uint8_t *in, int64_t in_len, uint8_t *meta, uint32_t 
     while (in < in_end) {
 	uint8_t b = *in++;
 	if (saved[b]) {
-	    uint32_t run_len = 0;
-	    unsigned char c;
-	    do {
-		c = meta<meta_end?*meta:0;
-		meta++;
-		run_len = (run_len<<7) | (c & 0x7f);
-	    } while (c & 0x80);
-	    if (meta > meta_end)
+	    uint32_t run_len, v;
+	    if ((v = u7tou32(meta, meta_end, &run_len)) == 0)
 		return NULL;
+	    meta += v;
 	    run_len++;
 	    if (outp + run_len > out_end)
 		run_len = out_end - outp;

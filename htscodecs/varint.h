@@ -36,6 +36,11 @@
 
 #include <stdint.h>
 
+#if 0
+// Little endian; LEB32
+//
+// It fits nicely with everything else being little endian, but is a bit
+// slower to decode.
 static inline int u32tou7(uint8_t *cp, uint32_t i) {
     uint8_t *op = cp;
 
@@ -65,5 +70,47 @@ static inline int u7tou32(uint8_t *cp, uint8_t *cp_end, uint32_t *i) {
     *i = j;
     return cp-op;
 }
+
+#else
+// Big endian.
+// Harder for encoding, but a simpler and faster decoder.
+//
+// Surprisingly this is often a bit smaller when compressed too.
+
+static inline int u32tou7(uint8_t *cp, uint32_t i) {
+    uint8_t *op = cp;
+    int s = 0, X = i;
+
+    do {
+	s += 7;
+	X >>= 7;
+    } while (X);
+
+    do {
+	s -= 7;
+	*cp++ = ((i>>s) & 0x7f) + (s?128:0);
+    } while (s);
+
+    return cp-op;
+}
+
+static inline int u7tou32(uint8_t *cp, uint8_t *cp_end, uint32_t *i) {
+    uint8_t *op = cp, c;
+    uint32_t j = 0;
+
+    if (cp >= cp_end) {
+	*i = 0;
+	return 0;
+    }
+
+    do {
+	c = *cp++;
+	j = (j<<7) | (c & 0x7f);
+    } while ((c & 0x80) && cp < cp_end);
+
+    *i = j;
+    return cp-op;
+}
+#endif
 
 #endif /* VARINT_H */
