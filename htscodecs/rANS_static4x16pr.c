@@ -160,6 +160,19 @@ static void present8(unsigned char *in, unsigned int in_size, int F0[256]) {
 	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
 }
 
+// Rounds to next power of 2.
+// credit to http://graphics.stanford.edu/~seander/bithacks.html
+static uint32_t round2(uint32_t v) {
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    return v;
+}
+
 static int normalise_freq(int *F, int size, int tot) {
     int m = 0, M = 0, fsum = 0, j;
     if (!size)
@@ -201,6 +214,21 @@ static int normalise_freq(int *F, int size, int tot) {
 
     //printf("F[%d]=%d\n", M, F[M]);
     return F[M]>0 ? 0 : -1;
+}
+
+// A specialised version of normalise_freq_shift where the input size
+// is already normalised to a power of 2, meaning we can just perform
+// shifts instead of hard to define multiplications and adjustments.
+static void normalise_freq_shift(int *F, int size, int max_tot) {
+    if (size == 0 || size == max_tot)
+	return;
+
+    uint shift = 0, i;
+    while (size < max_tot)
+	size*=2, shift++;
+
+    for (i = 0; i < 256; i++)
+	F[i] <<= shift;
 }
 
 // symbols only
@@ -293,19 +321,22 @@ static int encode_freq(uint8_t *cp, int *F) {
     return cp - op;
 }
 
-static int decode_freq(uint8_t *cp, uint8_t *cp_end, int *F) {
+static int decode_freq(uint8_t *cp, uint8_t *cp_end, int *F, int *fsum) {
     if (cp == cp_end)
 	return 0;
 
     uint8_t *op = cp;
     cp += decode_alphabet(cp, cp_end, F);
 
-    int j;
+    int j, tot = 0;
     for (j = 0; j < 256; j++) {
-	if (F[j])
+	if (F[j]) {
 	    cp += u7tou32(cp, cp_end, (unsigned int *)&F[j]);
+	    tot += F[j];
+	}
     }
 
+    *fsum = tot;
     return cp - op;
 }
 
@@ -417,8 +448,22 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     // Compute statistics
     hist8(in, in_size, F);
 
-    // Normalise so T[i] == TOTFREQ
-    if (normalise_freq(F, in_size, TOTFREQ) < 0)
+    // Normalise so frequences sum to power of 2
+    int fsum = in_size;
+    int max_val = round2(fsum);
+    if (max_val > TOTFREQ)
+	max_val = TOTFREQ;
+
+    if (normalise_freq(F, fsum, max_val) < 0)
+	return NULL;
+    fsum=max_val;
+
+    cp = out;
+    cp += encode_freq(cp, F);
+    tab_size = cp-out;
+    //write(2, out+4, cp-(out+4));
+
+    if (normalise_freq(F, fsum, TOTFREQ) < 0)
 	return NULL;
 
     // Encode statistics.
@@ -428,11 +473,6 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
 	    x += F[j];
 	}
     }
-
-    cp = out;
-    cp += encode_freq(cp, F);
-    tab_size = cp-out;
-    //write(2, out+4, cp-(out+4));
 
     RansEncInit(&rans0);
     RansEncInit(&rans1);
@@ -526,11 +566,13 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 	return NULL;
 
     // Precompute reverse lookup of frequency.
-    int F[256] = {0};
-    int fsz = decode_freq(cp, cp_end, F);
+    int F[256] = {0}, fsum;
+    int fsz = decode_freq(cp, cp_end, F, &fsum);
     if (!fsz)
 	goto err;
     cp += fsz;
+
+    normalise_freq_shift(F, fsum, TOTFREQ);
 
     // Build symbols; fixme, do as part of decode, see the _d variant
     for (j = x = 0; j < 256; j++) {
@@ -867,29 +909,36 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	if (F0[i] == 0)
 	    continue;
 
-#ifdef FAST
-	if (normalise_freq(F[i], T[i], TOTFREQ_O1) < 0)
-	    return NULL;
-	cp += encode_freq_d(cp, F0, F[i]);
-#else
 	// Order-1 frequencies often end up totalling under TOTFREQ.
 	// In this case it's smaller to output the real frequencies
 	// prior to normalisation and normalise after (with an extra
 	// normalisation step needed in the decoder too).
-	if (T[i] > TOTFREQ_O1)
-	    if (normalise_freq(F[i], T[i], TOTFREQ_O1) < 0) {
-		fprintf(stderr, "err in norm\n");
-		return NULL;
-	    }
+	//
+	// Thus we normalise to a power of 2 only, store those,
+	// and renormalise later here (and in decoder) by bit-shift
+	// to get to the fixed size.
+	int max_val = round2(T[i]);
+
+	// Small optimisation; trade frequency table size with
+	// accuracy of stats for smaller data.
+	// It's a reasonable trade off for small datasets.
+	int ns = 0;
+	for (j = 0; j < 256; j++)
+	    if (F[i][j])
+		ns++;
+	if (ns < 64 && max_val > 128) max_val /= 2;
+	if (max_val > 1024)           max_val /= 2;
+
+	if (max_val > TOTFREQ_O1)
+	    max_val = TOTFREQ_O1;
+
+	if (normalise_freq(F[i], T[i], max_val) < 0)
+	    return NULL;
+	T[i]=max_val;
 
 	cp += encode_freq_d(cp, F0, F[i]);
 
-	if (T[i] < TOTFREQ_O1)
-	    if (normalise_freq(F[i], T[i], TOTFREQ_O1) < 0) {
-		fprintf(stderr, "err in norm, T[%d]=%d\n", i, T[i]);
-		return NULL;
-	    }
-#endif
+	normalise_freq_shift(F[i], T[i], TOTFREQ_O1); T[i]=TOTFREQ_O1;
 
 	int *F_i_ = F[i];
 	for (x = j = 0; j < 256; j++) {
@@ -1107,9 +1156,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 	    continue;
 	}
 
-	if (T < TOTFREQ_O1)
-	    if (normalise_freq(F, T, TOTFREQ_O1) < 0)
-		goto err;
+	normalise_freq_shift(F, T, TOTFREQ_O1);
 
 	// Build symbols; fixme, do as part of decode, see the _d variant
 	for (j = x = 0; j < 256; j++) {
