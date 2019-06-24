@@ -1326,6 +1326,15 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	return out;
     }
 
+    if (order & X_CAT) {
+	out[0] = X_CAT;
+	c_meta_len = 1;
+	c_meta_len += u32tou7(&out[1], in_size);
+	memcpy(out+c_meta_len, in, in_size);
+	*out_size = c_meta_len + in_size;
+	return out;
+    }
+
     int do_pack = order & X_PACK;
     int do_rle  = order & X_RLE;
     int no_size = order & X_NOSZ;
