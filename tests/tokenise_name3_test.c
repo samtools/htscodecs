@@ -60,13 +60,13 @@ static char blk[BLK_SIZE*2]; // temporary fix for decoder, which needs more spac
 static int encode(int argc, char **argv) {
     FILE *fp;
     int len, level = 9;
-    int use_arith = 1;
+    int use_arith = 0;
 
     if (argc > 1 && argv[1][0] == '-') {
 	level = atoi(argv[1]+1);
 	if (level > 10) {
 	    level -= 10;
-	    use_arith = 0;
+	    use_arith = 1;
 	}
 	argc -= 1;
 	argv++;
