@@ -11,6 +11,10 @@ do
     tr -d '\012' < $f > $out/arith-nl
     for o in 0 1 64 65 128 129 192 193 8 9
     do
+	if [ ! -e "$comp.$o" ]
+	then
+	    continue
+	fi
         echo -n Testing arith_dynamic -o$o on $f "	"
 
 	# Round trip
