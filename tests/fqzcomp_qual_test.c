@@ -333,6 +333,10 @@ int main(int argc, char **argv) {
 
 	    int *lengths = malloc(MAX_REC * sizeof(int));
 	    out = (unsigned char *)fqz_decompress((char *)in2, in_len-8, &out_len, lengths, MAX_REC);
+	    if (!out) {
+		fprintf(stderr, "Failed to decompress\n");
+		return 1;
+	    }
 
 	    // Convert from binary back to ASCII with newlines
 	    int i = 0, j = 0;

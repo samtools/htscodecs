@@ -335,7 +335,7 @@ static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q
     last += (state->qctx & pm->qmask) << pm->qloc;
 
     // The final shifts have been factored into the tables already.
-    last += pm->ptab[MIN(1024, state->p)];      // << pm->ploc
+    last += pm->ptab[MIN(1023, state->p)];      // << pm->ploc
     last += pm->dtab[MIN(255,  state->delta)];  // << pm->dloc
     last += state->s << pm->sloc;
 
