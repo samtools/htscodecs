@@ -759,7 +759,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 	int pmeta_len;
 	uint64_t packed_len;
 	packed = hts_pack(in, in_size, out+c_meta_len, &pmeta_len, &packed_len);
-	if (!packed || (pmeta_len == 1 && out[c_meta_len] == 1)) {
+	if (!packed || (pmeta_len == 1 && out[c_meta_len] > 16)) {
 	    out[0] &= ~X_PACK;
 	    do_pack = 0;
 	    free(packed);
