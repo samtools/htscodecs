@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(htscodecs, 0.2)
+AC_INIT(htscodecs, 0.3)
 
 # Some functions benefit from -O3 optimisation, so if the user didn't
 # explicitly set any compiler flags, we'll plump for O3.
