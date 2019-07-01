@@ -100,6 +100,11 @@
 #include <errno.h>
 #include <time.h>
 
+//#define NO_THREADS
+#ifndef NO_THREADS
+#include <pthread.h>
+#endif
+
 #include "pooled_alloc.h"
 #include "arith_dynamic.h"
 #include "rANS_static4x16.h"
@@ -163,6 +168,18 @@ typedef struct {
     int max_names;
 } name_context;
 
+#ifndef NO_THREADS
+/*
+ * Thread local storage, used to avoid repeated malloc/free calls.
+ */
+pthread_once_t tok_once = PTHREAD_ONCE_INIT;
+pthread_key_t tok_key;
+
+static void tok_tls_init(void) {
+    pthread_key_create(&tok_key, free);
+}
+#endif
+
 static name_context *create_context(int max_names) {
     if (max_names <= 0)
 	return NULL;
@@ -172,12 +189,29 @@ static name_context *create_context(int max_names) {
 	return NULL;
 #endif
 
+#ifndef NO_THREADS
+    pthread_once(&tok_once, tok_tls_init);
+
+    name_context *ctx = pthread_getspecific(tok_key);
+    if (!ctx) {
+	ctx = malloc(sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
+	if (!ctx) return NULL;
+	ctx->max_names = max_names;
+	pthread_setspecific(tok_key, ctx);
+    } else if (ctx->max_names < max_names) {
+	ctx = realloc(ctx, sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
+	if (!ctx) return NULL;
+	ctx->max_names = max_names;
+	pthread_setspecific(tok_key, ctx);
+    }
+#else
     name_context *ctx = malloc(sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
     if (!ctx) return NULL;
+    ctx->max_names = max_names;
+#endif
 
     ctx->counter = 0;
     ctx->t_head = NULL;
-    ctx->max_names = max_names;
 
     ctx->lc = (last_context *)(((char *)ctx) + sizeof(*ctx));
     ctx->pool = NULL;
@@ -203,7 +237,9 @@ static void free_context(name_context *ctx) {
     for (i = 0; i < ctx->max_tok*16; i++)
 	free(ctx->desc[i].buf);
 
+#ifdef NO_THREADS
     free(ctx);
+#endif
 }
 
 //-----------------------------------------------------------------------------

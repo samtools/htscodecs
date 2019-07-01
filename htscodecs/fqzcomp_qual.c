@@ -63,6 +63,11 @@
 #include <math.h>
 #include <inttypes.h>
 
+//#define NO_THREADS
+#ifndef NO_THREADS
+#include <pthread.h>
+#endif
+
 #include "fqzcomp_qual.h"
 #include "varint.h"
 
@@ -306,11 +311,36 @@ typedef struct {
     SIMPLE_MODEL(2,_)     dup;
 } fqz_model;
 
+#ifndef NO_THREADS
+/*
+ * Thread local storage, used to avoid repeated malloc/free calls.
+ */
+pthread_once_t fqz_once = PTHREAD_ONCE_INIT;
+pthread_key_t fqz_key;
+
+static void fqz_tls_init(void) {
+    pthread_key_create(&fqz_key, free);
+}
+#endif
+
 static int fqz_create_models(fqz_model *m, fqz_gparams *gp) {
     int i;
 
+#ifndef NO_THREADS
+    pthread_once(&fqz_once, fqz_tls_init);
+
+    m->qual = pthread_getspecific(fqz_key);
+
+    if (!m->qual) {
+        if (!(m->qual = malloc(sizeof(*m->qual) * CTX_SIZE)))
+	    return -1;
+	pthread_setspecific(fqz_key, m->qual);
+    }
+#else
     if (!(m->qual = malloc(sizeof(*m->qual) * CTX_SIZE)))
 	return -1;
+#endif
+
     for (i = 0; i < CTX_SIZE; i++)
 	SIMPLE_MODEL(QMAX,_init)(&m->qual[i], gp->max_sym+1);
 
@@ -326,7 +356,9 @@ static int fqz_create_models(fqz_model *m, fqz_gparams *gp) {
 }
 
 static void fqz_destroy_models(fqz_model *m) {
+#ifdef NO_THREADS
     free(m->qual);
+#endif
 }
 
 static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q) {
