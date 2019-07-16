@@ -989,6 +989,9 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 	ctx->max_tok = ntok+1;
     }
     if (encode_token_end(ctx, ntok) < 0) return -1;
+#ifdef ENC_DEBUG
+    fprintf(stderr, "ntok=%d max_tok=%d\n", ntok, ctx->max_tok);
+#endif
 
     //printf("Encoded %.*s with %d tokens\n", len, name, ntok);
     
@@ -1311,7 +1314,7 @@ static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
 uint8_t *encode_names(char *blk, int len, int level, int use_arith,
 		      int *out_len, int *last_start_p) {
     int last_start = 0, i, j, nreads;
-    
+
     // Count lines
     for (nreads = i = 0; i < len; i++)
 	if (blk[i] <= '\n') // \n or \0 separated entries
@@ -1397,9 +1400,11 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
 		if (ctx->desc[i+k].buf_l)
 		    break;
 
-	    ctx->desc[i].buf_l = 0;
-	    free(ctx->desc[i].buf);
-	    ctx->desc[i].buf = NULL;
+	    if (k < 16) {
+		ctx->desc[i].buf_l = 0;
+		free(ctx->desc[i].buf);
+		ctx->desc[i].buf = NULL;
+	    }
 	}
     }
 
