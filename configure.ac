@@ -3,7 +3,7 @@ AC_INIT(htscodecs, 0.3)
 
 # Some functions benefit from -O3 optimisation, so if the user didn't
 # explicitly set any compiler flags, we'll plump for O3.
-${CFLAGS="-g -O3"}
+_=${CFLAGS="-g -O3"}
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
