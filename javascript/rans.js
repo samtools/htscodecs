@@ -366,8 +366,6 @@ function ReadFrequencies1(src, F, C) {
 }
 
 function RansDecode1(src, nbytes) {
-    // FIXME: this bit is missing from the RansDecode0 pseudocode.
-
     // Decode frequencies
     var F = new Array(256);
     var C = new Array(256);

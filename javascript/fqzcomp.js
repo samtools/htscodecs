@@ -203,6 +203,7 @@ function decode_fqz_params(src) {
 	for (; i < 256; i++)
 	    stab[i] = nparam-1;
     }
+    gparams.do_rev = (gflags & GFLAG_DO_REV)
     gparams.stab = stab
     gparams.max_sel = max_sel
 
@@ -224,7 +225,7 @@ function fqz_create_models(gparams) {
 	model.qual[i] = new ByteModel(gparams.max_sym+1) // +1 as max value not num. values
 
     model.len = new Array(4)
-    for (var i = 0; i < (1<<4); i++)
+    for (var i = 0; i < 4; i++)
 	model.len[i] = new ByteModel(256)
 
     model.rev   = new ByteModel(2)
@@ -233,14 +234,12 @@ function fqz_create_models(gparams) {
     if (gparams.max_sel > 0)
 	model.sel = new ByteModel(gparams.max_sel+1) // +1 as max value not num. values
 
-    // TODO: do_rev
-
     return model
 }
 
 // Initialise a new record, updating state.
 // Returns 1 if dup, otherwise 0
-function decode_fqz_new_record(src, rc, gparams, model, state) {
+function decode_fqz_new_record(src, rc, gparams, model, state, rev) {
     // Parameter selector
     if (gparams.max_sel > 0) {
 	state.s = model.sel.ModelDecode(src, rc)
@@ -265,7 +264,8 @@ function decode_fqz_new_record(src, rc, gparams, model, state) {
     }
     state.len = len
 
-    // FIXME: do_rev
+    if (gparams.do_rev)
+	rev[state.rec] = model.rev.ModelDecode(src, rc)
 
     state.is_dup = 0
     if (params.pflags & FLAG_DEDUP) {
@@ -277,6 +277,7 @@ function decode_fqz_new_record(src, rc, gparams, model, state) {
     state.delta = 0
     state.qctx = 0
     state.prevq = 0
+    state.rec++
 }
 
 function decode_fqz(src, q_lens) {
@@ -285,6 +286,7 @@ function decode_fqz(src, q_lens) {
     var gparams = decode_fqz_params(src)
     if (!gparams) return
     var params = gparams.params
+    var rev = new Array(q_lens.length)
 
     // Create initial models
     var model = fqz_create_models(gparams)
@@ -297,20 +299,21 @@ function decode_fqz(src, q_lens) {
     // Internal FQZ state
     var state = {
 	qctx:0,   // Qual-only sub-context
-	prevq:0, // Previous quality value
+	prevq:0,  // Previous quality value
 	delta:0,  // Running delta (q vs prevq)
 	p:0,      // Number of bases left in current record
 	s:0,      // Current parameter selector value (0 if unused)
 	x:0,      // "stab" tabulated copy of s
 	len:0,    // Length of current string
-	is_dup:0  // This string is a duplicate of last
+	is_dup:0, // This string is a duplicate of last
+	rec:0     // Record number
     }
 
     // The main decode loop itself
     var i = 0     // position in output buffer
     while (i < n_out) {
 	if (state.p == 0) {
-	    decode_fqz_new_record(src, rc, gparams, model, state)
+	    decode_fqz_new_record(src, rc, gparams, model, state, rev)
 	    if (state.is_dup > 0) {
 		if (model.dup.ModelDecode(src, rc)) {
 		    // Duplicate of last line
@@ -338,7 +341,30 @@ function decode_fqz(src, q_lens) {
 	last = fqz_update_ctx(params, state, Q)
     }
 
+    if (gparams.do_rev)
+	reverse_qualities(output, n_out, rev, q_lens)
+
     return output;
+}
+
+function reverse_qualities(qual, qual_len, rev, len) {
+    var rec = 0
+    var i = 0
+    while (i < qual_len) {
+	if (rev[rec]) {
+	    var j = 0
+	    var k = len[rec]-1
+	    while (j < k) {
+		var tmp   = qual[i+j]
+		qual[i+j] = qual[i+k]
+		qual[i+k] = tmp
+		j++
+		k--
+	    }
+	}
+
+	i += len[rec++];
+    }
 }
 
 function decode(src, q_lens) {
@@ -710,14 +736,15 @@ function encode_fqz(out, src, q_lens, q_dirs, params, qhist, qtab, ptab, dtab, s
 	model_qual[i] = new ByteModel(max_sym+1)
 
     var model_len = new Array(4)
-    for (var i = 0; i < (1<<4); i++)
+    for (var i = 0; i < 4; i++)
 	model_len[i] = new ByteModel(256)
 
     var model_rev    = new ByteModel(2)
     var model_dup    = new ByteModel(2)
     var model_sel    = new ByteModel(max_sel+1)
 
-    // TODO: do_rev
+    // Note: our JavaScript encoder doesn't have a way for reversing
+    // some quality strings, so we ignore do_rev for now.
     var rc = new RangeCoder(src)
 
     // The main encoding loop
