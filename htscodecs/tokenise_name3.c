@@ -128,7 +128,12 @@ enum name_type {N_ERR = -1, N_TYPE = 0, N_ALPHA, N_CHAR, N_DIGITS0, N_DZLEN, N_D
 char *types[]={"TYPE", "ALPHA", "CHAR", "DIG0", "DZLEN", "DUP", "DIFF",
 	       "DIGITS", "DDELTA", "DDELTA0", "MATCH", "NOP", "END"};
 
-typedef struct trie trie_t;
+typedef struct trie {
+    char c;
+    int count;
+    struct trie *next, *sibling;
+    int n; // Nth line
+} trie_t;
 
 typedef struct {
     char *last_name;
@@ -485,13 +490,6 @@ static int encode_token_diff(name_context *ctx, uint32_t val) {
 
 //-----------------------------------------------------------------------------
 // Trie implementation for tracking common name prefixes.
-typedef struct trie {
-    char c;
-    int count;
-    struct trie *next, *sibling;
-    int n; // Nth line
-} trie_t;
-
 static
 int build_trie(name_context *ctx, char *data, size_t len, int n) {
     int nlines = 0;

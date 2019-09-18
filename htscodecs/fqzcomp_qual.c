@@ -62,6 +62,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <inttypes.h>
+#include <sys/types.h>
 
 //#define NO_THREADS
 #ifndef NO_THREADS
