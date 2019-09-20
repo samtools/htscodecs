@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 out=test.out
 if test ! -d $out
 then

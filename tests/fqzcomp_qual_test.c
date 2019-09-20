@@ -192,7 +192,11 @@ static unsigned char *load(char *fn, size_t *lenp) {
 
     //build_rcp_freq();
 
-    int fd = open(fn, O_RDONLY);
+#ifndef _O_BINARY
+#define _O_BINARY 0
+#endif
+
+    int fd = open(fn, O_RDONLY | _O_BINARY);
     if (!fd) {
 	perror(fn);
 	return NULL;
@@ -282,6 +286,11 @@ int main(int argc, char **argv) {
     int strat = 0;
     fqz_gparams *gp = NULL, gp_local;
 
+#ifdef _WIN32
+        _setmode(_fileno(stdin),  _O_BINARY);
+        _setmode(_fileno(stdout), _O_BINARY);
+#endif
+
     while (argc > 1 && argv[1][0] == '-') {
 	if (argc > 1 && strcmp(argv[1], "-d") == 0) {
 	    decomp = 1;
@@ -329,7 +338,7 @@ int main(int argc, char **argv) {
 	    size_t out_len = *(uint32_t *)in2;  in2 += 4;
 	    size_t in2_len = *(uint32_t *)in2;  in2 += 4;
 
-	    fprintf(stderr, "out_len %ld, in_len %ld\n", out_len, in2_len);
+	    fprintf(stderr, "out_len %ld, in_len %ld\n", (long)out_len, (long)in2_len);
 
 	    int *lengths = malloc(MAX_REC * sizeof(int));
 	    out = (unsigned char *)fqz_decompress((char *)in2, in_len-8, &out_len, lengths, MAX_REC);

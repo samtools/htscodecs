@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <string.h>
+#include <fcntl.h>
 #include <sys/time.h>
 
 #include "htscodecs/rANS_static4x16.h"
@@ -23,6 +24,11 @@ int main(int argc, char **argv) {
     FILE *infp = stdin, *outfp = stdout;
     struct timeval tv1, tv2, tv3, tv4;
     size_t bytes = 0;
+
+#ifdef _WIN32
+        _setmode(_fileno(stdin),  _O_BINARY);
+        _setmode(_fileno(stdout), _O_BINARY);
+#endif
 
     extern char *optarg;
     extern int optind;
@@ -124,12 +130,12 @@ int main(int argc, char **argv) {
 		//free(bu[i].blk);
 	    }
 
-	    fprintf(stderr, "%5.1f MB/s enc, %5.1f MB/s dec\t %lld bytes -> %lld bytes\n",
+	    fprintf(stderr, "%5.1f MB/s enc, %5.1f MB/s dec\t %ld bytes -> %ld bytes\n",
 		    (double)in_sz / ((long)(tv2.tv_sec - tv1.tv_sec)*1000000 +
 				     tv2.tv_usec - tv1.tv_usec),
 		    (double)in_sz / ((long)(tv4.tv_sec - tv3.tv_sec)*1000000 +
 				     tv4.tv_usec - tv3.tv_usec),
-		    (long long)in_sz, (long long)out_sz);
+		    (long)in_sz, (long)out_sz);
 	}
 
 	exit(0);

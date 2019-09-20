@@ -139,6 +139,10 @@ static int decode(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+        _setmode(_fileno(stdin),  _O_BINARY);
+        _setmode(_fileno(stdout), _O_BINARY);
+#endif
 
     if (argc > 1 && strcmp(argv[1], "-d") == 0)
 	return decode(argc-1, argv+1);

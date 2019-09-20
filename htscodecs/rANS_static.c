@@ -41,6 +41,11 @@
 #define USE_HEAP
 #endif
 
+#ifdef __WIN32
+// Similarly Mingw on windows needs a bigger stack than we're given.
+#define USE_HEAP
+#endif
+
 // Use 11 for order-1?
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
