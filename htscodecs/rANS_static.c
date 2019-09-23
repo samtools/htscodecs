@@ -31,18 +31,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#if defined(NO_THREADS) && defined(__APPLE__)
+#if defined(NO_THREADS) && (defined(__APPLE__) || defined(_WIN32))
 // When pthreads is available, we use a single malloc, otherwise we'll
 // (normally) use the stack instead.
 //
 // However the MacOS X default stack size can be tiny (512K), albeit
 // I think only when threading?  We request malloc/free for the large
 // local arrays instead to avoid this, but it does have a performance hit.
-#define USE_HEAP
-#endif
-
-#ifdef __WIN32
-// Similarly Mingw on windows needs a bigger stack than we're given.
 #define USE_HEAP
 #endif
 
@@ -433,18 +428,74 @@ static void hist1_4(unsigned char *in, unsigned int in_size,
     }
 }
 
+#ifndef NO_THREADS
+/*
+ * Thread local storage per thread in the pool.
+ * This avoids needing to memset/calloc F and syms in the encoder,
+ * which can be speed things this encoder up a little.
+ */
+static pthread_once_t rans_enc_once = PTHREAD_ONCE_INIT;
+static pthread_key_t rans_enc_key;
+
+typedef struct {
+    RansEncSymbol (*syms)[256];
+    int (*F)[256];
+} thread_enc_data;
+
+static void rans_enc_free(void *vp) {
+    thread_enc_data *te = (thread_enc_data *)vp;
+    if (!te)
+	return;
+    free(te->F);
+    free(te->syms);
+    free(te);
+}
+
+static thread_enc_data *rans_enc_alloc(void) {
+    thread_enc_data *te = malloc(sizeof(*te));
+    if (!te)
+	return NULL;
+    te->F = calloc(256, sizeof(*te->F));
+    te->syms = calloc(256, sizeof(*te->syms));
+    if (!te->F || !te->syms) {
+	rans_enc_free(te);
+	return NULL;
+    }
+
+    return te;
+}
+
+static void rans_tls_enc_init(void) {
+    pthread_key_create(&rans_enc_key, rans_enc_free);
+}
+#endif
+
 static
 unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
 				unsigned int *out_size) {
     unsigned char *out_buf = NULL, *out_end, *cp;
     unsigned int tab_size, rle_i, rle_j;
 
+
+#ifndef NO_THREADS
+    pthread_once(&rans_enc_once, rans_tls_enc_init);
+    thread_enc_data *te = pthread_getspecific(rans_enc_key);
+    if (!te) {
+	if (!(te = rans_enc_alloc()))
+	    return NULL;
+	pthread_setspecific(rans_enc_key, te);
+    }
+    RansEncSymbol (*syms)[256] = te->syms;
+    int (*F)[256] = te->F;
+    memset(F, 0, 256*sizeof(*F));
+#else
 #ifdef USE_HEAP
     RansEncSymbol (*syms)[256] = malloc(256 * sizeof(*syms));
     int (*F)[256] = calloc(256, sizeof(*F));
 #else
     RansEncSymbol syms[256][256];
     int F[256][256] = {{0}};
+#endif
 #endif
     int T[256+MAGIC] = {0};
     int i, j;
