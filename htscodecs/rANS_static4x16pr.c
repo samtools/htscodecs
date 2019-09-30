@@ -315,7 +315,7 @@ static int encode_freq(uint8_t *cp, int *F) {
 
     for (j = 0; j < 256; j++) {
 	if (F[j])
-	    cp += u32tou7(cp, F[j]);
+	    cp += var_put_u32(cp, NULL, F[j]);
     }
 
     return cp - op;
@@ -331,7 +331,7 @@ static int decode_freq(uint8_t *cp, uint8_t *cp_end, int *F, int *fsum) {
     int j, tot = 0;
     for (j = 0; j < 256; j++) {
 	if (F[j]) {
-	    cp += u7tou32(cp, cp_end, (unsigned int *)&F[j]);
+	    cp += var_get_u32(cp, cp_end, (unsigned int *)&F[j]);
 	    tot += F[j];
 	}
     }
@@ -357,7 +357,7 @@ static int encode_freq_d(uint8_t *cp, int *F0, int *F) {
 		    *cp++ = dz-1;
 		}
 		dz = 0;
-		cp += u32tou7(cp, F[j]);
+		cp += var_put_u32(cp, NULL, F[j]);
 	    } else {
 		//fprintf(stderr, "2: j=%d F0[j]=%d, F[j]=%d, dz=%d\n", j, F0[j], F[j], dz);
 		dz++;
@@ -394,7 +394,7 @@ static int decode_freq_d(uint8_t *cp, uint8_t *cp_end, int *F0, int *F, int *tot
 	    dz--;
 	} else {
 	    if (cp >= cp_end) return 0;
-	    cp += u7tou32(cp, cp_end, &f);
+	    cp += var_get_u32(cp, cp_end, &f);
 	    if (f == 0) {
 		if (cp >= cp_end) return 0;
 		dz = *cp++;
@@ -789,7 +789,7 @@ static uint8_t *rle_encode(uint8_t *data, int64_t len,
 	    i--;
 	    run_len = i-run_len;
 
-	    j += u32tou7(&out_meta[j], run_len);
+	    j += var_put_u32(&out_meta[j], NULL, run_len);
 	}
     }
     
@@ -829,7 +829,7 @@ static uint8_t *rle_decode(uint8_t *in, int64_t in_len, uint8_t *meta, uint32_t 
 	uint8_t b = *in++;
 	if (saved[b]) {
 	    uint32_t run_len, v;
-	    if ((v = u7tou32(meta, meta_end, &run_len)) == 0)
+	    if ((v = var_get_u32(meta, meta_end, &run_len)) == 0)
 		return NULL;
 	    meta += v;
 	    run_len++;
@@ -940,8 +940,8 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	unsigned char *c_freq = rans_compress_O0_4x16(op+1, u_freq_sz, NULL, &c_freq_sz);
 	if (c_freq && c_freq_sz + 6 < cp-op) {
 	    *op++ = 1; // compressed
-	    op += u32tou7(op, u_freq_sz);
-	    op += u32tou7(op, c_freq_sz);
+	    op += var_put_u32(op, NULL, u_freq_sz);
+	    op += var_put_u32(op, NULL, c_freq_sz);
 	    memcpy(op, c_freq, c_freq_sz);
 	    cp = op+c_freq_sz;
 	}
@@ -1105,8 +1105,8 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     unsigned char *c_freq_end = cp_end;
     if (*cp++ == 1) {
 	uint32_t u_freq_sz, c_freq_sz;
-	cp += u7tou32(cp, cp_end, &u_freq_sz);
-	cp += u7tou32(cp, cp_end, &c_freq_sz);
+	cp += var_get_u32(cp, cp_end, &u_freq_sz);
+	cp += var_get_u32(cp, cp_end, &c_freq_sz);
 	if (c_freq_sz >= cp_end - cp - 16)
 	    goto err;
 	tab_end = cp + c_freq_sz;
@@ -1273,6 +1273,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	if (!(out = malloc(*out_size)))
 	    return NULL;
     }
+    unsigned char *out_end = out + *out_size;
 
     if (in_size%4 != 0 || in_size <= 20)
 	order &= ~X_4;
@@ -1297,7 +1298,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned char *out2;
 	c_meta_len = 1;
 	*out = order;
-	c_meta_len += u32tou7(out+c_meta_len, in_size);
+	c_meta_len += var_put_u32(out+c_meta_len, out_end, in_size);
 	out2 = out+26;
         for (i = 0; i < 4; i++) {
             // Brute force try all methods.
@@ -1318,7 +1319,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    }
             //rans_compress_to_4x16(in4+i*len4, len4, out2, &olen2, (order & ~X_4) | X_NOSZ);
             out2 += olen2;
-            c_meta_len += u32tou7(out+c_meta_len, olen2);
+            c_meta_len += var_put_u32(out+c_meta_len, out_end, olen2);
         }
 	memmove(out+c_meta_len, out+26, out2-(out+26));
 	free(in4);
@@ -1329,7 +1330,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (order & X_CAT) {
 	out[0] = X_CAT;
 	c_meta_len = 1;
-	c_meta_len += u32tou7(&out[1], in_size);
+	c_meta_len += var_put_u32(&out[1], out_end, in_size);
 	memcpy(out+c_meta_len, in, in_size);
 	*out_size = c_meta_len + in_size;
 	return out;
@@ -1343,7 +1344,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
     c_meta_len = 1;
 
     if (!no_size)
-	c_meta_len += u32tou7(&out[1], in_size);
+	c_meta_len += var_put_u32(&out[1], out_end, in_size);
 
     order &= 0xf;
 
@@ -1369,7 +1370,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 
 	    // Could derive this rather than storing verbatim.
 	    // Orig size * 8/nbits (+1 if not multiple of 8/n)
-	    int sz = u32tou7(out+c_meta_len, in_size);
+	    int sz = var_put_u32(out+c_meta_len, out_end, in_size);
 	    c_meta_len += sz;
 	    *out_size -= sz;
 	}
@@ -1394,17 +1395,17 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    rle = NULL;
 	} else {
 	    // Compress lengths with O0 and literals with O0/O1 ("order" param)
-	    int sz = u32tou7(out+c_meta_len, rmeta_len*2), sz2;
-	    sz += u32tou7(out+c_meta_len+sz, rle_len);
+	    int sz = var_put_u32(out+c_meta_len, out_end, rmeta_len*2), sz2;
+	    sz += var_put_u32(out+c_meta_len+sz, out_end, rle_len);
 	    c_rmeta_len = *out_size - (c_meta_len+sz+5);
 	    rans_compress_O0_4x16(meta, rmeta_len, out+c_meta_len+sz+5, &c_rmeta_len);
 	    if (c_rmeta_len < rmeta_len) {
-		sz2 = u32tou7(out+c_meta_len+sz, c_rmeta_len);
+		sz2 = var_put_u32(out+c_meta_len+sz, out_end, c_rmeta_len);
 		memmove(out+c_meta_len+sz+sz2, out+c_meta_len+sz+5, c_rmeta_len);
 	    } else {
 		// Uncompressed RLE meta-data as too small
-		sz = u32tou7(out+c_meta_len, rmeta_len*2+1);
-		sz2 = u32tou7(out+c_meta_len+sz, rle_len);
+		sz = var_put_u32(out+c_meta_len, out_end, rmeta_len*2+1);
+		sz2 = var_put_u32(out+c_meta_len+sz, out_end, rle_len);
 		memcpy(out+c_meta_len+sz+sz2, meta, rmeta_len);
 		c_rmeta_len = rmeta_len;
 	    }
@@ -1464,7 +1465,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	int i, j;
 
 	// Decode lengths
-	c_meta_len += u7tou32(in+c_meta_len, in_end, &ulen);
+	c_meta_len += var_get_u32(in+c_meta_len, in_end, &ulen);
 	if (!out) {
 	    if (ulen >= INT_MAX)
 		return NULL;
@@ -1478,7 +1479,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	}
 
 	for (i = 0; i < 4; i++) {
-	    c_meta_len += u7tou32(in+c_meta_len, in_end, &clen4[i]);
+	    c_meta_len += var_get_u32(in+c_meta_len, in_end, &clen4[i]);
 	    if (c_meta_len > in_size || clen4[i] > in_size || clen4[i] < 1) {
 		free(out_free);
 		return NULL;
@@ -1541,7 +1542,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     int sz = 0;
     unsigned int osz;
     if (!no_size)
-	sz = u7tou32(in, in_end, &osz);
+	sz = var_get_u32(in, in_end, &osz);
     else
 	sz = 0, osz = *out_size;
     in += sz;
@@ -1635,7 +1636,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	// New unpacked size.  We could derive this bit from *out_size
 	// and npacked_sym.
 	unsigned int osz;
-	sz = u7tou32(in, in_end, &osz);
+	sz = var_get_u32(in, in_end, &osz);
 	in += sz;
 	in_size -= sz;
 	if (osz > tmp1_size)
@@ -1648,8 +1649,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (do_rle) {
 	// Uncompress meta data
 	uint32_t c_meta_size, rle_len, sz;
-	sz  = u7tou32(in,    in_end, &u_meta_size);
-	sz += u7tou32(in+sz, in_end, &rle_len);
+	sz  = var_get_u32(in,    in_end, &u_meta_size);
+	sz += var_get_u32(in+sz, in_end, &rle_len);
 	if (rle_len > tmp1_size) // should never grow
 	    goto err;
 	if (u_meta_size & 1) {
@@ -1657,7 +1658,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    u_meta_size = u_meta_size/2 > (in_end-meta) ? (in_end-meta) : u_meta_size/2;
 	    c_meta_size = u_meta_size;
 	} else {
-	    sz += u7tou32(in+sz, in_end, &c_meta_size);
+	    sz += var_get_u32(in+sz, in_end, &c_meta_size);
 	    u_meta_size /= 2;
 	    meta_free = meta = rans_uncompress_O0_4x16(in+sz, in_size-sz, NULL, u_meta_size);
 	    if (!meta)

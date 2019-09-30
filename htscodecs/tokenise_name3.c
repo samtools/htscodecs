@@ -1178,7 +1178,7 @@ static int arith_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *ou
     if (arith_compress_to(in, in_len, out+6, &olen, method) == NULL)
 	return -1;
 
-    nb = u32tou7(out, olen);
+    nb = var_put_u32(out, out + *out_len, olen);
     memmove(out+nb, out+6, olen);
     *out_len = olen+nb;
 
@@ -1191,7 +1191,7 @@ static int64_t arith_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t
     unsigned int olen = *out_len;
 
     uint32_t clen;
-    int nb = u7tou32(in, in+in_len, &clen);
+    int nb = var_get_u32(in, in+in_len, &clen);
     //fprintf(stderr, "Arith decode %x\n", in[nb]);
     if (arith_uncompress_to(in+nb, in_len-nb, out, &olen) == NULL)
 	return -1;
@@ -1204,7 +1204,7 @@ static int rans_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out
     if (rans_compress_to_4x16(in, in_len, out+6, &olen, method) == NULL)
 	return -1;
 
-    nb = u32tou7(out, olen);
+    nb = var_put_u32(out, out + *out_len, olen);
     memmove(out+nb, out+6, olen);
     *out_len = olen+nb;
 
@@ -1217,7 +1217,7 @@ static int64_t rans_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t 
     unsigned int olen = *out_len;
 
     uint32_t clen;
-    int nb = u7tou32(in, in+in_len, &clen);
+    int nb = var_get_u32(in, in+in_len, &clen);
     //fprintf(stderr, "Arith decode %x\n", in[nb]);
     if (rans_uncompress_to_4x16(in+nb, in_len-nb, out, &olen) == NULL)
 	return -1;
@@ -1281,10 +1281,10 @@ static uint64_t uncompressed_size(uint8_t *in, uint64_t in_len) {
     uint32_t clen, ulen;
 
     // in[0] in part of buffer written by us
-    int nb = u7tou32(in, in+in_len, &clen);
+    int nb = var_get_u32(in, in+in_len, &clen);
 
     // in[nb] is part of buffer written to by arith_dynamic.
-    u7tou32(in+nb+1, in+in_len, &ulen);
+    var_get_u32(in+nb+1, in+in_len, &ulen);
 
     return ulen;
 }
@@ -1292,7 +1292,7 @@ static uint64_t uncompressed_size(uint8_t *in, uint64_t in_len) {
 static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
 		      uint8_t *out, uint64_t *out_len) {
     uint32_t clen;
-    u7tou32(in, in+in_len, &clen);
+    var_get_u32(in, in+in_len, &clen);
     return use_arith
 	? arith_decode(in, in_len, out, out_len)
 	: rans_decode(in, in_len, out, out_len);

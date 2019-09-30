@@ -624,13 +624,14 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 	if (!(out = malloc(*out_size)))
 	    return NULL;
     }
+    unsigned char *out_end = out + *out_size;
 
     if (in_size%4 != 0 || in_size <= 20)
 	order &= ~X_4;
 
     if (order & X_CAT) {
 	out[0] = X_CAT;
-	c_meta_len = 1 + u32tou7(&out[1], in_size);
+	c_meta_len = 1 + var_put_u32(&out[1], out_end, in_size);
 	memcpy(out+c_meta_len, in, in_size);
 	*out_size = in_size+c_meta_len;
     }
@@ -655,7 +656,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 	unsigned char *out2;
 	c_meta_len = 1;
 	*out = order;
-	c_meta_len += u32tou7(out+c_meta_len, in_size);
+	c_meta_len += var_put_u32(out+c_meta_len, out_end, in_size);
 	out2 = out+26;
 	for (i = 0; i < 4; i++) {
 	    // Brute force try all methods.
@@ -728,7 +729,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 		    return NULL;
 	    }
 	    out2 += olen2;
-	    c_meta_len += u32tou7(out+c_meta_len, olen2);
+	    c_meta_len += var_put_u32(out+c_meta_len, out_end, olen2);
 	}
 	memmove(out+c_meta_len, out+26, out2-(out+26));
 	free(in4);
@@ -745,7 +746,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
     c_meta_len = 1;
 
     if (!no_size)
-	c_meta_len += u32tou7(&out[1], in_size);
+	c_meta_len += var_put_u32(&out[1], out_end, in_size);
 
     order &= 0x3;
 
@@ -771,7 +772,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 
 	    // Could derive this rather than storing verbatim.
 	    // Orig size * 8/nbits (+1 if not multiple of 8/n)
-	    int sz = u32tou7(out+c_meta_len, in_size);
+	    int sz = var_put_u32(out+c_meta_len, out_end, in_size);
 	    c_meta_len += sz;
 	    *out_size -= sz;
 	}
@@ -854,7 +855,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	int i, j;
 
 	// Decode lengths
-	c_meta_len += u7tou32(in+c_meta_len, in_end, &ulen);
+	c_meta_len += var_get_u32(in+c_meta_len, in_end, &ulen);
 	if (!out) {
 	    if (ulen >= INT_MAX)
 		return NULL;
@@ -868,7 +869,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	}
 
 	for (i = 0; i < 4; i++) {
-	    c_meta_len += u7tou32(in+c_meta_len, in_end, &clen4[i]);
+	    c_meta_len += var_get_u32(in+c_meta_len, in_end, &clen4[i]);
 	    if (c_meta_len > in_size || clen4[i] > in_size || clen4[i] < 1) {
 		free(out_free);
 		return NULL;
@@ -932,7 +933,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
     int sz = 0;
     unsigned int osz;
     if (!no_size)
-	sz = u7tou32(in, in_end, &osz);
+	sz = var_get_u32(in, in_end, &osz);
     else
 	sz = 0, osz = *out_size;
     in += sz;
@@ -1003,7 +1004,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	// New unpacked size.  We could derive this bit from *out_size
 	// and npacked_sym.
 	unsigned int osz;
-	sz = u7tou32(in, in_end, &osz);
+	sz = var_get_u32(in, in_end, &osz);
 	in += sz;
 	in_size -= sz;
 	if (osz > tmp1_size)

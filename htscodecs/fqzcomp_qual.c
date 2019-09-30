@@ -966,6 +966,7 @@ unsigned char *compress_block_fqz2f(int vers,
     RangeCoder rc;
 
     unsigned char *comp = (unsigned char *)malloc(in_size*1.1+100000);
+    unsigned char *compe = comp + (size_t)(in_size*1.1+100000);
     if (!comp)
 	return NULL;
 
@@ -978,7 +979,7 @@ unsigned char *compress_block_fqz2f(int vers,
     }
 
     //dump_params(gp);
-    comp_idx = u32tou7(comp, in_size);
+    comp_idx = var_put_u32(comp, compe, in_size);
     comp_idx += fqz_store_parameters(gp, comp+comp_idx);
 
     fqz_param *pm;
@@ -1294,7 +1295,7 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 
     uint32_t len;
     ssize_t i, rec = 0, in_idx;
-    in_idx = u7tou32(in, in+in_size, &len);
+    in_idx = var_get_u32(in, in+in_size, &len);
     *out_size = len;
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
