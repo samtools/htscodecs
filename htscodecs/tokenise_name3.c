@@ -694,7 +694,7 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
 
     //printf("Looked for %d, found %d, prefix %d\n", n, from, p3);
 
-    *exact = (n != from);
+    *exact = (n != from) && len;
     return *exact ? from : p3;
 }
 
