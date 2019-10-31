@@ -38,6 +38,10 @@
 
 #include <stdint.h>
 
+#ifdef VARINT2
+#include "varint2.h"
+#else
+
 // General API scheme is var_{get,put}_{s,u}{32,64}
 // s/u for signed/unsigned;  32/64 for integer size.
 
@@ -185,5 +189,7 @@ static inline int var_size_s64(int64_t v) {
     return var_size_u64((v >> 63) ^ (v << 1));
 }
 #define var_size_s32 var_size_s64
+
+#endif /* VARINT2 */
 
 #endif /* VARINT_H */
