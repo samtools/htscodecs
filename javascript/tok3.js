@@ -318,7 +318,7 @@ function try_compress(src, use_arith) {
 	    var tmp = use_arith
 		? arith.encode(src, lvl)
 		: rans.encode(src, lvl)
-	} catch {
+	} catch (e) {
 	    var tmp = 0
 	}
 	if (tmp && best > tmp.length) {
