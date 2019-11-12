@@ -72,6 +72,7 @@
 #include "rANS_static4x16.h"
 #include "varint.h"
 #include "pack.h"
+#include "rle.h"
 
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
@@ -716,139 +717,6 @@ static void hist1_4(unsigned char *in, unsigned int in_size,
 }
 
 //-----------------------------------------------------------------------------
-static uint8_t *rle_encode(uint8_t *data, int64_t len,
-			   uint8_t *out_meta, unsigned int *out_meta_len, uint64_t *out_len) {
-    uint64_t i, j, k;
-    int last = -1;
-    unsigned char *out = malloc(len*2);
-    if (!out)
-	return NULL;
-
-    // Two pass:  Firstly compute which symbols are worth using RLE on.
-    int64_t saved[256+MAGIC] = {0};
-
-    if (len > 256) {
-	// 186/450
-	// Interleaved buffers to avoid cache collisions
-	int64_t saved2[256+MAGIC] = {0};
-	int64_t saved3[256+MAGIC] = {0};
-	int64_t saved4[256+MAGIC] = {0};
-	int64_t len4 = len&~3;
-	for (i = 0; i < len4; i+=4) {
-	    int d1 = (data[i+0] == last)     <<1;
-	    int d2 = (data[i+1] == data[i+0])<<1;
-	    int d3 = (data[i+2] == data[i+1])<<1;
-	    int d4 = (data[i+3] == data[i+2])<<1;
-	    last = data[i+3];
-	    saved [data[i+0]] += d1-1;
-	    saved2[data[i+1]] += d2-1;
-	    saved3[data[i+2]] += d3-1;
-	    saved4[data[i+3]] += d4-1;
-	}
-	while (i < len) {
-	    int d = (data[i] == last)<<1;
-	    saved[data[i]] += d - 1;
-	    last = data[i];
-	    i++;
-	}
-	for (i = 0; i < 256; i++)
-	    saved[i] += saved2[i] + saved3[i] + saved4[i];
-    } else {
-	// 163/391
-	for (i = 0; i < len; i++) {
-	    if (data[i] == last) {
-		saved[data[i]]++;
-	    } else {
-		saved[data[i]]--;
-		last = data[i];
-	    }
-	}
-    }
-
-    // fixme: pack into bits instead of bytes if many symbols?
-    for (j = 1, i = 0; i < 256; i++) {
-	if (saved[i] > 0) {
-	    out_meta[j++] = i;
-	}
-    }
-    if (j == 0) {
-	// not worth it.
-	free(out);
-	return NULL;
-    }
-    out_meta[0] = j-1; // NB: all symbols being worth it is 0 not 256.
-
-    // 2nd pass: perform RLE itself to out[] and out_meta[] arrays.
-    for (i = k = 0; i < len; i++) {
-	out[k++] = data[i];
-	if (saved[data[i]] > 0) {
-	    int run_len = i;
-	    int last = data[i];
-	    while (i < len && data[i] == last)
-		i++;
-	    i--;
-	    run_len = i-run_len;
-
-	    j += var_put_u32(&out_meta[j], NULL, run_len);
-	}
-    }
-    
-    *out_meta_len = j;
-    *out_len = k;
-    return out;
-}
-
-// On input *out_len holds the allocated size of out[].
-// On output it holds the used size of out[].
-static uint8_t *rle_decode(uint8_t *in, int64_t in_len, uint8_t *meta, uint32_t meta_sz,
-			   unsigned char *out, uint64_t *out_len) {
-    uint64_t j, m = 0;
-    uint8_t *meta_end = meta + meta_sz;
-
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-    if (*out_len > 100000)
-	return NULL;
-#endif
-
-    if (meta_sz == 0 || meta[0] >= meta_sz)
-	return NULL;
-
-    int saved[256] = {0};
-    j = meta[m++];
-    if (j == 0)
-	j = 256;
-    for (; j && m < meta_sz; j--)
-	saved[meta[m++]]=1;
-
-    j = 0;
-    meta += m;
-    uint8_t *in_end = in + in_len;
-    uint8_t *out_end = out + *out_len;
-    uint8_t *outp = out;
-    while (in < in_end) {
-	uint8_t b = *in++;
-	if (saved[b]) {
-	    uint32_t run_len, v;
-	    if ((v = var_get_u32(meta, meta_end, &run_len)) == 0)
-		return NULL;
-	    meta += v;
-	    run_len++;
-	    if (outp + run_len > out_end)
-		run_len = out_end - outp;
-	    memset(outp, b, run_len);
-	    outp += run_len;
-	} else {
-	    if (outp >= out_end)
-		break;
-	    *outp++ = b;
-	}
-    }
-
-    *out_len = outp-out;
-    return out;
-}
-
-//-----------------------------------------------------------------------------
 
 static
 unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
@@ -1382,11 +1250,20 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	// RLE 'in' -> rle_length + rle_literals arrays
 	unsigned int rmeta_len, c_rmeta_len;
 	uint64_t rle_len;
-	c_rmeta_len = in_size;
+	c_rmeta_len = in_size+257;
 	if (!(meta = malloc(c_rmeta_len)))
 	    return NULL;
 
-	rle = rle_encode(in, in_size, meta, &rmeta_len, &rle_len);
+	uint8_t rle_syms[256];
+	int rle_nsyms = 0;
+	uint64_t rmeta_len64;
+	rle = rle_encode(in, in_size, meta, &rmeta_len64,
+			 rle_syms, &rle_nsyms, NULL, &rle_len);
+	memmove(meta+1+rle_nsyms, meta, rmeta_len64);
+	meta[0] = rle_nsyms;
+	memcpy(meta+1, rle_syms, rle_nsyms);
+	rmeta_len = rmeta_len64 + rle_nsyms+1;
+
 	if (!rle || rle_len + rmeta_len >= .99*in_size) {
 	    // Not worth the speed hit.
 	    out[0] &= ~X_RLE;
@@ -1698,7 +1575,10 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (do_rle) {
 	// Unpack RLE.  tmp1 -> tmp2.
 	uint64_t unrle_size = *out_size;
-	if (!rle_decode(tmp1, tmp1_size, meta, u_meta_size, tmp2, &unrle_size))
+	int rle_nsyms = *meta ? *meta : 256;
+	if (!rle_decode(tmp1, tmp1_size,
+			meta+1+rle_nsyms, u_meta_size-(1+rle_nsyms),
+			meta+1, rle_nsyms, tmp2, &unrle_size))
 	    goto err;
 	tmp3_size = tmp2_size = unrle_size;
 	free(meta_free);

@@ -39,6 +39,8 @@ nobase_include_HEADERS = \
 	htscodecs/fqzcomp_qual.h \
 	htscodecs/rANS_static.h \
 	htscodecs/rANS_static4x16.h \
-	htscodecs/tokenise_name3.h
+	htscodecs/tokenise_name3.h \
+	htscodecs/pack.h \
+	htscodecs/rle.h
 
 EXTRA_DIST = README.md LICENSE.md

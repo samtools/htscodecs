@@ -34,6 +34,8 @@ lib_LTLIBRARIES = libhtscodecs.la
 libhtscodecs_la_SOURCES = \
 	pack.c \
 	pack.h \
+	rle.c \
+	rle.h \
 	fqzcomp_qual.c \
 	fqzcomp_qual.h \
 	rANS_static.c \
