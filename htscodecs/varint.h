@@ -59,8 +59,8 @@
 
 // Big endian.
 // Harder for encoding, but a simpler and faster decoder.
-//
-// Surprisingly this is often a bit smaller when compressed too.
+#define BIG_END
+#ifdef BIG_END
 static inline int var_put_u64(uint8_t *cp, const uint8_t *endp, uint64_t i) {
     uint8_t *op = cp;
     int s = 0;
@@ -153,6 +153,110 @@ static inline int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
     *i = j;
     return cp-op;
 }
+#else
+
+// Little endian 7-bit variable sized integer encoding.
+// The unsigned value is equivalent to LEB128 encoding.
+// For signed, see below.
+// This is also the Google Protocol Buffer and WebAssembly format.
+static inline int var_put_u64(uint8_t *cp, const uint8_t *endp, uint64_t i) {
+    uint8_t *op = cp;
+
+    if (!endp || (endp-cp)*7 >= 10) {
+	// Unsafe or big-enough anyway
+	do {
+	    *cp++ = (i&0x7f) + ((i>=0x80)<<7);
+	    i >>= 7;
+	} while (i);
+    } else if (cp < endp) {
+	// End checked variant
+	do {
+	    *cp++ = (i&0x7f) + ((i>=0x80)<<7);
+	    i >>= 7;
+	} while (i && cp < endp);
+    }
+
+    return cp-op;
+}
+
+static inline int var_put_u32(uint8_t *cp, const uint8_t *endp, uint32_t i) {
+    uint8_t *op = cp;
+
+    if (!endp || (endp-cp)*7 >= 5) {
+	// Unsafe or big-enough anyway
+	do {
+	    *cp++ = (i&0x7f) + ((i>=0x80)<<7);
+	    i >>= 7;
+	} while (i);
+    } else if (cp < endp) {
+	// End checked variant
+	do {
+	    *cp++ = (i&0x7f) + ((i>=0x80)<<7);
+	    i >>= 7;
+	} while (i && cp < endp);
+    }
+
+    return cp-op;
+}
+
+static inline int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
+    uint8_t *op = cp, c;
+    uint64_t j = 0, s = 0;
+
+    if (endp) {
+	// Safe variant
+	if (cp >= endp) {
+	    *i = 0;
+	    return 0;
+	}
+
+	do {
+	    c = *cp++;
+	    j |= (c & 0x7f) << s;
+	    s += 7;
+	} while ((c & 0x80) && cp < endp);
+    } else {
+	// Unsafe variant
+	do {
+	    c = *cp++;
+	    j |= (c & 0x7f) << s;
+	    s += 7;
+	} while ((c & 0x80));
+    }
+
+    *i = j;
+    return cp-op;
+}
+
+static inline int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
+    uint8_t *op = cp, c;
+    uint32_t j = 0, s = 0;
+
+    if (endp) {
+	// Safe variant
+	if (cp >= endp) {
+	    *i = 0;
+	    return 0;
+	}
+
+	do {
+	    c = *cp++;
+	    j |= (c & 0x7f) << s;
+	    s += 7;
+	} while ((c & 0x80) && cp < endp);
+    } else {
+	// Unsafe variant
+	do {
+	    c = *cp++;
+	    j |= (c & 0x7f) << s;
+	    s += 7;
+	} while ((c & 0x80));
+    }
+
+    *i = j;
+    return cp-op;
+}
+#endif
 
 // Signed versions of the above using zig-zag integer encoding.
 // This folds the sign bit into the bottom bit so we iterate
