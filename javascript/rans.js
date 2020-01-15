@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Genome Research Ltd.
+ * Copyright (c) 2019-2020 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
@@ -288,7 +288,7 @@ function WriteFrequencies0(out, F) {
 }
 
 function RansEncode0(src) {
-    const nbytes = src.length;
+    const nbytes = src.length
     var output = new IOStream("", 0, 257*3+9);
 
     output.WriteByte(0);   // Order 0
@@ -312,7 +312,8 @@ function RansEncode0(src) {
     for (var i = 0; i < 4; i++)
 	R[i] = RansEncInit();
 
-    var rans_out = new IOStream("", nbytes, nbytes);
+    var alloc = Math.floor(nbytes*1.05+100)
+    var rans_out = new IOStream("", alloc, alloc)
 
     // Main encode loop
     for (var i = nbytes-1; i >= 0; i--)
