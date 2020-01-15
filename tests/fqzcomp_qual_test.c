@@ -9,6 +9,7 @@
 #include <limits.h>
 
 #include "htscodecs/fqzcomp_qual.h"
+#include "htscodecs/varint.h"
 
 #ifndef MAX_REC
 #define MAX_REC 1000000
@@ -283,26 +284,36 @@ int main(int argc, char **argv) {
     unsigned char *in, *out;
     size_t in_len, out_len;
     int decomp = 0, vers = 4;  // CRAM version 4.0 (4) or 3.1 (3)
-    int strat = 0;
+    int strat = 0, raw = 0;
     fqz_gparams *gp = NULL, gp_local;
+    int blk_size = BLK_SIZE; // MAX
 
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);
         _setmode(_fileno(stdout), _O_BINARY);
 #endif
 
-    while (argc > 1 && argv[1][0] == '-') {
-	if (argc > 1 && strcmp(argv[1], "-d") == 0) {
+    extern char *optarg;
+    extern int optind;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "ds:s:b:r")) != -1) {
+	switch (opt) {
+	case 'd':
 	    decomp = 1;
-	    argv++;
-	    argc--;
-	}
-	if (argc > 2 && strcmp(argv[1], "-s") == 0) {
-	    strat = atoi(argv[2]);
-	    argv+=2;
-	    argc-=2;
-	}
-	if (argc > 2 && strcmp(argv[1], "-x") == 0) {
+	    break;
+
+	case 'b':
+	    blk_size = atoi(optarg);
+	    if (blk_size > BLK_SIZE)
+		blk_size = BLK_SIZE;
+	    break;
+
+	case 's':
+	    strat = atoi(optarg);
+	    break;
+
+	case 'x': {
 	    // Hex digits are:
 	    // qbits  qshift
 	    // pbits  pshift
@@ -313,35 +324,45 @@ int main(int argc, char **argv) {
 	    //
 	    // Examples: -x 0x5570000d6e14 q40+dir =  3473340
 	    //           -x 0x8252120e8d04 q4      =  724989
-	    uint64_t x = strtol(argv[2], NULL, 0);
+	    uint64_t x = strtol(optarg, NULL, 0);
 	    manual_strats[manual_nstrat++] = x;
 
 	    gp = &gp_local;
-	    argv+=2;
-	    argc-=2;
+	    break;
+	}
+	case 'r':
+	    raw = 1;
+	    break;
 	}
     }
-    in = load(argc > 1 ? argv[1] : "/dev/stdin", &in_len);
+
+    in = load(optind < argc ? argv[optind] : "/dev/stdin", &in_len);
     if (!in)
 	exit(1);
 
-    int blk_size = BLK_SIZE; // MAX
-    if (argc > 3)
-	blk_size = atoi(argv[3]);
-    if (blk_size > BLK_SIZE)
-	blk_size = BLK_SIZE;
+    if (raw)
+	blk_size = in_len;
 
+    // Block based, for arbitrary sizes of input
     if (decomp) {
 	unsigned char *in2 = in;
 	while (in_len > 0) {
 	    // Read sizes as 32-bit
-	    size_t out_len = *(uint32_t *)in2;  in2 += 4;
-	    size_t in2_len = *(uint32_t *)in2;  in2 += 4;
+	    size_t in2_len, out_len;
+	    if (raw) {
+		uint32_t u32;
+		var_get_u32(in2, in2+in_len, &u32);
+		out_len = u32;
+		in2_len = in_len;
+	    } else {
+		out_len = *(uint32_t *)in2;  in2 += 4;
+		in2_len = *(uint32_t *)in2;  in2 += 4;
+	    }
 
 	    fprintf(stderr, "out_len %ld, in_len %ld\n", (long)out_len, (long)in2_len);
 
 	    int *lengths = malloc(MAX_REC * sizeof(int));
-	    out = (unsigned char *)fqz_decompress((char *)in2, in_len-8, &out_len, lengths, MAX_REC);
+	    out = (unsigned char *)fqz_decompress((char *)in2, in_len-(raw?0:8), &out_len, lengths, MAX_REC);
 	    if (!out) {
 		fprintf(stderr, "Failed to decompress\n");
 		return 1;
@@ -360,7 +381,7 @@ int main(int argc, char **argv) {
 	    }
 	    free(out);
 	    in2 += in2_len;
-	    in_len -= in2_len+8;
+	    in_len -= in2_len+(raw?0:8);
 
 	    free(lengths);
 
@@ -389,13 +410,15 @@ int main(int argc, char **argv) {
 	    out = (unsigned char *)fqz_compress(vers, s, (char *)in2, in2_len, &out_len, strat, gp);
 
 	    // Write out 32-bit sizes.
-	    uint32_t u32;
-	    u32 = in2_len; if (write(1, &u32, 4) != 4) return 1;
-	    u32 = out_len; if (write(1, &u32, 4) != 4) return 1;
+	    if (!raw) {
+		uint32_t u32;
+		u32 = in2_len; if (write(1, &u32, 4) != 4) return 1;
+		u32 = out_len; if (write(1, &u32, 4) != 4) return 1;
+	    }
 	    if (write(1, out, out_len) < 0) return 1;
 	    in_len -= in2_len;
 	    in2 += in2_len;
-	    t_out += out_len+16;
+	    t_out += out_len + (raw?0:8);
 
 	    break; // One cycle only until we fix blocking to be \n based
 	}

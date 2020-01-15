@@ -10,11 +10,38 @@
 #include "htscodecs/rANS_static.h"
 
 #ifndef BLK_SIZE
-#  define BLK_SIZE 1024*1024
+// Divisible by 4 for X4
+#  define BLK_SIZE 1039*251*4
 #endif
 
 // Room to allow for expanded BLK_SIZE on worst case compression.
 #define BLK_SIZE2 ((int)(1.05*BLK_SIZE))
+
+// Max 4GB
+static unsigned char *load(FILE *infp, uint32_t *lenp) {
+    unsigned char *data = NULL;
+    uint32_t dsize = 0;
+    uint32_t dcurr = 0;
+    signed int len;
+
+    do {
+	if (dsize - dcurr < BLK_SIZE) {
+	    dsize = dsize ? dsize * 2 : BLK_SIZE;
+	    data = realloc(data, dsize);
+	}
+
+	len = fread(data + dcurr, 1, BLK_SIZE, infp);
+	if (len > 0)
+	    dcurr += len;
+    } while (len > 0);
+
+    if (len == -1) {
+	perror("fread");
+    }
+
+    *lenp = dcurr;
+    return data;
+}
 
 /*-----------------------------------------------------------------------------
  * Main.
@@ -36,7 +63,7 @@ int main(int argc, char **argv) {
     int decode = 0, test = 0;
     FILE *infp = stdin, *outfp = stdout;
     struct timeval tv1, tv2, tv3;
-    size_t bytes = 0;
+    size_t bytes = 0, raw = 0;
 
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);
@@ -46,7 +73,7 @@ int main(int argc, char **argv) {
     extern char *optarg;
     extern int optind;
 
-    while ((opt = getopt(argc, argv, "o:dt")) != -1) {
+    while ((opt = getopt(argc, argv, "o:dtr")) != -1) {
 	switch (opt) {
 	case 'o':
 	    order = atoi(optarg);
@@ -58,6 +85,10 @@ int main(int argc, char **argv) {
 	    
 	case 't':
 	    test = 1;
+	    break;
+
+	case 'r':
+	    raw = 1;
 	    break;
 	}
     }
@@ -144,49 +175,73 @@ int main(int argc, char **argv) {
 	
     }
 
-    if (decode) {
-	// Only used in some test implementations of RC_GetFreq()
-	//RC_init();
-	//RC_init2();
+    if (raw) {
+	// One naked / raw block, to match the specification
+	uint32_t in_size, out_size;
+	unsigned char *in = load(infp, &in_size), *out;
+	if (!in) exit(1);
 
-	for (;;) {
-	    uint32_t in_size, out_size;
-	    unsigned char *out;
-
-	    order = fgetc(infp);
-	    if (4 != fread(&in_size, 1, 4, infp))
-		break;
-	    if (in_size != fread(in_buf, 1, in_size, infp)) {
-		fprintf(stderr, "Truncated input\n");
+	if (decode) {
+	    if (!(out = rans_uncompress(in, in_size, &out_size)))
 		exit(1);
-	    }
-	    out = rans_uncompress(in_buf, in_size, &out_size);
-	    if (!out)
-		abort();
 
 	    fwrite(out, 1, out_size, outfp);
-	    free(out);
+	    bytes = out_size;
+	} else {
+	    if (!(out = rans_compress(in, in_size, &out_size, order)))
+		exit(1);
 
-	    bytes += out_size;
-	}
-    } else {
-	for (;;) {
-	    uint32_t in_size, out_size;
-	    unsigned char *out;
-
-	    in_size = fread(in_buf, 1, BLK_SIZE, infp);
-	    if (in_size <= 0)
-		break;
-
-	    out = rans_compress(in_buf, in_size, &out_size,
-				order && in_size >= 4);
-
-	    fputc(order && in_size >= 4, outfp);
-	    fwrite(&out_size, 1, 4, outfp);
 	    fwrite(out, 1, out_size, outfp);
-	    free(out);
-
 	    bytes += in_size;
+	}
+
+	free(in);
+	free(out);
+    } else {
+	if (decode) {
+	    // Only used in some test implementations of RC_GetFreq()
+	    //RC_init();
+	    //RC_init2();
+
+	    for (;;) {
+		uint32_t in_size, out_size;
+		unsigned char *out;
+
+		order = fgetc(infp);
+		if (4 != fread(&in_size, 1, 4, infp))
+		    break;
+		if (in_size != fread(in_buf, 1, in_size, infp)) {
+		    fprintf(stderr, "Truncated input\n");
+		    exit(1);
+		}
+		out = rans_uncompress(in_buf, in_size, &out_size);
+		if (!out)
+		    abort();
+
+		fwrite(out, 1, out_size, outfp);
+		free(out);
+
+		bytes += out_size;
+	    }
+	} else {
+	    for (;;) {
+		uint32_t in_size, out_size;
+		unsigned char *out;
+
+		in_size = fread(in_buf, 1, BLK_SIZE, infp);
+		if (in_size <= 0)
+		    break;
+
+		out = rans_compress(in_buf, in_size, &out_size,
+				    order && in_size >= 4);
+
+		fputc(order && in_size >= 4, outfp);
+		fwrite(&out_size, 1, 4, outfp);
+		fwrite(out, 1, out_size, outfp);
+		free(out);
+
+		bytes += in_size;
+	    }
 	}
     }
 

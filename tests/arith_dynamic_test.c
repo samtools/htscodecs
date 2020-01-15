@@ -11,7 +11,8 @@
 #include "htscodecs/arith_dynamic.h"
 
 #ifndef BLK_SIZE
-#  define BLK_SIZE 1013*1047
+// Divisible by 4 for X4
+#  define BLK_SIZE 1039*251*4
 #endif
 
 // Room to allow for expanded BLK_SIZE on worst case compression.
@@ -19,12 +20,38 @@
 
 static unsigned char in_buf[BLK_SIZE2+257*257*3];
 
+// Max 4GB
+static unsigned char *load(FILE *infp, uint32_t *lenp) {
+    unsigned char *data = NULL;
+    uint32_t dsize = 0;
+    uint32_t dcurr = 0;
+    signed int len;
+
+    do {
+	if (dsize - dcurr < BLK_SIZE) {
+	    dsize = dsize ? dsize * 2 : BLK_SIZE;
+	    data = realloc(data, dsize);
+	}
+
+	len = fread(data + dcurr, 1, BLK_SIZE, infp);
+	if (len > 0)
+	    dcurr += len;
+    } while (len > 0);
+
+    if (len == -1) {
+	perror("fread");
+    }
+
+    *lenp = dcurr;
+    return data;
+}
+
 int main(int argc, char **argv) {
     int opt, order = 0;
     int decode = 0, test = 0;
     FILE *infp = stdin, *outfp = stdout;
     struct timeval tv1, tv2, tv3, tv4;
-    size_t bytes = 0;
+    size_t bytes = 0, raw = 0;
 
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);
@@ -34,7 +61,7 @@ int main(int argc, char **argv) {
     extern char *optarg;
     extern int optind;
 
-    while ((opt = getopt(argc, argv, "o:dt")) != -1) {
+    while ((opt = getopt(argc, argv, "o:dtr")) != -1) {
 	switch (opt) {
 	case 'o':
 	    order = atoi(optarg);
@@ -46,6 +73,10 @@ int main(int argc, char **argv) {
 	    
 	case 't':
 	    test = 1;
+	    break;
+
+	case 'r':
+	    raw = 1;
 	    break;
 	}
     }
@@ -145,53 +176,74 @@ int main(int argc, char **argv) {
 	
     }
 
-    if (decode) {
-	// Only used in some test implementations of RC_GetFreq()
-	//RC_init();
-	//RC_init2();
+    if (raw) {
+	// One naked / raw block, to match the specification
+	uint32_t in_size, out_size;
+	unsigned char *in = load(infp, &in_size), *out;
+	if (!in) exit(1);
 
-	for (;;) {
-	    uint32_t in_size, out_size;
-	    unsigned char *out;
-
-	    if (4 != fread(&in_size, 1, 4, infp))
-		break;
-	    if (in_size > BLK_SIZE)
-		exit(1);
-
-	    if (in_size != fread(in_buf, 1, in_size, infp)) {
-		fprintf(stderr, "Truncated input\n");
-		exit(1);
-	    }
-	    out = arith_uncompress(in_buf, in_size, &out_size);
-	    if (!out)
+	if (decode) {
+	    if (!(out = arith_uncompress(in, in_size, &out_size)))
 		exit(1);
 
 	    fwrite(out, 1, out_size, outfp);
-	    fflush(outfp);
-	    free(out);
+	    bytes = out_size;
+	} else {
+	    if (!(out = arith_compress(in, in_size, &out_size, order)))
+		exit(1);
 
-	    bytes += out_size;
-	}
-    } else {
-	for (;;) {
-	    uint32_t in_size, out_size;
-	    unsigned char *out;
-
-	    in_size = fread(in_buf, 1, BLK_SIZE, infp);
-	    if (in_size <= 0)
-		break;
-
-	    if (in_size < 4)
-		order &= ~1;
-
-	    out = arith_compress(in_buf, in_size, &out_size, order);
-
-	    fwrite(&out_size, 1, 4, outfp);
 	    fwrite(out, 1, out_size, outfp);
-	    free(out);
-
 	    bytes += in_size;
+	}
+
+	free(in);
+	free(out);
+    } else {
+	// Block based, to permit arbitrarily large data sets.
+	if (decode) {
+	    for (;;) {
+		uint32_t in_size, out_size;
+		unsigned char *out;
+
+		if (4 != fread(&in_size, 1, 4, infp))
+		    break;
+		if (in_size > BLK_SIZE)
+		    exit(1);
+
+		if (in_size != fread(in_buf, 1, in_size, infp)) {
+		    fprintf(stderr, "Truncated input\n");
+		    exit(1);
+		}
+		out = arith_uncompress(in_buf, in_size, &out_size);
+		if (!out)
+		    exit(1);
+
+		fwrite(out, 1, out_size, outfp);
+		fflush(outfp);
+		free(out);
+
+		bytes += out_size;
+	    }
+	} else {
+	    for (;;) {
+		uint32_t in_size, out_size;
+		unsigned char *out;
+
+		in_size = fread(in_buf, 1, BLK_SIZE, infp);
+		if (in_size <= 0)
+		    break;
+
+		if (in_size < 4)
+		    order &= ~1;
+
+		out = arith_compress(in_buf, in_size, &out_size, order);
+
+		fwrite(&out_size, 1, 4, outfp);
+		fwrite(out, 1, out_size, outfp);
+		free(out);
+
+		bytes += in_size;
+	    }
 	}
     }
 

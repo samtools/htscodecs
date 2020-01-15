@@ -10,16 +10,16 @@ do
     comp=${f%/*/*}/names/tok3/${f##*/}
     for lvl in 1 3 5 7 9 11 13 15 17 19
     do
-        echo -n Testing tokenise_name3 -$lvl on $f "	"
+        echo -n Testing tokenise_name3 -r -$lvl on $f "	"
 
 	# Round trip
-	./tokenise_name3 -$lvl < $f > $out/tok3.comp
+	./tokenise_name3 -r -$lvl < $f > $out/tok3.comp
 	wc -c < $out/tok3.comp
-	./tokenise_name3 -d < $out/tok3.comp | tr '\000' '\012' > $out/tok3.uncomp
+	./tokenise_name3 -d -r < $out/tok3.comp | tr '\000' '\012' > $out/tok3.uncomp
 	cmp $f $out/tok3.uncomp || exit 1
 
 	# Precompressed data
-	./tokenise_name3 -d < $comp.$lvl | tr '\000' '\012' > $out/tok3.uncomp
+	./tokenise_name3 -d -r < $comp.$lvl | tr '\000' '\012' > $out/tok3.uncomp
 	cmp $f $out/tok3.uncomp || exit 1
     done
     echo
