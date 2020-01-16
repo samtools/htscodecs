@@ -175,13 +175,15 @@ static uint32_t round2(uint32_t v) {
 }
 
 static int normalise_freq(int *F, int size, int tot) {
-    int m = 0, M = 0, fsum = 0, j;
+    int m, M, j, loop = 0;
+    uint64_t tr;
     if (!size)
 	return 0;
 
-    uint64_t tr = ((uint64_t)tot<<31)/size + (1<<30)/size;
+ again:
+    tr = ((uint64_t)tot<<31)/size + (1<<30)/size;
 
-    for (m = M = j = 0; j < 256; j++) {
+    for (size = m = M = j = 0; j < 256; j++) {
 	if (!F[j])
 	    continue;
 
@@ -190,16 +192,20 @@ static int normalise_freq(int *F, int size, int tot) {
 
 	if ((F[j] = (F[j]*tr)>>31) == 0)
 	    F[j] = 1;
-	fsum += F[j];
+	size += F[j];
     }
 
-    int adjust = tot - fsum;
+    int adjust = tot - size;
     if (adjust > 0) {
 	F[M] += adjust;
     } else if (adjust < 0) {
-	if (F[M] > -adjust) {
+	if (F[M] > -adjust && (loop == 1 || F[M]/2 >= -adjust)) {
 	    F[M] += adjust;
 	} else {
+	    if (loop < 1) {
+		loop++;
+		goto again;
+	    }
 	    adjust += F[M]-1;
 	    F[M] = 1;
 	    for (j = 0; adjust && j < 256; j++) {
