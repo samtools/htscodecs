@@ -1576,6 +1576,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	// Unpack RLE.  tmp1 -> tmp2.
 	uint64_t unrle_size = *out_size;
 	int rle_nsyms = *meta ? *meta : 256;
+	if (u_meta_size < 1+rle_nsyms)
+	    goto err;
 	if (!rle_decode(tmp1, tmp1_size,
 			meta+1+rle_nsyms, u_meta_size-(1+rle_nsyms),
 			meta+1, rle_nsyms, tmp2, &unrle_size))
