@@ -135,6 +135,12 @@ function EncodeRLE(src) {
 	if (L[i] > 0)
 	    nrle++
 
+    if (!nrle) {
+	// Format cannot cope with zero RLE symbols, so pick one!
+	nrle = 1;
+	L[0] = 1;
+    }
+
     // Start meta-data as list of symbols to RLE
     var meta = new IOStream("", 0, nrle+1 + src.length)
     meta.WriteByte(nrle)
