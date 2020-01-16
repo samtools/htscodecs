@@ -664,7 +664,7 @@ function NormaliseFrequencies0(F, bits) {
 	    F[max_idx] -= tot-max;
 	} else if (tot != max) {
 	    // Much too high, fudge scale and try again.
-	    scale = scale * 0.99
+	    scale = max / tot;
 	    renorm = 1;
 	}
     } while (renorm)
@@ -973,11 +973,11 @@ function RansEncode1(src) {
     BuildFrequencies1(src, F, F0)
     NormaliseFrequencies1(F, F0);
 
-
     // Store frequencies, possibly compressed
     var freq = new IOStream("", 0, 257*257*3+9);
 
     WriteFrequencies1(freq, F, F0);
+
     var cfreq = RansEncode0(freq.buf.slice(0, freq.pos))
     if (cfreq.length < freq.pos) {
 	output.WriteByte(1);
@@ -1007,7 +1007,7 @@ function RansEncode1(src) {
 	R[j] = RansEncInit();
 	L[j] = 0;
     }
-    var rans_out = new IOStream("", nbytes, nbytes);
+    var rans_out = new IOStream("", (nbytes*1.05+100)>>0, (nbytes*1.05+100)>>0);
 
     // We have 4 rans codecs running in parallel on its own 1/4tr of buffer
     var nbytes4 = Math.floor(nbytes/4);
