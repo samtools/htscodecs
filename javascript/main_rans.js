@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Genome Research Ltd.
+ * Copyright (c) 2019-2020 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,7 @@
 
 var fs = require("fs");
 var rans = require("./rans");
-var argv = require('minimist')(process.argv.slice(2), { boolean: "d" });
+var argv = require('minimist')(process.argv.slice(2), { boolean: ["d", "r"] });
 
 if (argv._.length != 1) {
     process.stderr.write("Usage: node main_rans.js [-d] [-o order] input-file > output-file\n");
@@ -44,17 +44,22 @@ var filein  = argv._[0]
 
 var buf = fs.readFileSync(filein);
 var blk_size = 1024*1024;
+var raw = argv.r
 
 if (!argv.d) {
     var order = argv.o != undefined ? argv.o : 0;
     var pos = 0;
     var out_len = 0;
+    if (raw)
+	blk_size = buf.length
     while (pos < buf.length) {
 	var buf2 = rans.encode(buf.slice(pos, pos+blk_size), order);
 	var header = new Buffer.allocUnsafe(5);
-	header[0] = order;
-	header.writeInt32LE(buf2.length, 1);
-	process.stdout.write(header)
+	if (!raw) {
+	    header[0] = order;
+	    header.writeInt32LE(buf2.length, 1);
+	    process.stdout.write(header)
+	}
 	process.stdout.write(buf2)
 	pos += blk_size;
 	out_len += buf2.length;
@@ -64,11 +69,14 @@ if (!argv.d) {
 } else {
     var pos = 0;
     var out_len = 0;
+    var len = buf.length
     while (pos < buf.length) {
-	var order = buf[0];
-	pos++;
-	var len = buf.readInt32LE(pos);
-	pos += 4;
+	if (!raw) {
+	    var order = buf[0];
+	    pos++;
+	    len = buf.readInt32LE(pos);
+	    pos += 4;
+	}
 	var buf2 = rans.decode(buf.slice(pos, pos+len));
 	process.stdout.write(buf2)
 	out_len += buf2.length;

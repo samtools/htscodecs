@@ -33,7 +33,7 @@
 
 var fs = require("fs");
 var tok3 = require("./tok3");
-var argv = require('minimist')(process.argv.slice(2), { boolean: ["d","a"] });
+var argv = require('minimist')(process.argv.slice(2), { boolean: ["d","a", "r"] });
 
 if (argv._.length != 1) {
     process.stderr.write("Usage: node main_tok3.js [-a] [-d] input-file > output-file\n");
@@ -44,15 +44,20 @@ var filein  = argv._[0]
 
 var buf = fs.readFileSync(filein);
 var blk_size = 1024*1024;
+var raw = argv.r
 
 if (!argv.d) {
     var pos = 0;
     var out_len = 0;
+    if (raw)
+	blk_size = buf.length
     while (pos < buf.length) {
 	var buf2 = tok3.encode(buf.slice(pos, pos+blk_size), argv.a);
 	var header = new Buffer.allocUnsafe(4);
-	header.writeInt32LE(buf2.length, 0);
-	process.stdout.write(header)
+	if (!raw) {
+	    header.writeInt32LE(buf2.length, 0);
+	    process.stdout.write(header)
+	}
 	process.stdout.write(buf2)
 	pos += blk_size;
 	out_len += buf2.length+4;
@@ -62,9 +67,12 @@ if (!argv.d) {
 } else {
     var pos = 0;
     var out_len = 0;
+    var len = buf.length
     while (pos < buf.length) {
-	var len = buf.readInt32LE(pos);
-	pos += 4;
+	if (!raw) {
+	    len = buf.readInt32LE(pos);
+	    pos += 4;
+	}
 	var buf2 = tok3.decode(buf.slice(pos, pos+len), len);
 	process.stdout.write(buf2)
 	out_len += buf2.length;

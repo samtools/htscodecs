@@ -185,7 +185,7 @@ function decode_fqz_params(src) {
     // Check fqz format version
     var vers = src.ReadByte()
     if (vers != 5) {
-	console.log("Invalid FQZComp version number");
+	console.error("Invalid FQZComp version number");
 	return;
     }
 
