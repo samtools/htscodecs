@@ -64,6 +64,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <limits.h>
+#include <math.h>
 #ifndef NO_THREADS
 #include <pthread.h>
 #endif
@@ -78,10 +79,15 @@
 #define TOTFREQ (1<<TF_SHIFT)
 
 // 9-11 is considerably faster in the O1sfb variant due to reduced table size.
+// We auto-tune between 10 and 12 though.  Anywhere from 9 to 14 are viable.
 #ifndef TF_SHIFT_O1
-#define TF_SHIFT_O1 10
+#define TF_SHIFT_O1 12
+#endif
+#ifndef TF_SHIFT_O1_FAST
+#define TF_SHIFT_O1_FAST 10
 #endif
 #define TOTFREQ_O1 (1<<TF_SHIFT_O1)
+#define TOTFREQ_O1_FAST (1<<TF_SHIFT_O1_FAST)
 
 
 /*-----------------------------------------------------------------------------
@@ -724,6 +730,79 @@ static void hist1_4(unsigned char *in, unsigned int in_size,
 
 //-----------------------------------------------------------------------------
 
+double fast_log(double a) {
+  union { double d; long long x; } u = { a };
+  return (u.x - 4606921278410026770) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
+}
+
+// Compute the entropy of 12-bit vs 10-bit frequency tables.
+// 10 bit means smaller memory footprint when decoding and
+// more speed due to cache hits, but it *may* be a poor
+// compression fit.
+static int compute_shift(int *F0, int (*F)[256], int *T, int *S) {
+    int i, j;
+
+    double e10 = 0, e12 = 0;
+    int max_tot = 0;
+    for (i = 0; i < 256; i++) {
+	if (F0[i] == 0)
+	    continue;
+	int max_val = round2(T[i]);
+	int ns = 0;
+#define MAX(a,b) ((a)>(b)?(a):(b))
+
+	// Number of samples that get their freq bumped to 1
+	int sm10 = 0, sm12 = 0;
+	for (j = 0; j < 256; j++) {
+	    if (F[i][j] && max_val / F[i][j] > TOTFREQ_O1_FAST)
+		sm10++;
+	    if (F[i][j] && max_val / F[i][j] > TOTFREQ_O1)
+		sm12++;
+	}
+
+	double l10 = log(TOTFREQ_O1_FAST + sm10);
+	double l12 = log(TOTFREQ_O1      + sm12);
+
+	for (j = 0; j < 256; j++) {
+	    if (F[i][j]) {
+		ns++;
+
+		int x = (double)TOTFREQ_O1_FAST * F[i][j]/T[i];
+		e10 -= F[i][j] * (fast_log(MAX(x,1)) - l10);
+
+		x = (double)TOTFREQ_O1 * F[i][j]/T[i];
+		e12 -= F[i][j] * (fast_log(MAX(x,1)) - l12);
+
+		// Estimation of compressedf symbol freq table too.
+		e10 += 4;
+		e12 += 6;
+	    }
+	}
+
+	// Order-1 frequencies often end up totalling under TOTFREQ.
+	// In this case it's smaller to output the real frequencies
+	// prior to normalisation and normalise after (with an extra
+	// normalisation step needed in the decoder too).
+	//
+	// Thus we normalise to a power of 2 only, store those,
+	// and renormalise later here (and in decoder) by bit-shift
+	// to get to the fixed size.
+	if (ns < 64 && max_val > 128) max_val /= 2;
+	if (max_val > 1024)           max_val /= 2;
+	if (max_val > TOTFREQ_O1)     max_val = TOTFREQ_O1;
+	S[i] = max_val; // scale to max this
+	if (max_tot < max_val)
+	    max_tot = max_val;
+    }
+    int shift = e10/e12 < 1.01 || max_tot <= TOTFREQ_O1_FAST ? TF_SHIFT_O1_FAST : TF_SHIFT_O1;
+
+//    fprintf(stderr, "e10/12 = %f %f %f, shift %d\n",
+//    	    e10/log(256), e12/log(256), e10/e12, shift);
+
+    return shift;
+}
+
+
 static
 unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
@@ -761,6 +840,11 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     F0[0]=1;
     cp += encode_alphabet(cp, F0);
 
+    // Decide between 10-bit and 12-bit freqs.
+    // Fills out S[] to hold the new scaled maximum value.
+    int S[256] = {0};
+    int shift = compute_shift(F0, F, T, S);
+
     // Normalise so T[i] == TOTFREQ_O1
     for (i = 0; i < 256; i++) {
 	unsigned int x;
@@ -768,28 +852,9 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	if (F0[i] == 0)
 	    continue;
 
-	// Order-1 frequencies often end up totalling under TOTFREQ.
-	// In this case it's smaller to output the real frequencies
-	// prior to normalisation and normalise after (with an extra
-	// normalisation step needed in the decoder too).
-	//
-	// Thus we normalise to a power of 2 only, store those,
-	// and renormalise later here (and in decoder) by bit-shift
-	// to get to the fixed size.
-	int max_val = round2(T[i]);
-
-	// Small optimisation; trade frequency table size with
-	// accuracy of stats for smaller data.
-	// It's a reasonable trade off for small datasets.
-	int ns = 0;
-	for (j = 0; j < 256; j++)
-	    if (F[i][j])
-		ns++;
-	if (ns < 64 && max_val > 128) max_val /= 2;
-	if (max_val > 1024)           max_val /= 2;
-
-	if (max_val > TOTFREQ_O1)
-	    max_val = TOTFREQ_O1;
+	int max_val = S[i];
+	if (shift == TF_SHIFT_O1_FAST && max_val > TOTFREQ_O1_FAST)
+	    max_val = TOTFREQ_O1_FAST;
 
 	if (normalise_freq(F[i], T[i], max_val) < 0)
 	    return NULL;
@@ -797,23 +862,24 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 
 	cp += encode_freq_d(cp, F0, F[i]);
 
-	normalise_freq_shift(F[i], T[i], TOTFREQ_O1); T[i]=TOTFREQ_O1;
+	normalise_freq_shift(F[i], T[i], 1<<shift); T[i]=1<<shift;
 
 	int *F_i_ = F[i];
 	for (x = j = 0; j < 256; j++) {
-	    RansEncSymbolInit(&syms[i][j], x, F_i_[j], TF_SHIFT_O1);
+	    RansEncSymbolInit(&syms[i][j], x, F_i_[j], shift);
 	    x += F_i_[j];
 	}
 
     }
 
+    *op = shift<<4;
     if (cp - op > 1000) {
 	// try rans0 compression of header
 	unsigned int u_freq_sz = cp-(op+1);
 	unsigned int c_freq_sz;
 	unsigned char *c_freq = rans_compress_O0_4x16(op+1, u_freq_sz, NULL, &c_freq_sz);
 	if (c_freq && c_freq_sz + 6 < cp-op) {
-	    *op++ = 1; // compressed
+	    *op++ |= 1; // compressed
 	    op += var_put_u32(op, NULL, u_freq_sz);
 	    op += var_put_u32(op, NULL, c_freq_sz);
 	    memcpy(op, c_freq, c_freq_sz);
@@ -825,7 +891,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     //write(2, out+4, cp-(out+4));
     tab_size = cp - out;
     assert(tab_size < 257*257*3);
-    
+
     RansState rans0, rans1, rans2, rans3;
     RansEncInit(&rans0);
     RansEncInit(&rans1);
@@ -977,7 +1043,8 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     // compressed header? If so uncompress it
     unsigned char *tab_end = NULL;
     unsigned char *c_freq_end = cp_end;
-    if (*cp++ == 1) {
+    unsigned int shift = *cp >> 4;
+    if (*cp++ & 1) {
 	uint32_t u_freq_sz, c_freq_sz;
 	cp += var_get_u32(cp, cp_end, &u_freq_sz);
 	cp += var_get_u32(cp, cp_end, &c_freq_sz);
@@ -1015,12 +1082,12 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 	    continue;
 	}
 
-	normalise_freq_shift(F, T, TOTFREQ_O1);
+	normalise_freq_shift(F, T, 1<<shift);
 
 	// Build symbols; fixme, do as part of decode, see the _d variant
 	for (j = x = 0; j < 256; j++) {
 	    if (F[j]) {
-		if (x + F[j] > TOTFREQ_O1 || F[j] < 0)
+		if (x + F[j] > (1<<shift) || F[j] < 0)
 		    goto err;
 		for (y = 0; y < F[j]; y++) {
 		    sfb[i][y + x].c = j;
@@ -1030,7 +1097,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 		x += F[j];
 	    }
 	}
-	if (x != TOTFREQ_O1)
+	if (x != (1<<shift))
 	    goto err;
     }
 
@@ -1059,61 +1126,121 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     R[2] = rans2;
     R[3] = rans3;
 
-    const uint32_t mask = ((1u << TF_SHIFT_O1)-1);
-    for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
-	uint32_t m[4];
-	uint32_t c[4];
+    // Around 15% faster to specialise for 10/12 than to have one
+    // loop with shift as a variable.
+    if (shift == TF_SHIFT_O1) {
+	// TF_SHIFT_O1 = 12
+	const uint32_t mask = ((1u << TF_SHIFT_O1)-1);
+	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
+	    uint32_t m[4];
+	    uint32_t c[4];
 
-	m[0] = R[0] & mask;
-	R[0] = sfb[l0][m[0]].f * (R[0]>>TF_SHIFT_O1) + sfb[l0][m[0]].b;
-	c[0] = sfb[l0][m[0]].c;
+	    m[0] = R[0] & mask;
+	    R[0] = sfb[l0][m[0]].f * (R[0]>>TF_SHIFT_O1) + sfb[l0][m[0]].b;
+	    c[0] = sfb[l0][m[0]].c;
 
-	m[1] = R[1] & mask;
-	R[1] = sfb[l1][m[1]].f * (R[1]>>TF_SHIFT_O1) + sfb[l1][m[1]].b;
-	c[1] = sfb[l1][m[1]].c;
+	    m[1] = R[1] & mask;
+	    R[1] = sfb[l1][m[1]].f * (R[1]>>TF_SHIFT_O1) + sfb[l1][m[1]].b;
+	    c[1] = sfb[l1][m[1]].c;
 
-	m[2] = R[2] & mask;
-	R[2] = sfb[l2][m[2]].f * (R[2]>>TF_SHIFT_O1) + sfb[l2][m[2]].b;
-	c[2] = sfb[l2][m[2]].c;
+	    m[2] = R[2] & mask;
+	    R[2] = sfb[l2][m[2]].f * (R[2]>>TF_SHIFT_O1) + sfb[l2][m[2]].b;
+	    c[2] = sfb[l2][m[2]].c;
 
-	m[3] = R[3] & mask;
-	R[3] = sfb[l3][m[3]].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m[3]].b;
-	c[3] = sfb[l3][m[3]].c;
+	    m[3] = R[3] & mask;
+	    R[3] = sfb[l3][m[3]].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m[3]].b;
+	    c[3] = sfb[l3][m[3]].c;
 
-	// TODO: inline expansion of 4-way packing here is about 4% faster.
-	out[i4[0]] = c[0];
-	out[i4[1]] = c[1];
-	out[i4[2]] = c[2];
-	out[i4[3]] = c[3];
+	    // TODO: inline expansion of 4-way packing here is about 4% faster.
+	    out[i4[0]] = c[0];
+	    out[i4[1]] = c[1];
+	    out[i4[2]] = c[2];
+	    out[i4[3]] = c[3];
 
-	if (ptr < ptr_end) {
-	    RansDecRenorm(&R[0], &ptr);
-	    RansDecRenorm(&R[1], &ptr);
-	    RansDecRenorm(&R[2], &ptr);
-	    RansDecRenorm(&R[3], &ptr);
-	} else {
-	    RansDecRenormSafe(&R[0], &ptr, ptr_end+8);
-	    RansDecRenormSafe(&R[1], &ptr, ptr_end+8);
-	    RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
-	    RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
+	    if (ptr < ptr_end) {
+		RansDecRenorm(&R[0], &ptr);
+		RansDecRenorm(&R[1], &ptr);
+		RansDecRenorm(&R[2], &ptr);
+		RansDecRenorm(&R[3], &ptr);
+	    } else {
+		RansDecRenormSafe(&R[0], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[1], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
+	    }
+
+	    l0 = c[0];
+	    l1 = c[1];
+	    l2 = c[2];
+	    l3 = c[3];
 	}
 
-	l0 = c[0];
-	l1 = c[1];
-	l2 = c[2];
-	l3 = c[3];
-    }
+	// Remainder
+	for (; i4[3] < out_sz; i4[3]++) {
+	    uint32_t m3 = R[3] & ((1u<<TF_SHIFT_O1)-1);
+	    unsigned char c3 = sfb[l3][m3].c;
+	    out[i4[3]] = c3;
+	    R[3] = sfb[l3][m3].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m3].b;
+	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
+	    l3 = c3;
+	}
+    } else {
+	// TF_SHIFT_O1 = 10
+	const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
+	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
+	    uint32_t m[4];
+	    uint32_t c[4];
 
-    // Remainder
-    for (; i4[3] < out_sz; i4[3]++) {
-	uint32_t m3 = R[3] & ((1u<<TF_SHIFT_O1)-1);
-	unsigned char c3 = sfb[l3][m3].c;
-	out[i4[3]] = c3;
-	R[3] = sfb[l3][m3].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m3].b;
-	RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
-	l3 = c3;
+	    m[0] = R[0] & mask;
+	    R[0] = sfb[l0][m[0]].f * (R[0]>>TF_SHIFT_O1_FAST) + sfb[l0][m[0]].b;
+	    c[0] = sfb[l0][m[0]].c;
+
+	    m[1] = R[1] & mask;
+	    R[1] = sfb[l1][m[1]].f * (R[1]>>TF_SHIFT_O1_FAST) + sfb[l1][m[1]].b;
+	    c[1] = sfb[l1][m[1]].c;
+
+	    m[2] = R[2] & mask;
+	    R[2] = sfb[l2][m[2]].f * (R[2]>>TF_SHIFT_O1_FAST) + sfb[l2][m[2]].b;
+	    c[2] = sfb[l2][m[2]].c;
+
+	    m[3] = R[3] & mask;
+	    R[3] = sfb[l3][m[3]].f * (R[3]>>TF_SHIFT_O1_FAST) + sfb[l3][m[3]].b;
+	    c[3] = sfb[l3][m[3]].c;
+
+	    // TODO: inline expansion of 4-way packing here is about 4% faster.
+	    out[i4[0]] = c[0];
+	    out[i4[1]] = c[1];
+	    out[i4[2]] = c[2];
+	    out[i4[3]] = c[3];
+
+	    if (ptr < ptr_end) {
+		RansDecRenorm(&R[0], &ptr);
+		RansDecRenorm(&R[1], &ptr);
+		RansDecRenorm(&R[2], &ptr);
+		RansDecRenorm(&R[3], &ptr);
+	    } else {
+		RansDecRenormSafe(&R[0], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[1], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
+	    }
+
+	    l0 = c[0];
+	    l1 = c[1];
+	    l2 = c[2];
+	    l3 = c[3];
+	}
+
+	// Remainder
+	for (; i4[3] < out_sz; i4[3]++) {
+	    uint32_t m3 = R[3] & ((1u<<TF_SHIFT_O1_FAST)-1);
+	    unsigned char c3 = sfb[l3][m3].c;
+	    out[i4[3]] = c3;
+	    R[3] = sfb[l3][m3].f * (R[3]>>TF_SHIFT_O1_FAST) + sfb[l3][m3].b;
+	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
+	    l3 = c3;
+	}
     }
-    
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
 #ifdef NO_THREADS
