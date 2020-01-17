@@ -138,6 +138,11 @@ static inline int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
 	    return 0;
 	}
 
+	if (*cp < 128) {
+	    *i = *cp;
+	    return 1;
+	}
+
 	do {
 	    c = *cp++;
 	    j = (j<<7) | (c & 0x7f);

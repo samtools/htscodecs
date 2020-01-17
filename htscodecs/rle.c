@@ -120,27 +120,27 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
     for (j = 0; j < rle_nsyms; j++)
 	saved[rle_syms[j]] = 1;
 
-    j = 0;
     uint8_t *lit_end = lit + lit_len;
     uint8_t *out_end = out + *out_len;
     uint8_t *outp = out;
     while (lit < lit_end) {
-	uint32_t rlen;
+	if (outp >= out_end)
+	    goto err;
+
 	uint8_t b = *lit++;
-	if (saved[b]) {
-	    uint32_t v;
-	    if ((v = var_get_u32(run, run_end, &rlen)) == 0)
-		return NULL;
-	    run += v;
-	    rlen++;
-	    if (outp + rlen > out_end)
-		goto err;
-	    memset(outp, b, rlen);
-	    outp += rlen;
-	} else {
-	    if (outp >= out_end)
-		goto err;
+	if (!saved[b]) {
 	    *outp++ = b;
+	} else {
+	    uint32_t rlen;
+	    run += var_get_u32(run, run_end, &rlen);
+	    if (rlen) {
+		if (outp + rlen > out_end)
+		    goto err;
+		memset(outp, b, rlen+1);
+		outp += rlen+1;
+	    } else {
+		*outp++ = b;
+	    }
 	}
     }
 
