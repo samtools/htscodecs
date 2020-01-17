@@ -106,21 +106,36 @@ int main(int argc, char **argv) {
 	} blocks;
 	blocks *b = NULL, *bc = NULL, *bu = NULL;
 	int nb = 0, i;
-	
-	while ((len = fread(in_buf, 1, BLK_SIZE, infp)) != 0) {
-	    // inefficient, but it'll do for testing
-	    b = realloc(b, (nb+1)*sizeof(*b));
-	    bu = realloc(bu, (nb+1)*sizeof(*bu));
-	    bc = realloc(bc, (nb+1)*sizeof(*bc));
-	    b[nb].blk = malloc(len);
-	    b[nb].sz = len;
-	    memcpy(b[nb].blk, in_buf, len);
-	    bc[nb].sz = rans_compress_bound_4x16(BLK_SIZE, order);
-	    bc[nb].blk = malloc(bc[nb].sz);
-	    bu[nb].sz = len;
-	    bu[nb].blk = malloc(BLK_SIZE);
-	    nb++;
-	    in_sz += len;
+
+	uint32_t blk_size = BLK_SIZE;
+	if (raw) {
+	    b = malloc(sizeof(*b));
+	    bu = malloc(sizeof(*bu));
+	    bc = malloc(sizeof(*bc));
+	    b[0].blk = load(infp, &blk_size);
+	    b[0].sz = blk_size;
+	    bc[0].sz = rans_compress_bound_4x16(blk_size, order);
+	    bc[0].blk = malloc(bc[0].sz);
+	    bu[0].sz = blk_size;
+	    bu[0].blk = malloc(blk_size);
+	    nb = 1;
+	    in_sz = blk_size;
+	} else {
+	    while ((len = fread(in_buf, 1, blk_size, infp)) != 0) {
+		// inefficient, but it'll do for testing
+		b = realloc(b, (nb+1)*sizeof(*b));
+		bu = realloc(bu, (nb+1)*sizeof(*bu));
+		bc = realloc(bc, (nb+1)*sizeof(*bc));
+		b[nb].blk = malloc(len);
+		b[nb].sz = len;
+		memcpy(b[nb].blk, in_buf, len);
+		bc[nb].sz = rans_compress_bound_4x16(blk_size, order);
+		bc[nb].blk = malloc(bc[nb].sz);
+		bu[nb].sz = len;
+		bu[nb].blk = malloc(blk_size);
+		nb++;
+		in_sz += len;
+	    }
 	}
 	fprintf(stderr, "Testing %d blocks\n", nb);
 
@@ -145,7 +160,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&tv2, NULL);
 	    
 	    // Warmup
-	    for (i = 0; i < nb; i++) memset(bu[i].blk, 0, BLK_SIZE);
+	    for (i = 0; i < nb; i++) memset(bu[i].blk, 0, blk_size);
 
 	    gettimeofday(&tv3, NULL);
 
