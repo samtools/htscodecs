@@ -773,7 +773,7 @@ function RansEncode0(src) {
 
 // Decode a table of order-1 frequences,
 // filling out the F and C arrays.
-function ReadFrequencies1(src, F, C) {
+function ReadFrequencies1(src, F, C, shift) {
     // Initialise; not in the specification - implicit?
     for (var i = 0; i < 256; i++) {
 	F[i] = new Array(256);
@@ -804,7 +804,7 @@ function ReadFrequencies1(src, F, C) {
 	    }
 	}
 
-	NormaliseFrequencies0_Shift(F[i], 10)
+	NormaliseFrequencies0_Shift(F[i], shift)
 
 	// Compute C[] from F[]
 	C[i][0] = 0;
@@ -817,8 +817,10 @@ function RansDecode1(src, nbytes) {
     // FIXME: this bit is missing from the RansDecode0 pseudocode.
 
     var comp = src.ReadByte();
+    var shift = comp >> 4;
+
     var freq_src = src
-    if (comp) {
+    if (comp & 1) {
 	var ulen = src.ReadUint7()
 	var clen = src.ReadUint7()
 	var comp = new IOStream(src.ReadData(clen))
@@ -828,13 +830,13 @@ function RansDecode1(src, nbytes) {
     // Decode frequencies
     var F = new Array(256);
     var C = new Array(256);
-    ReadFrequencies1(freq_src, F, C);
+    ReadFrequencies1(freq_src, F, C, shift);
 
     // Fast lookup to avoid slow RansGetSymbolFromFreq
     var C2S = new Array(256);
     for (var i = 0; i < 256; i++)
 	// Could do only for symbols in alphabet?
-	C2S[i] = RansBuildC2S(C[i], 10);
+	C2S[i] = RansBuildC2S(C[i], shift);
 
     // Initialise rANS state
     var R = new Array(4);
@@ -849,13 +851,13 @@ function RansDecode1(src, nbytes) {
     var nbytes4 = Math.floor(nbytes/4);
     for (var i = 0; i < nbytes4; i++) {
 	for (var j = 0; j < 4; j++) {
-	    var f = RansGetCumulativeFreq(R[j], 10);
+	    var f = RansGetCumulativeFreq(R[j], shift);
 
 	    //var s = RansGetSymbolFromFreq(C[L[j]], f);
 	    var s = C2S[L[j]][f]; // Precomputed version of above
 
 	    output[i+j*nbytes4] = s;
-	    R[j] = RansAdvanceStep(R[j], C[L[j]][s], F[L[j]][s], 10);
+	    R[j] = RansAdvanceStep(R[j], C[L[j]][s], F[L[j]][s], shift);
 	    R[j] = RansRenorm(src, R[j]);
 	    L[j] = s;
 	}
@@ -866,10 +868,10 @@ function RansDecode1(src, nbytes) {
     // designed this to just act as if we kept going with a bail out.)
     i = 4*i;
     while (i < nbytes) {
-	var f = RansGetCumulativeFreq(R[3], 10);
+	var f = RansGetCumulativeFreq(R[3], shift);
 	var s = RansGetSymbolFromFreq(C[L[3]], f);
 	output[i++] = s;
-	R[3] = RansAdvanceStep(R[3], C[L[3]][s], F[L[3]][s], 10);
+	R[3] = RansAdvanceStep(R[3], C[L[3]][s], F[L[3]][s], shift);
 	R[3] = RansRenorm(src, R[3]);
 	L[3] = s;
     }
@@ -902,24 +904,24 @@ function BuildFrequencies1(src, F, F0) {
     F0[0] += 3;
 }
 
-function NormaliseFrequencies1(F, F0) {
+function NormaliseFrequencies1(F, F0, shift) {
 
     for (var i = 0; i < 256; i++) {
 	if (!F0[i])
 	    continue;
 
 	var bit_size = Math.ceil(Math.log2(F0[i]));
-	if (bit_size > 10)
-	    bit_size = 10;
+	if (bit_size > shift)
+	    bit_size = shift;
 
 	NormaliseFrequencies0(F[i], bit_size)
     }
 }
 
-function NormaliseFrequencies1_Shift(F, F0) {
+function NormaliseFrequencies1_Shift(F, F0, shift) {
     for (var i = 0; i < 256; i++)
 	if (F0[i])
-	    NormaliseFrequencies0_Shift(F[i], 10)
+	    NormaliseFrequencies0_Shift(F[i], shift)
 }
 
 function WriteFrequencies1(out, F, F0) {
@@ -970,8 +972,11 @@ function RansEncode1(src) {
 	C[i] = new Array(256);
     }
 
+    // Frequency precision
+    var shift = 12;
+
     BuildFrequencies1(src, F, F0)
-    NormaliseFrequencies1(F, F0);
+    NormaliseFrequencies1(F, F0, shift);
 
     // Store frequencies, possibly compressed
     var freq = new IOStream("", 0, 257*257*3+9);
@@ -980,17 +985,17 @@ function RansEncode1(src) {
 
     var cfreq = RansEncode0(freq.buf.slice(0, freq.pos))
     if (cfreq.length < freq.pos) {
-	output.WriteByte(1);
+	output.WriteByte(1 | (shift<<4));
 	output.WriteUint7(freq.pos)
 	output.WriteUint7(cfreq.length)
 	output.WriteData(cfreq, cfreq.length);
     } else {
-	output.WriteByte(0);
+	output.WriteByte(0 | (shift<<4));
 	output.WriteData(freq.buf, freq.pos);
     }
 
     // Normalise and compute cumulative frequencies
-    NormaliseFrequencies1_Shift(F, F0);
+    NormaliseFrequencies1_Shift(F, F0, shift);
     for (var i = 0; i < 256; i++) {
 	if (!F0[i])
 	    continue;
@@ -1021,7 +1026,7 @@ function RansEncode1(src) {
     // Deal with the remainder if not a multiple of 4
     last[3] = src[nbytes-1];
     for (var i = nbytes-2; i > 4*nbytes4-2; i--) {
-	R[3] = RansEncPut(R[3], rans_out, C[src[i]][last[3]], F[src[i]][last[3]], 10);
+	R[3] = RansEncPut(R[3], rans_out, C[src[i]][last[3]], F[src[i]][last[3]], shift);
 	last[3] = src[i];
     }
 
@@ -1029,14 +1034,14 @@ function RansEncode1(src) {
     while (idx[0] >= 0) {
 	for (var j = 3; j >= 0; j--) {
 	    var s = src[idx[j]]
-	    R[j] = RansEncPut(R[j], rans_out, C[s][last[j]], F[s][last[j]], 10);
+	    R[j] = RansEncPut(R[j], rans_out, C[s][last[j]], F[s][last[j]], shift);
 	    last[j] = s;
 	    idx[j]--;
 	}
     }
 
     for (var j = 3; j >= 0; j--) {
-        R[j] = RansEncPut(R[j], rans_out, C[0][last[j]], F[0][last[j]], 10)
+        R[j] = RansEncPut(R[j], rans_out, C[0][last[j]], F[0][last[j]], shift)
     }
 
     for (var i = 3; i >= 0; i--)
