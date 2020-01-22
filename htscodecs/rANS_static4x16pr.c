@@ -1089,10 +1089,12 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 	    if (F[j]) {
 		if (x + F[j] > (1<<shift) || F[j] < 0)
 		    goto err;
+
+		sb_t *ss = &sfb[i][x];
 		for (y = 0; y < F[j]; y++) {
-		    sfb[i][y + x].c = j;
-		    sfb[i][y + x].f = F[j];
-		    sfb[i][y + x].b = y;
+		    ss[y].c = j;
+		    ss[y].f = F[j];
+		    ss[y].b = y;
 		}
 		x += F[j];
 	    }
