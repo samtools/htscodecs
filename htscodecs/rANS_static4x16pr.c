@@ -78,7 +78,7 @@
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
 
-// 9-11 is considerably faster in the O1sfb variant due to reduced table size.
+// 9-11 is considerably faster in the O1 variant due to reduced table size.
 // We auto-tune between 10 and 12 though.  Anywhere from 9 to 14 are viable.
 #ifndef TF_SHIFT_O1
 #define TF_SHIFT_O1 12
@@ -955,12 +955,6 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     return out;
 }
 
-typedef struct {
-    uint16_t c;
-    uint16_t f;
-    uint16_t b;
-} sb_t;
-
 #ifndef NO_THREADS
 /*
  * Thread local storage per thread in the pool.
@@ -973,9 +967,17 @@ static void rans_tls_init(void) {
 }
 #endif
 
+//#define MAGIC2 111
+#define MAGIC2 179
+//#define MAGIC2 0
+typedef struct {
+    uint16_t f;
+    uint16_t b;
+} fb_t;
+
 static
-unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_size,
-					  unsigned char *out, unsigned int out_sz) {
+unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
+				       unsigned char *out, unsigned int out_sz) {
     if (in_size < 16) // 4-states at least
 	return NULL;
 
@@ -991,7 +993,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
     unsigned char *c_freq = NULL;
     int i, j = -999;
-    unsigned int x, y;
+    unsigned int x;
 
 #ifndef NO_THREADS
     /*
@@ -1015,22 +1017,26 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
      */
     pthread_once(&rans_once, rans_tls_init);
 
-    sb_t *sfb_ = pthread_getspecific(rans_key);
+    uint8_t *restrict sfb_ = pthread_getspecific(rans_key);
     if (!sfb_) {
-	sfb_ = calloc(256*TOTFREQ_O1, sizeof(*sfb_));
+	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
 	pthread_setspecific(rans_key, sfb_);
     }
 #else
-    sb_t *sfb_ = calloc(256*TOTFREQ_O1, sizeof(*sfb_));
+    uint8_t *restrict sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
 #endif
 
     if (!sfb_)
 	return NULL;
-    sb_t *sfb[256];
-    for (i = 0; i < 256; i++)
-	sfb[i]=  sfb_ + i*TOTFREQ_O1;
-
-    //memset(D, 0, 256*sizeof(*D));
+    fb_t fb[256][256];
+    uint8_t *restrict sfb[256];
+    if ((*cp >> 4) == TF_SHIFT_O1) {
+	for (i = 0; i < 256; i++)
+	    sfb[i]=  sfb_ + i*(TOTFREQ_O1+MAGIC2);
+    } else {
+	for (i = 0; i < 256; i++)
+	    sfb[i]=  sfb_ + i*(TOTFREQ_O1_FAST+MAGIC2);
+    }
 
     if (!out)
 	out_free = out = malloc(out_sz);
@@ -1090,12 +1096,9 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 		if (x + F[j] > (1<<shift) || F[j] < 0)
 		    goto err;
 
-		sb_t *ss = &sfb[i][x];
-		for (y = 0; y < F[j]; y++) {
-		    ss[y].c = j;
-		    ss[y].f = F[j];
-		    ss[y].b = y;
-		}
+		memset(&sfb[i][x], j, F[j]);
+		fb[i][j].f = F[j];
+		fb[i][j].b = x;
 		x += F[j];
 	    }
 	}
@@ -1132,32 +1135,25 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
     // loop with shift as a variable.
     if (shift == TF_SHIFT_O1) {
 	// TF_SHIFT_O1 = 12
+
 	const uint32_t mask = ((1u << TF_SHIFT_O1)-1);
 	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
-	    uint32_t m[4];
-	    uint32_t c[4];
+	    uint16_t m, c;
+	    c = sfb[l0][m = R[0] & mask];
+	    R[0] = fb[l0][c].f * (R[0]>>TF_SHIFT_O1) + m - fb[l0][c].b;
+	    out[i4[0]] = l0 = c;
 
-	    m[0] = R[0] & mask;
-	    R[0] = sfb[l0][m[0]].f * (R[0]>>TF_SHIFT_O1) + sfb[l0][m[0]].b;
-	    c[0] = sfb[l0][m[0]].c;
+	    c = sfb[l1][m = R[1] & mask];
+	    R[1] = fb[l1][c].f * (R[1]>>TF_SHIFT_O1) + m - fb[l1][c].b;
+	    out[i4[1]] = l1 = c;
 
-	    m[1] = R[1] & mask;
-	    R[1] = sfb[l1][m[1]].f * (R[1]>>TF_SHIFT_O1) + sfb[l1][m[1]].b;
-	    c[1] = sfb[l1][m[1]].c;
+	    c = sfb[l2][m = R[2] & mask];
+	    R[2] = fb[l2][c].f * (R[2]>>TF_SHIFT_O1) + m - fb[l2][c].b;
+	    out[i4[2]] = l2 = c;
 
-	    m[2] = R[2] & mask;
-	    R[2] = sfb[l2][m[2]].f * (R[2]>>TF_SHIFT_O1) + sfb[l2][m[2]].b;
-	    c[2] = sfb[l2][m[2]].c;
-
-	    m[3] = R[3] & mask;
-	    R[3] = sfb[l3][m[3]].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m[3]].b;
-	    c[3] = sfb[l3][m[3]].c;
-
-	    // TODO: inline expansion of 4-way packing here is about 4% faster.
-	    out[i4[0]] = c[0];
-	    out[i4[1]] = c[1];
-	    out[i4[2]] = c[2];
-	    out[i4[3]] = c[3];
+	    c = sfb[l3][m = R[3] & mask];
+	    R[3] = fb[l3][c].f * (R[3]>>TF_SHIFT_O1) + m - fb[l3][c].b;
+	    out[i4[3]] = l3 = c;
 
 	    if (ptr < ptr_end) {
 		RansDecRenorm(&R[0], &ptr);
@@ -1170,19 +1166,14 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 		RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
 		RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
 	    }
-
-	    l0 = c[0];
-	    l1 = c[1];
-	    l2 = c[2];
-	    l3 = c[3];
 	}
 
 	// Remainder
 	for (; i4[3] < out_sz; i4[3]++) {
 	    uint32_t m3 = R[3] & ((1u<<TF_SHIFT_O1)-1);
-	    unsigned char c3 = sfb[l3][m3].c;
+	    unsigned char c3 = sfb[l3][m3];
 	    out[i4[3]] = c3;
-	    R[3] = sfb[l3][m3].f * (R[3]>>TF_SHIFT_O1) + sfb[l3][m3].b;
+	    R[3] = fb[l3][c3].f * (R[3]>>TF_SHIFT_O1) + m3 - fb[l3][c3].b;
 	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
 	    l3 = c3;
 	}
@@ -1190,30 +1181,22 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 	// TF_SHIFT_O1 = 10
 	const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
 	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
-	    uint32_t m[4];
-	    uint32_t c[4];
+	    uint16_t m, c;
+	    c = sfb[l0][m = R[0] & mask];
+	    R[0] = fb[l0][c].f * (R[0]>>TF_SHIFT_O1_FAST) + m - fb[l0][c].b;
+	    out[i4[0]] = l0 = c;
 
-	    m[0] = R[0] & mask;
-	    R[0] = sfb[l0][m[0]].f * (R[0]>>TF_SHIFT_O1_FAST) + sfb[l0][m[0]].b;
-	    c[0] = sfb[l0][m[0]].c;
+	    c = sfb[l1][m = R[1] & mask];
+	    R[1] = fb[l1][c].f * (R[1]>>TF_SHIFT_O1_FAST) + m - fb[l1][c].b;
+	    out[i4[1]] = l1 = c;
 
-	    m[1] = R[1] & mask;
-	    R[1] = sfb[l1][m[1]].f * (R[1]>>TF_SHIFT_O1_FAST) + sfb[l1][m[1]].b;
-	    c[1] = sfb[l1][m[1]].c;
+	    c = sfb[l2][m = R[2] & mask];
+	    R[2] = fb[l2][c].f * (R[2]>>TF_SHIFT_O1_FAST) + m - fb[l2][c].b;
+	    out[i4[2]] = l2 = c;
 
-	    m[2] = R[2] & mask;
-	    R[2] = sfb[l2][m[2]].f * (R[2]>>TF_SHIFT_O1_FAST) + sfb[l2][m[2]].b;
-	    c[2] = sfb[l2][m[2]].c;
-
-	    m[3] = R[3] & mask;
-	    R[3] = sfb[l3][m[3]].f * (R[3]>>TF_SHIFT_O1_FAST) + sfb[l3][m[3]].b;
-	    c[3] = sfb[l3][m[3]].c;
-
-	    // TODO: inline expansion of 4-way packing here is about 4% faster.
-	    out[i4[0]] = c[0];
-	    out[i4[1]] = c[1];
-	    out[i4[2]] = c[2];
-	    out[i4[3]] = c[3];
+	    c = sfb[l3][m = R[3] & mask];
+	    R[3] = fb[l3][c].f * (R[3]>>TF_SHIFT_O1_FAST) + m - fb[l3][c].b;
+	    out[i4[3]] = l3 = c;
 
 	    if (ptr < ptr_end) {
 		RansDecRenorm(&R[0], &ptr);
@@ -1226,19 +1209,14 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 		RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
 		RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
 	    }
-
-	    l0 = c[0];
-	    l1 = c[1];
-	    l2 = c[2];
-	    l3 = c[3];
 	}
 
 	// Remainder
 	for (; i4[3] < out_sz; i4[3]++) {
 	    uint32_t m3 = R[3] & ((1u<<TF_SHIFT_O1_FAST)-1);
-	    unsigned char c3 = sfb[l3][m3].c;
+	    unsigned char c3 = sfb[l3][m3];
 	    out[i4[3]] = c3;
-	    R[3] = sfb[l3][m3].f * (R[3]>>TF_SHIFT_O1_FAST) + sfb[l3][m3].b;
+	    R[3] = fb[l3][c3].f * (R[3]>>TF_SHIFT_O1_FAST) + m3 - fb[l3][c3].b;
 	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
 	    l3 = c3;
 	}
@@ -1259,6 +1237,7 @@ unsigned char *rans_uncompress_O1sfb_4x16(unsigned char *in, unsigned int in_siz
 
     return NULL;
 }
+
 
 /*-----------------------------------------------------------------------------
  * Simple interface to the order-0 vs order-1 encoders and decoders.
@@ -1696,7 +1675,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    memcpy(tmp1, in, tmp1_size);
 	} else {
 	    tmp1 = order
-		? rans_uncompress_O1sfb_4x16(in, in_size, tmp1, tmp1_size)
+		? rans_uncompress_O1_4x16(in, in_size, tmp1, tmp1_size)
 		: rans_uncompress_O0_4x16(in, in_size, tmp1, tmp1_size);
 	    if (!tmp1)
 		goto err;
