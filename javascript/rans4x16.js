@@ -373,29 +373,28 @@ function DecodePack(data, P, nsym, len) {
 //
 // Maybe make this more general purpose of X* where we specify the stripe
 // size instead of fixing it at 4?
-function RansEncodeX4(hdr, src) {
-    var stride = 4
-    if (src.length % stride != 0) {
-	console.error("Input data is not a size multiple of", stride)
-	return
-    }
+function RansEncodeStripe(hdr, src, N) {
+    if (N == 0)
+	N = 4; // old default
 
     // Split into multiple streams
-    var ulen = src.length / stride
-    var j = 0
-    var part = new Array(stride)
-    for (var s = 0; s < stride; s++)
-	part[s] = new Array(ulen)
-    for (var i = 0; i < src.length; i+=stride) {
-	for (var s = 0; s < stride; s++)
-	    part[s][j] = src[i+s]
-	j++
+    var part = new Array(N)
+    var ulen = new Array(N)
+    for (var s = 0; s < N; s++) {
+	ulen[s] = Math.floor(src.length / N) + ((src.length % N) > s);
+	part[s] = new Array(ulen[s])
+    }
+
+    for (var x = 0, i = 0; i < src.length; i+=N, x++) {
+	for (var j = 0; j < N; j++)
+	    if (x < part[j].length)
+		part[j][x] = src[i+j]
     }
 
     // Compress each part
-    var comp = new Array(stride)
+    var comp = new Array(N)
     var total = 0
-    for (var s = 0; s < stride; s++) {
+    for (var s = 0; s < N; s++) {
 	// Example: try O0 and O1 and choose best
 	var comp0 = encode(part[s], 0)
 	var comp1 = encode(part[s], 1)
@@ -404,34 +403,39 @@ function RansEncodeX4(hdr, src) {
     }
 
     // Serialise
-    var out = new IOStream("", 0, total+5*stride)
-    for (var s = 0; s < stride; s++)
+    var out = new IOStream("", 0, total+5*N+1)
+    out.WriteByte(N)
+    for (var s = 0; s < N; s++)
 	out.WriteUint7(comp[s].length)
 
-    for (var s = 0; s < stride; s++)
+    for (var s = 0; s < N; s++)
 	out.WriteData(comp[s], comp[s].length)
 
     return out.buf.slice(0, out.buf.pos)
 }
 
-function RansDecodeX4(src, len) {
-    var clen = new Array(4)
-    for (i = 0; i < 4; i++)
-	clen[i] = src.ReadUint7()
+function RansDecodeStripe(src, len) {
+    var N = src.ReadByte()
 
-    var X0 = RansDecodeStream(src, (len/4)>>0)
-    var X1 = RansDecodeStream(src, (len/4)>>0)
-    var X2 = RansDecodeStream(src, (len/4)>>0)
-    var X3 = RansDecodeStream(src, (len/4)>>0)
+    // Retrieve lengths
+    var clen = new Array(N)
+    var ulen = new Array(N)
+    for (var j = 0; j < N; j++)
+	clen[j] = src.ReadUint7()
 
+    // Decode streams
+    var T = new Array(N);
+    for (var j = 0; j < N; j++) {
+	ulen[j] = Math.floor(len / N) + ((len % N) > j)
+	T[j] = RansDecodeStream(src, ulen[j])
+    }
+
+    // Transpose
     var out = new Buffer.allocUnsafe(len)
-    var i = 0
-    for (var j = 0; j < len/4; j++) {
-	out[i+0] = X0[j];
-	out[i+1] = X1[j];
-	out[i+2] = X2[j];
-	out[i+3] = X3[j];
-	i += 4;
+    for (var j = 0; j < N; j++) {
+	for (var i = 0; i < ulen[j]; i++) {
+	    out[i*N + j] = T[j][i];
+	}
     }
 
     return out;
@@ -449,7 +453,7 @@ function decode(src) {
 function RansDecodeStream(stream, n_out) {
     var format = stream.ReadByte();
     var order  = format & 1
-    var x4     = format & 8
+    var stripe = format & 8
     var nosz   = format & 16
     var cat    = format & 32
     var rle    = format & 64
@@ -458,9 +462,9 @@ function RansDecodeStream(stream, n_out) {
     if (!nosz)
 	n_out = stream.ReadUint7();
 
-    // 4 way interleaving
-    if (x4)
-	return RansDecodeX4(stream, n_out)
+    // N-way interleaving
+    if (stripe)
+	return RansDecodeStripe(stream, n_out)
 
     // Bit packing
     if (pack) {
@@ -497,17 +501,19 @@ function encode(src, format) {
     hdr.WriteByte(format);
 
     var order = format & 1
-    var x4    = format & 8
+    var stripe= format & 8
     var nosz  = format & 16
     var cat   = format & 32
     var rle   = format & 64
     var pack  = format & 128
 
+    var N     = format>>8
+
     if (!nosz)
 	hdr.WriteUint7(src.length);
 
-    if (x4)
-	return Buffer.concat([hdr.buf.slice(0, hdr.pos), RansEncodeX4(hdr, src)])
+    if (stripe)
+	return Buffer.concat([hdr.buf.slice(0, hdr.pos), RansEncodeStripe(hdr, src, N)])
 
     var pack_meta = new Buffer.alloc(0)
     if (pack)

@@ -38,7 +38,7 @@ const bzip2 = require("bzip2");
 
 const ARITH_ORDER  = 1
 const ARITH_EXT    = 4
-const ARITH_X4     = 8
+const ARITH_STRIPE = 8
 const ARITH_NOSIZE = 16
 const ARITH_CAT    = 32
 const ARITH_RLE    = 64
@@ -59,8 +59,8 @@ module.exports = class RangeCoderGen {
 	var order = flags & ARITH_ORDER;
 
 	// 4-way recursion
-	if (flags & ARITH_X4)
-	    return this.decodeX4(this.stream, n_out)
+	if (flags & ARITH_STRIPE)
+	    return this.decodeStripe(this.stream, n_out)
 
 	// Meta data
 	if (flags & ARITH_PACK) {
@@ -99,9 +99,9 @@ module.exports = class RangeCoderGen {
 	if (!(flags & ARITH_NOSIZE))
 	    this.stream.WriteUint7(src.length);
 
-	if (flags & ARITH_X4)
+	if (flags & ARITH_STRIPE)
 	    return Buffer.concat([this.stream.buf.slice(0, this.stream.pos),
-				  this.encodeX4(this.stream, src)])
+				  this.encodeStripe(this.stream, src, flags>>8)])
 
 	var order = flags & ARITH_ORDER;
 	var e_len = src.length;
@@ -576,30 +576,29 @@ module.exports = class RangeCoderGen {
     }
 
     //----------------------------------------------------------------------
-    // X4 method
-    encodeX4(hdr, src) {
-	var stride = 4
-	if (src.length % stride != 0) {
-	    console.error("Input data is not a size multiple of", stride)
-	    return
-	}
+    // STRIPE method
+    encodeStripe(hdr, src, N) {
+    if (N == 0)
+	N = 4; // old default
 
 	// Split into multiple streams
-	var ulen = src.length / stride
-	var j = 0
-	var part = new Array(stride)
-	for (var s = 0; s < stride; s++)
-	    part[s] = new Array(ulen)
-	for (var i = 0; i < src.length; i+=stride) {
-	    for (var s = 0; s < stride; s++)
-		part[s][j] = src[i+s]
-	    j++
+	var part = new Array(N)
+	var ulen = new Array(N)
+	for (var s = 0; s < N; s++) {
+	    ulen[s] = Math.floor(src.length / N) + ((src.length % N) > s);
+	    part[s] = new Array(ulen[s])
+	}
+
+	for (var x = 0, i = 0; i < src.length; i+=N, x++) {
+	    for (var j = 0; j < N; j++)
+		if (x < part[j].length)
+		    part[j][x] = src[i+j]
 	}
 
 	// Compress each part
-	var comp = new Array(stride)
+	var comp = new Array(N)
 	var total = 0
-	for (var s = 0; s < stride; s++) {
+	for (var s = 0; s < N; s++) {
 	    // Example: try O0 and O1 and choose best
 	    var comp0 = this.encode(part[s], 0)
 	    var comp1 = this.encode(part[s], 1)
@@ -608,35 +607,39 @@ module.exports = class RangeCoderGen {
 	}
 
 	// Serialise
-	var out = new IOStream("", 0, total+5*stride)
-	for (var s = 0; s < stride; s++)
+	var out = new IOStream("", 0, total+5*N + 1)
+	out.WriteByte(N)
+	for (var s = 0; s < N; s++)
 	    out.WriteUint7(comp[s].length)
 
-	for (var s = 0; s < stride; s++)
+	for (var s = 0; s < N; s++)
 	    out.WriteData(comp[s], comp[s].length)
 
 	return out.buf.slice(0, out.buf.pos)
     }
 
-    decodeX4(stream, len) {
-	var plen = len/4
+    decodeStripe(stream, len) {
+	var N = stream.ReadByte()
 	
-	var clen = new Array(4);
-	for (var i = 0; i < 4; i++)
-	    clen[i] = stream.ReadUint7()
+	// Retrieve lengths
+	var clen = new Array(N)
+	var ulen = new Array(N)
+	for (var j = 0; j < N; j++)
+	    clen[j] = stream.ReadUint7()
 
-	var X0 = this.decodeStream(stream, plen)
-	var X1 = this.decodeStream(stream, plen)
-	var X2 = this.decodeStream(stream, plen)
-	var X3 = this.decodeStream(stream, plen)
+	// Decode streams
+	var T = new Array(N);
+	for (var j = 0; j < N; j++) {
+	    ulen[j] = Math.floor(len / N) + ((len % N) > j)
+	    T[j] = this.decodeStream(stream, ulen[j])
+	}
 
-	var out = new Buffer.allocUnsafe(len);
-	for (var i = 0, j = 0; j < plen; j++) {
-	    out[i+0] = X0[j]
-	    out[i+1] = X1[j]
-	    out[i+2] = X2[j]
-	    out[i+3] = X3[j]
-	    i += 4;
+	// Transpose
+	var out = new Buffer.allocUnsafe(len)
+	for (var j = 0; j < N; j++) {
+	    for (var i = 0; i < ulen[j]; i++) {
+		out[i*N + j] = T[j][i];
+	    }
 	}
 
 	return out

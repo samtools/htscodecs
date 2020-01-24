@@ -36,11 +36,11 @@
 // reduction in some data sets.
 
 // top bits in order byte
-#define X_PACK 0x80    // Pack 2,4,8 or infinite symbols into a byte.
-#define X_RLE  0x40    // Run length encoding with runs & lits encoded separately
-#define X_CAT  0x20    // Nop; for tiny segments where rANS overhead is too big
-#define X_NOSZ 0x10    // Don't store the original size; used by X4 mode
-#define X_4    0x08    // For 4-byte integer data; rotate & encode 4 streams.
+#define X_PACK   0x80    // Pack 2,4,8 or infinite symbols into a byte.
+#define X_RLE    0x40    // Run length encoding with runs & lits encoded separately
+#define X_CAT    0x20    // Nop; for tiny segments where rANS overhead is too big
+#define X_NOSZ   0x10    // Don't store the original size; used by STRIPE mode
+#define X_STRIPE 0x08    // For N-byte integer data; rotate & encode N streams.
 
 // FIXME Can we get decoder to return the compressed sized read, avoiding
 // us needing to store it?  Yes we can.  See c-size comments.  If we added all these
@@ -422,11 +422,16 @@ static int decode_freq_d(uint8_t *cp, uint8_t *cp_end, int *F0, int *F, int *tot
 }
 
 unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
+    int N = order>>8;
+    if (!N) N=4;
+
+    order &= 0xff;
     return (order == 0
 	? 1.05*size + 257*3 + 4
 	: 1.05*size + 257*257*3 + 4 + 257*3+4) +
 	((order & X_PACK) ? 1 : 0) +
-	((order & X_RLE) ? 1 + 257*3+4: 0) + 20;
+	((order & X_RLE) ? 1 + 257*3+4: 0) + 20 +
+	((order & X_STRIPE) ? 1 + 5*N: 0);
 }
 
 // Compresses in_size bytes from 'in' to *out_size bytes in 'out'.
@@ -1017,19 +1022,19 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
      */
     pthread_once(&rans_once, rans_tls_init);
 
-    uint8_t *restrict sfb_ = pthread_getspecific(rans_key);
+    uint8_t *sfb_ = pthread_getspecific(rans_key);
     if (!sfb_) {
 	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
 	pthread_setspecific(rans_key, sfb_);
     }
 #else
-    uint8_t *restrict sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
+    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
 #endif
 
     if (!sfb_)
 	return NULL;
     fb_t fb[256][256];
-    uint8_t *restrict sfb[256];
+    uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
 	    sfb[i]=  sfb_ + i*(TOTFREQ_O1+MAGIC2);
@@ -1257,39 +1262,54 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
     }
     unsigned char *out_end = out + *out_size;
 
-    if (in_size%4 != 0 || in_size <= 20)
-	order &= ~X_4;
+    if (in_size <= 20)
+	order &= ~X_STRIPE;
 
-    if (order & X_4) {
-	unsigned char *in4 = malloc(in_size);
-	if (!in4)
+    if (order & X_STRIPE) {
+	int N = (order>>8);
+	if (N == 0) N = 4; // default for compatibility with old tests
+
+	if (N > 255)
 	    return NULL;
-	unsigned int len4 = in_size/4, i4[4];
-	int i;
 
-	for (i = 0; i < 4; i++)
-	    i4[i] = i*len4;
-	for (i = 0; i4[0] < len4; i4[0]++, i4[1]++, i4[2]++, i4[3]++, i+=4) {
-	    in4[i4[0]] = in[i+0];
-	    in4[i4[1]] = in[i+1];
-	    in4[i4[2]] = in[i+2];
-	    in4[i4[3]] = in[i+3];
+	unsigned char *transposed = malloc(in_size);
+	unsigned int part_len[256];
+	unsigned int idx[256];
+	if (!transposed)
+	    return NULL;
+	int i, j, x;
+
+	for (i = 0; i < N; i++) {
+	    part_len[i] = in_size / N + ((in_size % N) > i);
+	    idx[i] = i ? idx[i-1] + part_len[i-1] : 0; // cumulative index
+	}
+
+	for (i = x = 0; i < in_size-N; i += N, x++) {
+	    for (j = 0; j < N; j++)
+		transposed[idx[j]+x] = in[i+j];
+	}
+	for (; i < in_size; i += N, x++) {
+	    for (j = 0; i+j < in_size; j++)
+		transposed[idx[j]+x] = in[i+j];
 	}
 
 	unsigned int olen2;
-	unsigned char *out2;
+	unsigned char *out2, *out2_start;
 	c_meta_len = 1;
-	*out = order;
+	*out = order & ~X_NOSZ;
 	c_meta_len += var_put_u32(out+c_meta_len, out_end, in_size);
-	out2 = out+26;
-        for (i = 0; i < 4; i++) {
+	out[c_meta_len++] = N;
+	
+	out2_start = out2 = out+2+5*N; // shares a buffer with c_meta
+        for (i = 0; i < N; i++) {
             // Brute force try all methods.
             int j, m[] = {1,64,128,0}, best_j = 0, best_sz = in_size+10;
             for (j = 0; j < 4; j++) {
-                if ((order & m[j]) != m[j])
+		if ((order & m[j]) != m[j])
                     continue;
                 olen2 = *out_size - (out2 - out);
-                rans_compress_to_4x16(in4+i*len4, len4, out2, &olen2, m[j] | X_NOSZ);
+                rans_compress_to_4x16(transposed+idx[i], part_len[i],
+				      out2, &olen2, m[j] | X_NOSZ);
                 if (best_sz > olen2) {
                     best_sz = olen2;
                     best_j = j;
@@ -1297,15 +1317,15 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
             }
 	    if (best_j != j-1) {
 		olen2 = *out_size - (out2 - out);
-		rans_compress_to_4x16(in4+i*len4, len4, out2, &olen2, m[best_j] | X_NOSZ);
+		rans_compress_to_4x16(transposed+idx[i], part_len[i],
+				      out2, &olen2, m[best_j] | X_NOSZ);
 	    }
-            //rans_compress_to_4x16(in4+i*len4, len4, out2, &olen2, (order & ~X_4) | X_NOSZ);
             out2 += olen2;
             c_meta_len += var_put_u32(out+c_meta_len, out_end, olen2);
         }
-	memmove(out+c_meta_len, out+26, out2-(out+26));
-	free(in4);
-	*out_size = c_meta_len + out2-(out+26);
+	memmove(out+c_meta_len, out2_start, out2-out2_start);
+	free(transposed);
+	*out_size = c_meta_len + out2-out2_start;
 	return out;
     }
 
@@ -1443,6 +1463,52 @@ unsigned char *rans_compress_4x16(unsigned char *in, unsigned int in_size,
     return rans_compress_to_4x16(in, in_size, NULL, out_size, order);
 }
 
+/*
+ * Data transpose by N.
+ * Tuned for specific common cases of N.
+ */
+static void unstripe(unsigned char *out, unsigned char *outN,
+		     unsigned int ulen, unsigned int N,
+		     unsigned int idxN[256]) {
+    int j = 0, k;
+
+    switch (N) {
+    case 4:
+	while (j < ulen-4) {
+	    for (k = 0; k < 4; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	while (j < ulen) {
+	    for (k = 0; j < ulen; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	break;
+
+    case 2:
+	while (j < ulen-4) {
+	    for (k = 0; k < 2; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	while (j < ulen) {
+	    for (k = 0; j < ulen; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	break;
+
+    default:
+	// General case, around 25% slower overall decode
+	while (j < ulen-N) {
+	    for (k = 0; k < N; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	while (j < ulen) {
+	    for (k = 0; j < ulen; k++)
+		out[j++] = outN[idxN[k]++];
+	}
+	break;
+    }
+}
+
 unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 				       unsigned char *out, unsigned int *out_size) {
     unsigned char *in_end = in + in_size;
@@ -1451,27 +1517,34 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (in_size == 0)
 	return NULL;
 
-    if (*in & X_4) {
-	unsigned int ulen, olen, clen4[4], c_meta_len = 1;
-	int i, j;
+    if (*in & X_STRIPE) {
+	unsigned int ulen, olen, c_meta_len = 1;
+	int i, j, k;
+	uint64_t clen_tot = 0;
 
 	// Decode lengths
 	c_meta_len += var_get_u32(in+c_meta_len, in_end, &ulen);
+	unsigned int N = in[c_meta_len++];
+	unsigned int clenN[256], ulenN[256], idxN[256];
 	if (!out) {
 	    if (ulen >= INT_MAX)
 		return NULL;
-	    if (!(out_free = out = malloc(ulen)))
+	    if (!(out_free = out = malloc(ulen))) {
 		return NULL;
+	    }
 	    *out_size = ulen;
 	}
-	if (ulen != *out_size || (ulen%4 != 0)) {
+	if (ulen != *out_size) {
 	    free(out_free);
 	    return NULL;
 	}
 
-	for (i = 0; i < 4; i++) {
-	    c_meta_len += var_get_u32(in+c_meta_len, in_end, &clen4[i]);
-	    if (c_meta_len > in_size || clen4[i] > in_size || clen4[i] < 1) {
+	for (i = 0; i < N; i++) {
+	    ulenN[i] = ulen / N + ((ulen % N) > i);
+	    idxN[i] = i ? idxN[i-1] + ulenN[i-1] : 0;
+	    c_meta_len += var_get_u32(in+c_meta_len, in_end, &clenN[i]);
+	    clen_tot += clenN[i];
+	    if (c_meta_len > in_size || clenN[i] > in_size || clenN[i] < 1) {
 		free(out_free);
 		return NULL;
 	    }
@@ -1480,45 +1553,39 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	// We can call this with a larger buffer, but once we've determined
 	// how much we really use we limit it so the recursion becomes easier
 	// to limit.
-	if (c_meta_len + clen4[0] + clen4[1] + clen4[2] + clen4[3] > in_size) {
+	if (c_meta_len + clen_tot > in_size) {
 	    free(out_free);
 	    return NULL;
 	}
-	in_size = c_meta_len + clen4[0] + clen4[1] + clen4[2] + clen4[3];
+	in_size = c_meta_len + clen_tot;
 
-	//fprintf(stderr, "    x4 meta %d\n", c_meta_len); //c-size
+	//fprintf(stderr, "    stripe meta %d\n", c_meta_len); //c-size
 
-	// Uncompress the 4 streams
-	unsigned char *out4 = malloc(ulen);
-	if (!out4) {
+	// Uncompress the N streams
+	unsigned char *outN = malloc(ulen);
+	if (!outN) {
 	    free(out_free);
 	    return NULL;
 	}
-	for (i = 0; i < 4; i++) {
-	    olen = ulen/4;
+	for (i = 0; i < N; i++) {
+	    olen = ulenN[i];
 	    if (in_size < c_meta_len) {
 		free(out_free);
-		free(out4);
+		free(outN);
 		return NULL;
 	    }
-	    if (!rans_uncompress_to_4x16(in+c_meta_len, in_size-c_meta_len, out4 + i*(ulen/4), &olen)
-		|| olen != ulen/4) {
+	    if (!rans_uncompress_to_4x16(in+c_meta_len, in_size-c_meta_len, outN + idxN[i], &olen)
+		|| olen != ulenN[i]) {
 		free(out_free);
-		free(out4);
+		free(outN);
 		return NULL;
 	    }
-	    c_meta_len += clen4[i];
+	    c_meta_len += clenN[i];
 	}
 
-	unsigned int i4[4] = {0*(ulen/4), 1*(ulen/4), 2*(ulen/4), 3*(ulen/4)};
-	j = 0;
-	while (j < ulen) {
-	    out[j++] = out4[i4[0]++];
-	    out[j++] = out4[i4[1]++];
-	    out[j++] = out4[i4[2]++];
-	    out[j++] = out4[i4[3]++];
-	}
-	free(out4);
+	unstripe(out, outN, ulen, N, idxN);
+
+	free(outN);
 	*out_size = ulen;
 	return out;
     }

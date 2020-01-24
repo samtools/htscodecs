@@ -52,6 +52,8 @@ var raw = argv.r
 var arith = new RangeCoderGen()
 if (!argv.d) {
     var order = argv.o != undefined ? argv.o : 0;
+    // -o8.4 => 8+(256*4)
+    order += Math.round((order - (order>>0))*10)*256
     var pos = 0;
     var out_len = 0;
     if (raw)

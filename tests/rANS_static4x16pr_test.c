@@ -62,9 +62,13 @@ int main(int argc, char **argv) {
 
     while ((opt = getopt(argc, argv, "o:dtr")) != -1) {
 	switch (opt) {
-	case 'o':
-	    order = atoi(optarg);
+	case 'o': {
+	    char *optend;
+	    order = strtol(optarg, &optend, 0);
+	    if (*optend == '.')
+		order += atoi(optend+1)<<8;
 	    break;
+	}
 
 	case 'd':
 	    decode = 1;
