@@ -1519,7 +1519,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 
     if (*in & X_STRIPE) {
 	unsigned int ulen, olen, c_meta_len = 1;
-	int i, j, k;
+	int i;
 	uint64_t clen_tot = 0;
 
 	// Decode lengths
