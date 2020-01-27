@@ -1234,9 +1234,9 @@ static int compress(uint8_t *in, uint64_t in_len, int level, int use_arith,
     //fprintf(stderr, "=== try %d ===\n", (int)in_len);
 
     int m, rmethods[5][12] = {
-	{1,   0},					      // 1
+	{2,   0,      128},				      // 1
 	{2,   0,                         192+8},              // 3
-	{2,   0,                         193+8},              // 5
+	{3,   0,  128,                   193+8},              // 5
 	{6,   0,1,    129,   65,    193, 193+8},              // 7
 	{9,   0,1,128,129,64,65,192,193, 193+8},              // 9
     };
@@ -1248,6 +1248,10 @@ static int compress(uint8_t *in, uint64_t in_len, int level, int use_arith,
 
     for (m = 1; m <= rmethods[level][0]; m++) {
 	*out_len = olen;
+
+	if (in_len % 4 != 0 && (rmethods[level][m] & 8))
+	    continue;
+
 	if (use_arith) {
 	    if (arith_encode(in, in_len, out, out_len, rmethods[level][m]) < 0)
 		return -1;
