@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 Genome Research Ltd.
+ * Copyright (c) 2016-2020 Genome Research Ltd.
  * Author(s): James Bonfield
  * 
  * Redistribution and use in source and binary forms, with or without 
@@ -362,8 +362,11 @@ static int encode_token_int(name_context *ctx, int ntok,
     if (encode_token_type(ctx, ntok, type) < 0) return -1;
     if (descriptor_grow(&ctx->desc[id], 4) < 0)	return -1;
 
-    // Assumes little endian and unalign access OK.
-    *(uint32_t *)(ctx->desc[id].buf + ctx->desc[id].buf_l) = val;
+    uint8_t *cp = &ctx->desc[id].buf[ctx->desc[id].buf_l];
+    cp[0] = (val >>  0) & 0xff;
+    cp[1] = (val >>  8) & 0xff;
+    cp[2] = (val >> 16) & 0xff;
+    cp[3] = (val >> 24) & 0xff;
     ctx->desc[id].buf_l += 4;
 
     return 0;
@@ -377,8 +380,8 @@ static int decode_token_int(name_context *ctx, int ntok,
     if (ctx->desc[id].buf_l + 4 > ctx->desc[id].buf_a)
 	return -1;
 
-    // Assumes little endian and unalign access OK.
-    *val = *(uint32_t *)(ctx->desc[id].buf + ctx->desc[id].buf_l);
+    uint8_t *cp = ctx->desc[id].buf + ctx->desc[id].buf_l;
+    *val = (cp[0]) + (cp[1]<<8) + (cp[2]<<16) + (cp[3]<<24);
     ctx->desc[id].buf_l += 4;
 
     return 0;
@@ -1478,12 +1481,18 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
     }
 
     uint8_t *cp = out;
-    //*out_len = tot_size+4;
-    //*(uint32_t *)cp = tot_size;   cp += 4;
 
     *out_len = tot_size;
-    *(uint32_t *)cp = last_start; cp += 4;
-    *(uint32_t *)cp = nreads;     cp += 4;
+//    *(uint32_t *)cp = last_start; cp += 4;
+//    *(uint32_t *)cp = nreads;     cp += 4;
+    *cp++ = (last_start >>  0) & 0xff;
+    *cp++ = (last_start >>  8) & 0xff;
+    *cp++ = (last_start >> 16) & 0xff;
+    *cp++ = (last_start >> 24) & 0xff;
+    *cp++ = (nreads     >>  0) & 0xff;
+    *cp++ = (nreads     >>  8) & 0xff;
+    *cp++ = (nreads     >> 16) & 0xff;
+    *cp++ = (nreads     >> 24) & 0xff;
     *cp++ = use_arith;
     //write(1, &nreads, 4);
     int last_tnum = -1;
@@ -1524,12 +1533,14 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 	return NULL;
 
     int i, o = 9;
-    int ulen   = *(uint32_t *)in;
+    //int ulen   = *(uint32_t *)in;
+    int ulen   = (in[0]<<0) | (in[1]<<8) | (in[2]<<16) | (in[3]<<24);
 
     if (ulen < 0 || ulen >= INT_MAX-1024)
 	return NULL;
 
-    int nreads = *(uint32_t *)(in+4);
+    //int nreads = *(uint32_t *)(in+4);
+    int nreads = (in[4]<<0) | (in[5]<<8) | (in[6]<<16) | (in[7]<<24);
     int use_arith = in[8];
     name_context *ctx = create_context(nreads);
     if (!ctx)

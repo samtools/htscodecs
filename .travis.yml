@@ -1,8 +1,19 @@
 language: c
 compiler: gcc
 
-os:
-  - linux
-  - osx
+matrix:
+  include:
+    # A big endian platform
+    - os: linux
+      arch: s390x
 
-script: autoreconf -i; ./configure CFLAGS="-g -Wall -O3 -fsanitize=address" && make && (make check || (cat tests/test-suite.log; false))
+    # A little endian platform running linux plus address sanitizer
+    - os: linux
+      compiler: gcc
+      env: SANITIZE=-fsanitize=address
+
+    # A little endian platform running MacOS X
+    - os: osx
+      compiler: clang
+
+script: autoreconf -i; ./configure CFLAGS="-g -Wall -O3 $SANITIZE" LDFLAGS="$SANITIZE" && make && (make check || (cat tests/test-suite.log; false))

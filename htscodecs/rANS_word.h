@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include "htscodecs_endian.h"
 
 #ifdef assert
 #define RansAssert assert
@@ -285,19 +286,22 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     uint32_t x = *r;
     uint32_t x_max = sym->x_max;
 
-//    uint32_t c = x < sym->x_max;
-//    uint16_t *p16 = (uint16_t *)(*pptr-2);
-//    uint32_t p1 = x, x1 = x >> 16;
-//    *p16  = c ? *p16 : p1;
-//    *pptr = c ? *pptr : (uint8_t *)p16;
-//    x     = c ? x : x1;
-
+#ifdef HTSCODECS_LITTLE_ENDIAN
     if (x >= x_max) {
-	uint16_t* ptr = *(uint16_t **)pptr;
-	*--ptr = x;//(uint16_t) (x & 0xffff);
+	(*pptr) -= 2;
+        **(uint16_t **)pptr = x;
 	x >>= 16;
-	*pptr = (uint8_t *)ptr;
     }
+#else
+    if (x >= x_max) {
+	uint8_t* ptr = *pptr;
+        ptr -= 2;
+	ptr[0] = x & 0xff;
+	ptr[1] = (x >> 8) & 0xff;
+	x >>= 16;
+	*pptr = ptr;
+    }
+#endif
 
     // x = C(s,x)
     // NOTE: written this way so we get a 32-bit "multiply high" when
@@ -342,10 +346,8 @@ static inline void RansDecAdvanceSymbolStep(RansState* r, RansDecSymbol const* s
 
 // Renormalize.
 
-// FIXME: this is endian specific.  We need big endian versions of these
-// functions.
-
 #if defined(__x86_64) && !defined(__ILP32__)
+
 /*
  * Assembly variants of the RansDecRenorm code.
  * These are based on joint ideas from Rob Davies and from looking at
@@ -381,16 +383,35 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
     // renormalize
     uint32_t x = *r;
 
-    //       q4        q40
-    // clang 801/540   750/438 (generated cmov; equiv to asm above)
-    // gcc8  896/624   352/286 (conditionals)
-    uint16_t* ptr = *(uint16_t **)pptr;
-    uint32_t y = *ptr;
+    // Generally this is faster than asm for highly predictable data
+    // (branch prediction is efficient), but slower for complex data.
+    //
+    // However we'll be using RLE and/or PACK for highly predictable
+    // data, turning into smaller but less predictable as far as
+    // entropy encoding goes.  So the latter is what we tune for.
+    // We do however still have to use this code on big endian systems.
+
+    // Times for asm code (above) / this code (LE) / this code (BE).
+    //
+    //       q4-0      q40-0
+    // clang 648/903/904   648/392/391  this faster q4, slower q40
+    // gcc7  650/851/851   650/394/393
+    //       q4-1      q40-1(OPT)
+    // clang 487/567/568   445/310/312  this faster q4, slower q40
+    // gcc7  413/497/498   381/282/282
+    //       q4-193(OPT)
+    // clang 990/907/903                this slower
+    // gcc7  952/875/868                this slower
+#ifdef HTSCODECS_LITTLE_ENDIAN
+    uint32_t y = **(uint16_t **)pptr; // 32-bit quicker here
+#else
+    uint16_t y = **(uint16_t **)pptr;
+    y = (y<<8) | (y>>8);
+#endif
     if (x < RANS_BYTE_L)
-	ptr++;
+	(*pptr)+=2;
     if (x < RANS_BYTE_L)
 	x = (x << 16) | y;
-    *pptr = (uint8_t *)ptr;
 
     *r = x;
 }
@@ -400,9 +421,15 @@ static inline void RansDecRenormSafe(RansState* r, uint8_t** pptr, uint8_t *ptr_
 {
     uint32_t x = *r;
     if (x >= RANS_BYTE_L || *pptr+1 >= ptr_end) return;
+#ifdef HTSCODECS_LITTLE_ENDIAN
     uint16_t* ptr = *(uint16_t **)pptr;
     x = (x << 16) | *ptr++;
     *pptr = (uint8_t *)ptr;
+#else
+    uint16_t y = (*pptr)[0] + ((*pptr)[1]<<8);
+    x = (x << 16) | y;
+    (*pptr) += 2;
+#endif
     *r = x;
 }
 
