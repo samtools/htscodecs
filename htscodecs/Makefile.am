@@ -51,7 +51,8 @@ libhtscodecs_la_SOURCES = \
 	arith_dynamic.h \
 	c_range_coder.h \
 	c_simple_model.h \
-	varint.h
+	varint.h \
+	htscodecs_endian.h
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
 libhtscodecs_la_LIBADD = @LIBZ@

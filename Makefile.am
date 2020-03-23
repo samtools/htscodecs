@@ -41,6 +41,8 @@ nobase_include_HEADERS = \
 	htscodecs/rANS_static4x16.h \
 	htscodecs/tokenise_name3.h \
 	htscodecs/pack.h \
-	htscodecs/rle.h
+	htscodecs/rle.h \
+	htscodecs/varint.h
+	htscodecs/htscodecs_endian.h
 
 EXTRA_DIST = README.md LICENSE.md
