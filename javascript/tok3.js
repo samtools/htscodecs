@@ -173,7 +173,7 @@ function DecodeSingleName(B, N, T, n) {
 //----------------------------------------------------------------------
 // Main tokeniser decode entry function: decodes a compressed src and
 // returns the uncompressed buffer.
-function decode(src, len) {
+function decode(src, len, separator) {
     var src = new IOStream(src)
     var ulen = src.ReadUint32()
     var nnames = src.ReadUint32()
@@ -184,8 +184,10 @@ function decode(src, len) {
     var T = new Array(nnames)
 
     var str = ""
+    if (typeof separator === 'undefined')
+	separator = '\n'
     for (var i = 0; i < nnames; i++)
-	str += DecodeSingleName(B, N, T, i) + "\n"
+	str += DecodeSingleName(B, N, T, i) + separator
 
     return str
 }

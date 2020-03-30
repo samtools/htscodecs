@@ -227,9 +227,8 @@ module.exports = class RangeCoderGen {
 	do {
 	    var chunk = bzip2.decompress(bits, size);
 	    if (chunk != -1) {
-		// Is there a faster Uint8Array to Buffer copy method?
-		for (var i = 0; i < chunk.length; i++)
-		    output[j++] = chunk[i]
+	        Buffer.from(chunk).copy(output, j)
+	        j += chunk.length
 		size -= chunk.length
 	    }
 	} while(chunk != -1);
