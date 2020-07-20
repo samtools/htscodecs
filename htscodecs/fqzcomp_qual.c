@@ -53,6 +53,8 @@
 // cc -Wall -DTEST_MAIN -O3 -g fqzcomp_qual2.c -lm
 // ./a.out $f > /tmp/_ && ./a.out -d < /tmp/_ > /tmp/__ && cmp /tmp/__ $f
 
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>

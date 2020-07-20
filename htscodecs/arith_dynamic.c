@@ -44,7 +44,11 @@
 #define X_EXT    0x04    // External compression codec via magic num (gz, xz, bz2)
 #define X_ORDER  0x03    // Mask to obtain order
 
+#include "config.h"
+
+#ifdef HAVE_LIBBZ2
 #include <bzlib.h>
+#endif
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -808,9 +812,15 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
     if (do_ext) {
 	// Use an external compression library instead.
 	// For now, bzip2
+#ifdef HAVE_LIBBZ2
 	if (BZ_OK != BZ2_bzBuffToBuffCompress((char *)out+c_meta_len, out_size,
 					      (char *)in, in_size, 9, 0, 30))
 	    *out_size = in_size; // Didn't fit with bz2; force X_CAT below instead
+#else
+	fprintf(stderr, "Htscodecs has been compiled without libbz2 support\n");
+	free(out);
+	return NULL;
+#endif
 
 //      // lzma doesn't help generally, at least not for the name tokeniser
 //	size_t lzma_size = 0;
@@ -1057,7 +1067,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
     if (do_pack) {
 	c_meta_size = hts_unpack_meta(in, in_size, *out_size, map, &npacked_sym);
 	if (c_meta_size == 0)
-	    goto err;;
+	    goto err;
 
 	unpacked_sz = osz;
 	in      += c_meta_size;
@@ -1070,7 +1080,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	in += sz;
 	in_size -= sz;
 	if (osz > tmp1_size)
-	    goto err;;
+	    goto err;
 	tmp1_size = osz;
     }
 
@@ -1086,15 +1096,20 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	if (do_cat) {
 	    //fprintf(stderr, "    CAT %d\n", tmp1_size); //c-size
 	    if (tmp1_size > in_size)
-		goto err;;
+		goto err;
 	    if (tmp1_size > *out_size)
-		goto err;;
+		goto err;
 	    memcpy(tmp1, in, tmp1_size);
 	} else if (do_ext) {
+#ifdef HAVE_LIBBZ2
 	    if (BZ_OK != BZ2_bzBuffToBuffDecompress((char *)tmp1, &tmp1_size,
 						    (char *)in, in_size, 0, 0))
-		goto err;;
-	} else {
+		goto err;
+#else
+	    fprintf(stderr, "Htscodecs has been compiled without libbz2 support\n");
+	    goto err;
+#endif
+	  } else {
 	    // in -> tmp1
 	    if (do_rle) {
 		tmp1 = order == 1
@@ -1109,7 +1124,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 		    : arith_uncompress_O0(in, in_size, tmp1, tmp1_size);
 	    }
 	    if (!tmp1)
-		goto err;;
+		goto err;
 	}
     } else {
 	tmp1 = NULL;
@@ -1123,7 +1138,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 	//uint8_t *porig = unpack(tmp2, tmp2_size, unpacked_sz, npacked_sym, map);
 	//memcpy(tmp3, porig, unpacked_sz);
 	if (!hts_unpack(tmp1, tmp1_size, tmp2, unpacked_sz, npacked_sym, map))
-	    goto err;;
+	    goto err;
 	tmp2_size = unpacked_sz;
     } else {
 	tmp2_size = tmp1_size;

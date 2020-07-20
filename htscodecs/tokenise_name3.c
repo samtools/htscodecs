@@ -83,7 +83,7 @@
 //   @VP2-06:112:H7LNDMCVY:1:1105:27100:1172 1:N:0:ATTCAGAA+AGGCGAAG
 //   @VP2-06:112:H7LNDMCVY:1:1105:27172:1172 1:N:0:ATTCAGAA+AGGCTAAG
 
-
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>

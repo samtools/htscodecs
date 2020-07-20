@@ -31,6 +31,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
+
 #if defined(NO_THREADS) && (defined(__APPLE__) || defined(_WIN32))
 // When pthreads is available, we use a single malloc, otherwise we'll
 // (normally) use the stack instead.
