@@ -286,14 +286,19 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     uint32_t x = *r;
     uint32_t x_max = sym->x_max;
 
+    // This is better for 40-qual illumina (3.7% quicker overall CRAM).
+    // The old method was better for low complexity data such as NovaSeq
+    // quals (2.6% quicker overall CRAM).
+    int o = x >= x_max;
+    uint8_t* ptr = *pptr;
+    ptr[-1] = x & 0xff;
+    ptr -= o;
+    x >>= o*8;
     if (x >= x_max) {
-	uint8_t* ptr = *pptr;
-	do {
-	    *--ptr = (uint8_t) (x & 0xff);
-	    x >>= 8;
-	} while (x >= x_max);
-	*pptr = ptr;
+        *--ptr = (uint8_t) (x & 0xff);
+        x >>= 8;
     }
+    *pptr = ptr;
 
     //uint32_t q = (uint32_t) (((uint64_t)x * sym->rcp_freq) >> sym->rcp_shift);
     //*r = q * sym->cmpl_freq + x + sym->bias;
@@ -307,6 +312,97 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     // The extra >>32 has already been added to RansEncSymbolInit
     uint32_t q = (uint32_t) (((uint64_t)x * sym->rcp_freq) >> sym->rcp_shift);
     *r = q * sym->cmpl_freq + x + sym->bias;
+}
+
+// A 4-way version of RansEncPutSymbol, renormalising 4 states
+// simulatenously with their results written to the same ptr buffer.
+// (This is perhaps a failing as it makes optmisation tricky.)
+static inline void RansEncPutSymbol4(RansState *r0,
+                                     RansState *r1,
+                                     RansState *r2,
+                                     RansState *r3,
+                                     uint8_t** pptr,
+                                     RansEncSymbol const *sym0,
+                                     RansEncSymbol const *sym1,
+                                     RansEncSymbol const *sym2,
+                                     RansEncSymbol const *sym3)
+{
+    RansAssert(sym0->x_max != 0); // can't encode symbol with freq=0
+    RansAssert(sym1->x_max != 0); // can't encode symbol with freq=0
+    RansAssert(sym2->x_max != 0); // can't encode symbol with freq=0
+    RansAssert(sym3->x_max != 0); // can't encode symbol with freq=0
+
+    // renormalize
+    uint32_t x0, x1, x2, x3;
+    uint8_t* ptr = *pptr;
+
+    int o;
+    uint32_t m[4] = {
+        sym0->x_max,
+        sym1->x_max,
+        sym2->x_max,
+        sym3->x_max
+    };
+
+    x0 = *r0;
+    o = x0 >= m[0];
+    ptr[-1] = x0;
+    ptr -= o;
+    x0 >>= o*8;
+    if (x0 >= m[0]) {
+        *--ptr = x0;
+        x0 >>= 8;
+    }
+
+    x1 = *r1;
+    o = x1 >= m[1];
+    ptr[-1] = x1;
+    ptr -= o;
+    x1 >>= o*8;
+    if (x1 >= m[1]) {
+        *--ptr = x1;
+        x1 >>= 8;
+    }
+
+    x2 = *r2;
+    o = x2 >= m[2];
+    ptr[-1] = x2;
+    ptr -= o;
+    x2 >>= o*8;
+    if (x2 >= m[2]) {
+        *--ptr = x2;
+        x2 >>= 8;
+    }
+
+    x3 = *r3;
+    o = x3 >= m[3];
+    ptr[-1] = x3;
+    ptr -= o;
+    x3 >>= o*8;
+    if (x3 >= m[3]) {
+        *--ptr = x3;
+        x3 >>= 8;
+    }
+
+    *pptr = ptr;
+
+    // x = C(s,x)
+    uint32_t qa, qb;
+    qa = (uint32_t) (((uint64_t)x0 * sym0->rcp_freq) >> sym0->rcp_shift);
+    uint32_t X0 = qa * sym0->cmpl_freq;
+    qb = (uint32_t) (((uint64_t)x1 * sym1->rcp_freq) >> sym1->rcp_shift);
+    uint32_t X1 = qb * sym1->cmpl_freq;
+
+    *r0 = X0 + x0 + sym0->bias;
+    *r1 = X1 + x1 + sym1->bias;
+
+    qa = (uint32_t) (((uint64_t)x2 * sym2->rcp_freq) >> sym2->rcp_shift);
+    uint32_t X2 = qa * sym2->cmpl_freq;
+    qb = (uint32_t) (((uint64_t)x3 * sym3->rcp_freq) >> sym3->rcp_shift);
+    uint32_t X3 = qb * sym3->cmpl_freq;
+
+    *r2 = X2 + x2 + sym2->bias;
+    *r3 = X3 + x3 + sym3->bias;
 }
 
 // Equivalent to RansDecAdvance that takes a symbol.

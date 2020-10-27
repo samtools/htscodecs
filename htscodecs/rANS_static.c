@@ -387,47 +387,68 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
 static void hist1_4(unsigned char *in, unsigned int in_size,
 		    int F0[256][256], int *T0) {
     int T1[256+MAGIC] = {0}, T2[256+MAGIC] = {0}, T3[256+MAGIC] = {0};
-    unsigned int idiv4 = in_size/4;
     int i;
-    unsigned char c0, c1, c2, c3;
 
-    unsigned char *in0 = in + 0;
-    unsigned char *in1 = in + idiv4;
-    unsigned char *in2 = in + idiv4*2;
-    unsigned char *in3 = in + idiv4*3;
+    unsigned char l = 0, c;
+    unsigned char *in_end = in + in_size;
 
-    unsigned char last_0 = 0, last_1 = in1[-1], last_2 = in2[-1], last_3 = in3[-1];
-    //unsigned char last_0 = 0, last_1 = 0, last_2 = 0, last_3 = 0;
+    unsigned char cc[5] = {0};
+    if (in_size > 500000) {
+	int F1[256][259] = {0};
+	while (in < in_end-8) {
+	    memcpy(cc, in, 4); in += 4;
+	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
+	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
+	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
+	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
+	    cc[4] = cc[3];
 
-    unsigned char *in0_end = in1;
+	    memcpy(cc, in, 4); in += 4;
+	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
+	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
+	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
+	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
+	    cc[4] = cc[3];
+	}
+	l = cc[3];
 
-    while (in0 < in0_end) {
-	F0[last_0][c0 = *in0++]++;
-	T0[last_0]++;
-	last_0 = c0;
+	while (in < in_end) {
+	    F0[l][c = *in++]++;
+	    T0[l]++;
+	    l = c;
+	}
 
-	F0[last_1][c1 = *in1++]++;
-	T1[last_1]++;
-	last_1 = c1;
+	int i, j;
+	for (i = 0; i < 256; i++)
+	    for (j = 0; j < 256; j++)
+		F0[i][j] += F1[i][j];
+    } else {
+	while (in < in_end-8) {
+	    memcpy(cc, in, 4); in += 4;
+	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
+	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
+	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
+	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
+	    cc[4] = cc[3];
 
-	F0[last_2][c2 = *in2++]++;
-	T2[last_2]++;
-	last_2 = c2;
+	    memcpy(cc, in, 4); in += 4;
+	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
+	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
+	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
+	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
+	    cc[4] = cc[3];
+	}
+	l = cc[3];
 
-	F0[last_3][c3 = *in3++]++;
-	T3[last_3]++;
-	last_3 = c3;
+	while (in < in_end) {
+	    F0[l][c = *in++]++;
+	    T0[l]++;
+	    l = c;
+	}
     }
 
-    while (in3 < in + in_size) {
-	F0[last_3][c3 = *in3++]++;
-	T3[last_3]++;
-	last_3 = c3;
-    }
-
-    for (i = 0; i < 256; i++) {
+    for (i = 0; i < 256; i++)
 	T0[i]+=T1[i]+T2[i]+T3[i];
-    }
 }
 
 #ifndef NO_THREADS
@@ -652,10 +673,8 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
 	RansEncSymbol *s1 = &syms[c1][l1];
 	RansEncSymbol *s0 = &syms[c0][l0];
 
-	RansEncPutSymbol(&rans3, &ptr, s3);
-	RansEncPutSymbol(&rans2, &ptr, s2);
-	RansEncPutSymbol(&rans1, &ptr, s1);
-	RansEncPutSymbol(&rans0, &ptr, s0);
+	RansEncPutSymbol4(&rans3, &rans2, &rans1, &rans0, &ptr,
+			  s3, s2, s1, s0);
 
 	l3 = c3;
 	l2 = c2;
