@@ -267,20 +267,20 @@ static inline int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
 // This folds the sign bit into the bottom bit so we iterate
 // 0, -1, +1, -2, +2, etc.
 static inline int var_put_s32(uint8_t *cp, const uint8_t *endp, int32_t i) {
-    return var_put_u32(cp, endp, (i << 1) ^ (i >> 31));
+    return var_put_u32(cp, endp, ((uint32_t)i << 1) ^ (i >> 31));
 }
 static inline int var_put_s64(uint8_t *cp, const uint8_t *endp, int64_t i) {
-    return var_put_u64(cp, endp, (i << 1) ^ (i >> 63));
+    return var_put_u64(cp, endp, ((uint64_t)i << 1) ^ (i >> 63));
 }
 
 static inline int var_get_s32(uint8_t *cp, const uint8_t *endp, int32_t *i) {
     int b = var_get_u32(cp, endp, (uint32_t *)i);
-    *i = (*i >> 1) ^ -(*i & 1);
+    *i = ((uint32_t)*i >> 1) ^ -(int32_t)(*i & 1);
     return b;
 }
 static inline int var_get_s64(uint8_t *cp, const uint8_t *endp, int64_t *i) {
     int b = var_get_u64(cp, endp, (uint64_t *)i);
-    *i = (*i >> 1) ^ -(*i & 1);
+    *i = ((uint64_t)*i >> 1) ^ -(int64_t)(*i & 1);
     return b;
 }
 
@@ -295,7 +295,7 @@ static inline int var_size_u64(uint64_t v) {
 #define var_size_u32 var_size_u64
 
 static inline int var_size_s64(int64_t v) {
-    return var_size_u64((v >> 63) ^ (v << 1));
+    return var_size_u64(((uint64_t)v << 1) ^ (v >> 63));
 }
 #define var_size_s32 var_size_s64
 
