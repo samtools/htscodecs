@@ -428,12 +428,13 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
     if (!N) N=4;
 
     order &= 0xff;
-    return (order == 0
+    int sz = (order == 0
 	? 1.05*size + 257*3 + 4
 	: 1.05*size + 257*257*3 + 4 + 257*3+4) +
 	((order & X_PACK) ? 1 : 0) +
 	((order & X_RLE) ? 1 + 257*3+4: 0) + 20 +
 	((order & X_STRIPE) ? 1 + 5*N: 0);
+    return sz + (sz&1) + 2; // make this even so buffers are word aligned
 }
 
 // Compresses in_size bytes from 'in' to *out_size bytes in 'out'.
@@ -460,6 +461,10 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     if (!out || bound > *out_size)
 	return NULL;
 
+    // If "out" isn't word aligned, tweak out_end/ptr to ensure it is.
+    // We already added more round in bound to allow for this.
+    if (((size_t)out)&1)
+	bound--;
     ptr = out_end = out + bound;
 
     if (in_size == 0)
@@ -825,6 +830,8 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     if (!out || bound > *out_size)
 	return NULL;
 
+    if (((size_t)out)&1)
+	bound--;
     out_end = out + bound;
 
     int F[256][256] = {{0}}, T[256+MAGIC] = {0}, i, j;

@@ -383,31 +383,10 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
     // renormalize
     uint32_t x = *r;
 
-    // Generally this is faster than asm for highly predictable data
-    // (branch prediction is efficient), but slower for complex data.
-    //
-    // However we'll be using RLE and/or PACK for highly predictable
-    // data, turning into smaller but less predictable as far as
-    // entropy encoding goes.  So the latter is what we tune for.
-    // We do however still have to use this code on big endian systems.
+    // Up to 6% quicker (rans4x16pr -t) if using unaligned access,
+    // but normally closer.
+    uint32_t y = (*pptr)[0] | ((*pptr)[1]<<8);
 
-    // Times for asm code (above) / this code (LE) / this code (BE).
-    //
-    //       q4-0      q40-0
-    // clang 648/903/904   648/392/391  this faster q4, slower q40
-    // gcc7  650/851/851   650/394/393
-    //       q4-1      q40-1(OPT)
-    // clang 487/567/568   445/310/312  this faster q4, slower q40
-    // gcc7  413/497/498   381/282/282
-    //       q4-193(OPT)
-    // clang 990/907/903                this slower
-    // gcc7  952/875/868                this slower
-#ifdef HTSCODECS_LITTLE_ENDIAN
-    uint32_t y = **(uint16_t **)pptr; // 32-bit quicker here
-#else
-    uint16_t y = **(uint16_t **)pptr;
-    y = (y<<8) | (y>>8);
-#endif
     if (x < RANS_BYTE_L)
 	(*pptr)+=2;
     if (x < RANS_BYTE_L)
@@ -417,19 +396,16 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 }
 #endif /* __x86_64 */
 
+// Note the data may not be word aligned here.
+// This function is only used sparingly, for the last few bytes in the buffer,
+// so speed isn't critical.
 static inline void RansDecRenormSafe(RansState* r, uint8_t** pptr, uint8_t *ptr_end)
 {
     uint32_t x = *r;
     if (x >= RANS_BYTE_L || *pptr+1 >= ptr_end) return;
-#ifdef HTSCODECS_LITTLE_ENDIAN
-    uint16_t* ptr = *(uint16_t **)pptr;
-    x = (x << 16) | *ptr++;
-    *pptr = (uint8_t *)ptr;
-#else
     uint16_t y = (*pptr)[0] + ((*pptr)[1]<<8);
     x = (x << 16) | y;
     (*pptr) += 2;
-#endif
     *r = x;
 }
 
