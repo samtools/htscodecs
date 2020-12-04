@@ -394,7 +394,7 @@ static void hist1_4(unsigned char *in, unsigned int in_size,
 
     unsigned char cc[5] = {0};
     if (in_size > 500000) {
-	int F1[256][259] = {0};
+	int F1[256][259] = {{0}};
 	while (in < in_end-8) {
 	    memcpy(cc, in, 4); in += 4;
 	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
