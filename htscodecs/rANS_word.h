@@ -125,7 +125,7 @@ static inline void RansDecInit(RansState* r, uint8_t** pptr)
     x  = ptr[0] << 0;
     x |= ptr[1] << 8;
     x |= ptr[2] << 16;
-    x |= ptr[3] << 24;
+    x |= ((uint32_t)ptr[3]) << 24;
     ptr += 4;
 
     *pptr = ptr;
