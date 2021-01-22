@@ -1544,6 +1544,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 
 	// Decode lengths
 	c_meta_len += var_get_u32(in+c_meta_len, in_end, &ulen);
+	if (c_meta_len >= in_size)
+	    return NULL;
 	unsigned int N = in[c_meta_len++];
 	unsigned int clenN[256], ulenN[256], idxN[256];
 	if (!out) {
