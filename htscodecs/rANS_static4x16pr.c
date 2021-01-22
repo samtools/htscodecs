@@ -127,9 +127,11 @@ static void hist4p(unsigned char *in, unsigned int in_size, int *F0) {
 }
 #endif
 
-static void hist8(unsigned char *in, unsigned int in_size, int F0[256]) {
-    int F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
-    int F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0}, F7[256+MAGIC] = {0};
+static void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
+    uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
+    uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
+    uint32_t F7[256+MAGIC] = {0};
+
     int i, i8 = in_size & ~7;
     for (i = 0; i < i8; i+=8) {
 	F0[in[i+0]]++;
@@ -148,9 +150,12 @@ static void hist8(unsigned char *in, unsigned int in_size, int F0[256]) {
 	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
 }
 
-static void present8(unsigned char *in, unsigned int in_size, int F0[256]) {
-    int F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
-    int F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0}, F7[256+MAGIC] = {0};
+static void present8(unsigned char *in, unsigned int in_size,
+		     uint32_t F0[256]) {
+    uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
+    uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
+    uint32_t F7[256+MAGIC] = {0};
+
     int i, i8 = in_size & ~7;
     for (i = 0; i < i8; i+=8) {
 	F0[in[i+0]]=1;
@@ -182,7 +187,7 @@ static uint32_t round2(uint32_t v) {
     return v;
 }
 
-static int normalise_freq(int *F, int size, int tot) {
+static int normalise_freq(uint32_t *F, int size, uint32_t tot) {
     int m, M, j, loop = 0;
     uint64_t tr;
     if (!size)
@@ -234,7 +239,8 @@ static int normalise_freq(int *F, int size, int tot) {
 // A specialised version of normalise_freq_shift where the input size
 // is already normalised to a power of 2, meaning we can just perform
 // shifts instead of hard to define multiplications and adjustments.
-static void normalise_freq_shift(int *F, int size, int max_tot) {
+static void normalise_freq_shift(uint32_t *F, uint32_t size,
+				 uint32_t max_tot) {
     if (size == 0 || size == max_tot)
 	return;
 
@@ -247,7 +253,7 @@ static void normalise_freq_shift(int *F, int size, int max_tot) {
 }
 
 // symbols only
-static int encode_alphabet(uint8_t *cp, int *F) {
+static int encode_alphabet(uint8_t *cp, uint32_t *F) {
     uint8_t *op = cp;
     int rle, j;
 
@@ -273,7 +279,7 @@ static int encode_alphabet(uint8_t *cp, int *F) {
     return cp - op;
 }
 
-static int decode_alphabet(uint8_t *cp, uint8_t *cp_end, int *F) {
+static int decode_alphabet(uint8_t *cp, uint8_t *cp_end, uint32_t *F) {
     if (cp == cp_end)
 	return 0;
 
@@ -322,7 +328,7 @@ static int decode_alphabet(uint8_t *cp, uint8_t *cp_end, int *F) {
     return cp - op;
 }
 
-static int encode_freq(uint8_t *cp, int *F) {
+static int encode_freq(uint8_t *cp, uint32_t *F) {
     uint8_t *op = cp;
     int j;
 
@@ -336,7 +342,8 @@ static int encode_freq(uint8_t *cp, int *F) {
     return cp - op;
 }
 
-static int decode_freq(uint8_t *cp, uint8_t *cp_end, int *F, int *fsum) {
+static int decode_freq(uint8_t *cp, uint8_t *cp_end, uint32_t *F,
+		       uint32_t *fsum) {
     if (cp == cp_end)
 	return 0;
 
@@ -359,7 +366,7 @@ static int decode_freq(uint8_t *cp, uint8_t *cp_end, int *F, int *fsum) {
 // Use the order-0 freqs in F0 to encode the order-1 stats in F.
 // All symbols present in F are present in F0, but some in F0 will
 // be empty in F.  Thus we run-length encode the 0 frequencies.
-static int encode_freq_d(uint8_t *cp, int *F0, int *F) {
+static int encode_freq_d(uint8_t *cp, uint32_t *F0, uint32_t *F) {
     uint8_t *op = cp;
     int j, dz;
 
@@ -391,7 +398,8 @@ static int encode_freq_d(uint8_t *cp, int *F0, int *F) {
     return cp - op;
 }
 
-static int decode_freq_d(uint8_t *cp, uint8_t *cp_end, int *F0, int *F, int *total) {
+static int decode_freq_d(uint8_t *cp, uint8_t *cp_end, uint32_t *F0,
+			 uint32_t *F, uint32_t *total) {
     if (cp == cp_end)
 	return 0;
 
@@ -451,7 +459,8 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     RansState rans1;
     RansState rans3;
     uint8_t* ptr;
-    int F[256+MAGIC] = {0}, i, j, tab_size = 0, rle, x;
+    uint32_t F[256+MAGIC] = {0};
+    int i, j, tab_size = 0, rle, x;
     int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
 
     if (!out) {
@@ -474,8 +483,8 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     hist8(in, in_size, F);
 
     // Normalise so frequences sum to power of 2
-    int fsum = in_size;
-    int max_val = round2(fsum);
+    uint32_t fsum = in_size;
+    uint32_t max_val = round2(fsum);
     if (max_val > TOTFREQ)
 	max_val = TOTFREQ;
 
@@ -591,7 +600,7 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 	return NULL;
 
     // Precompute reverse lookup of frequency.
-    int F[256] = {0}, fsum;
+    uint32_t F[256] = {0}, fsum;
     int fsz = decode_freq(cp, cp_end, F, &fsum);
     if (!fsz)
 	goto err;
@@ -695,7 +704,7 @@ static void hist1_1(unsigned char *in, unsigned int in_size,
 #endif
 
 static void hist1_4(unsigned char *in, unsigned int in_size,
-		    int F0[256][256], int *T0) {
+		    uint32_t F0[256][256], uint32_t *T0) {
     int T1[256+MAGIC] = {0}, T2[256+MAGIC] = {0}, T3[256+MAGIC] = {0};
     unsigned int idiv4 = in_size/4;
     int i;
@@ -751,7 +760,8 @@ double fast_log(double a) {
 // 10 bit means smaller memory footprint when decoding and
 // more speed due to cache hits, but it *may* be a poor
 // compression fit.
-static int compute_shift(int *F0, int (*F)[256], int *T, int *S) {
+static int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
+			 int *S) {
     int i, j;
 
     double e10 = 0, e12 = 0;
@@ -834,7 +844,8 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	bound--;
     out_end = out + bound;
 
-    int F[256][256] = {{0}}, T[256+MAGIC] = {0}, i, j;
+    uint32_t F[256][256] = {{0}}, T[256+MAGIC] = {0};
+    int i, j;
 
     //memset(F, 0, 256*256*sizeof(int));
     //memset(T, 0, 256*sizeof(int));
@@ -849,7 +860,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     *cp++ = 0; // uncompressed header marker
 
     // Encode the order-0 symbols for use in the order-1 frequency tables
-    int F0[256+MAGIC] = {0};
+    uint32_t F0[256+MAGIC] = {0};
     present8(in, in_size, F0);
     F0[0]=1;
     cp += encode_alphabet(cp, F0);
@@ -878,7 +889,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 
 	normalise_freq_shift(F[i], T[i], 1<<shift); T[i]=1<<shift;
 
-	int *F_i_ = F[i];
+	uint32_t *F_i_ = F[i];
 	for (x = j = 0; j < 256; j++) {
 	    RansEncSymbolInit(&syms[i][j], x, F_i_[j], shift);
 	    x += F_i_[j];
@@ -1078,7 +1089,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     }
 
     // Decode order-0 symbol list; avoids needing in order-1 tables
-    int F0[256] = {0};
+    uint32_t F0[256] = {0};
     int fsz = decode_alphabet(cp, c_freq_end, F0);
     if (!fsz)
 	goto err;
@@ -1091,7 +1102,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 	if (F0[i] == 0)
 	    continue;
 
-	int F[256] = {0}, T = 0;
+	uint32_t F[256] = {0}, T = 0;
 	fsz = decode_freq_d(cp, c_freq_end, F0, F, &T);
 	if (!fsz)
 	    goto err;
