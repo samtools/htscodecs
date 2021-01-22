@@ -1542,7 +1542,8 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 
     int i, o = 9;
     //int ulen   = *(uint32_t *)in;
-    int ulen   = (in[0]<<0) | (in[1]<<8) | (in[2]<<16) | (in[3]<<24);
+    int ulen   = (in[0]<<0) | (in[1]<<8) | (in[2]<<16) |
+	(((uint32_t)in[3])<<24);
 
     if (ulen < 0 || ulen >= INT_MAX-1024)
 	return NULL;
