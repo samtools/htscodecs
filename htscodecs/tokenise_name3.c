@@ -194,6 +194,14 @@ static name_context *create_context(int max_names) {
 	return NULL;
 #endif
 
+    // An arbitrary limit to prevent malformed data from consuming excessive
+    // amounts of memory.  Consider upping this if we have genuine use cases
+    // for larger blocks.
+    if (max_names > 1e7) {
+	fprintf(stderr, "Name codec currently has a max of 10 million rec.\n");
+	return NULL;
+    }
+
 #ifndef NO_THREADS
     pthread_once(&tok_once, tok_tls_init);
 
