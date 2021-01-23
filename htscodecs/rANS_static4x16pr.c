@@ -611,7 +611,7 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
     // Build symbols; fixme, do as part of decode, see the _d variant
     for (j = x = 0; j < 256; j++) {
 	if (F[j]) {
-	    if (x + F[j] > TOTFREQ || F[j] < 0)
+	    if (x + F[j] > TOTFREQ)
 		goto err;
 	    for (y = 0; y < F[j]; y++) {
 		ssym [y + x] = j;
@@ -1118,7 +1118,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 	// Build symbols; fixme, do as part of decode, see the _d variant
 	for (j = x = 0; j < 256; j++) {
 	    if (F[j]) {
-		if (x + F[j] > (1<<shift) || F[j] < 0)
+		if (x + F[j] > (1<<shift))
 		    goto err;
 
 		memset(&sfb[i][x], j, F[j]);
