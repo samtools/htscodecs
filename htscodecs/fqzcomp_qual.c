@@ -1380,12 +1380,12 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
 		goto err;
 	    pm = &gp.p[x];
 
-	    int len = last_len;
+	    unsigned int len = last_len;
 	    if (!pm->fixed_len || state.first_len) {
 		len  = SIMPLE_MODEL(256,_decodeSymbol)(&model.len[0], &rc);
 		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[1], &rc)<<8;
 		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[2], &rc)<<16;
-		len |= SIMPLE_MODEL(256,_decodeSymbol)(&model.len[3], &rc)<<24;
+		len |= ((unsigned)SIMPLE_MODEL(256,_decodeSymbol)(&model.len[3], &rc))<<24;
 		//fprintf(stderr, "Len %d\n", len);
 		state.first_len = 0;
 		last_len = len;
