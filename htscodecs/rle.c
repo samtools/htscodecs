@@ -183,7 +183,6 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
     return out;
 
  err:
-    free(out);
     return NULL;
 }
 

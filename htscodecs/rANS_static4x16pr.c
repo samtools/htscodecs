@@ -611,7 +611,7 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
     // Build symbols; fixme, do as part of decode, see the _d variant
     for (j = x = 0; j < 256; j++) {
 	if (F[j]) {
-	    if (x + F[j] > TOTFREQ)
+	    if (F[j] > TOTFREQ - x)
 		goto err;
 	    for (y = 0; y < F[j]; y++) {
 		ssym [y + x] = j;
@@ -1118,7 +1118,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 	// Build symbols; fixme, do as part of decode, see the _d variant
 	for (j = x = 0; j < 256; j++) {
 	    if (F[j]) {
-		if (x + F[j] > (1<<shift))
+		if (F[j] > (1<<shift) - x)
 		    goto err;
 
 		memset(&sfb[i][x], j, F[j]);
@@ -1777,6 +1777,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 
     if (do_rle) {
 	// Unpack RLE.  tmp1 -> tmp2.
+	if (u_meta_size == 0)
+	    goto err;
 	uint64_t unrle_size = *out_size;
 	int rle_nsyms = *meta ? *meta : 256;
 	if (u_meta_size < 1+rle_nsyms)
