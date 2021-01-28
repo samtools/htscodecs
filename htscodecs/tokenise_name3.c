@@ -389,7 +389,7 @@ static int decode_token_int(name_context *ctx, int ntok,
 	return -1;
 
     uint8_t *cp = ctx->desc[id].buf + ctx->desc[id].buf_l;
-    *val = (cp[0]) + (cp[1]<<8) + (cp[2]<<16) + (cp[3]<<24);
+    *val = (cp[0]) + (cp[1]<<8) + (cp[2]<<16) + ((uint32_t)cp[3]<<24);
     ctx->desc[id].buf_l += 4;
 
     return 0;
