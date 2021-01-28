@@ -1572,6 +1572,7 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 	    }
 
 	    if ((ttype & 15) != 0 && (ttype & 128)) {
+		if (tnum < 0) goto err;
 		ctx->desc[tnum<<4].buf = malloc(nreads);
 		if (!ctx->desc[tnum<<4].buf)
 		    goto err;
@@ -1582,6 +1583,7 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 		memset(&ctx->desc[tnum<<4].buf[1], N_MATCH, nreads-1);
 	    }
 
+	    if (tnum < 0) goto err;
 	    i = (tnum<<4) | (ttype&15);
 	    if (j >= i)
 		goto err;
@@ -1608,6 +1610,7 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 	}
 
 	if ((ttype & 15) != 0 && (ttype & 128)) {
+	    if (tnum < 0) goto err;
 	    if (ctx->desc[tnum<<4].buf) free(ctx->desc[tnum<<4].buf);
 	    ctx->desc[tnum<<4].buf = malloc(nreads);
 	    if (!ctx->desc[tnum<<4].buf)
@@ -1624,6 +1627,7 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 	int64_t clen, ulen = uncompressed_size(&in[o], sz-o);
 	if (ulen < 0 || ulen >= INT_MAX)
 	    goto err;
+	if (tnum < 0) goto err;
 	i = (tnum<<4) | (ttype&15);
 
 	if (i >= MAX_TBLOCKS || i < 0)
