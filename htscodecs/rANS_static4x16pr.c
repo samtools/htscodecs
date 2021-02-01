@@ -76,6 +76,7 @@
 #include "varint.h"
 #include "pack.h"
 #include "rle.h"
+#include "utils.h"
 
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
@@ -1481,52 +1482,6 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 unsigned char *rans_compress_4x16(unsigned char *in, unsigned int in_size,
 				  unsigned int *out_size, int order) {
     return rans_compress_to_4x16(in, in_size, NULL, out_size, order);
-}
-
-/*
- * Data transpose by N.
- * Tuned for specific common cases of N.
- */
-static void unstripe(unsigned char *out, unsigned char *outN,
-		     unsigned int ulen, unsigned int N,
-		     unsigned int idxN[256]) {
-    int j = 0, k;
-
-    switch (N) {
-    case 4:
-	while (j < ulen-4) {
-	    for (k = 0; k < 4; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-
-    case 2:
-	while (j < ulen-4) {
-	    for (k = 0; k < 2; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-
-    default:
-	// General case, around 25% slower overall decode
-	while (j < ulen-N) {
-	    for (k = 0; k < N; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-    }
 }
 
 unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,

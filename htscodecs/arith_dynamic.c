@@ -65,6 +65,7 @@
 #include "arith_dynamic.h"
 #include "varint.h"
 #include "pack.h"
+#include "utils.h"
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 
@@ -864,52 +865,6 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
 unsigned char *arith_compress(unsigned char *in, unsigned int in_size,
 			      unsigned int *out_size, int order) {
     return arith_compress_to(in, in_size, NULL, out_size, order);
-}
-
-/*
- * Data transpose by N.
- * Tuned for specific common cases of N.
- */
-static void unstripe(unsigned char *out, unsigned char *outN,
-		     unsigned int ulen, unsigned int N,
-		     unsigned int idxN[256]) {
-    int j = 0, k;
-
-    switch (N) {
-    case 4:
-	while (j < ulen-4) {
-	    for (k = 0; k < 4; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-
-    case 2:
-	while (j < ulen-4) {
-	    for (k = 0; k < 2; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-
-    default:
-	// General case, around 25% slower overall decode
-	while (j < ulen-N) {
-	    for (k = 0; k < N; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	while (j < ulen) {
-	    for (k = 0; j < ulen; k++)
-		out[j++] = outN[idxN[k]++];
-	}
-	break;
-    }
 }
 
 unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
