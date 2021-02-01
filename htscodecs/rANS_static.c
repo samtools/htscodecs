@@ -48,6 +48,7 @@
 #define TOTFREQ (1<<TF_SHIFT)
 
 #include "rANS_byte.h"
+#include "utils.h"
 
 /*-------------------------------------------------------------------------- */
 /*
@@ -80,29 +81,6 @@
  * are easier to understand, but can be up to 2x slower.
  */
 
-#define MAGIC 8
-
-static void hist8(unsigned char *in, unsigned int in_size, int F0[256]) {
-    int F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
-    int F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0}, F7[256+MAGIC] = {0};
-    int i, i8 = in_size & ~7;
-    for (i = 0; i < i8; i+=8) {
-	F0[in[i+0]]++;
-	F1[in[i+1]]++;
-	F2[in[i+2]]++;
-	F3[in[i+3]]++;
-	F4[in[i+4]]++;
-	F5[in[i+5]]++;
-	F6[in[i+6]]++;
-	F7[in[i+7]]++;
-    }
-    while (i < in_size)
-	F0[in[i++]]++;
-
-    for (i = 0; i < 256; i++)
-	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
-}
-
 static
 unsigned char *rans_compress_O0(unsigned char *in, unsigned int in_size,
 				unsigned int *out_size) {
@@ -124,7 +102,7 @@ unsigned char *rans_compress_O0(unsigned char *in, unsigned int in_size,
     ptr = out_end = out_buf + (int)(1.05*in_size) + 257*257*3 + 9;
 
     // Compute statistics
-    hist8(in, in_size, F);
+    hist8(in, in_size, (uint32_t *)F);
     tr = ((uint64_t)TOTFREQ<<31)/in_size + (1<<30)/in_size;
 
  normalise_harder:
@@ -384,72 +362,6 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
     return NULL;
 }
 
-static void hist1_4(unsigned char *in, unsigned int in_size,
-		    int F0[256][256], int *T0) {
-    int T1[256+MAGIC] = {0}, T2[256+MAGIC] = {0}, T3[256+MAGIC] = {0};
-    int i;
-
-    unsigned char l = 0, c;
-    unsigned char *in_end = in + in_size;
-
-    unsigned char cc[5] = {0};
-    if (in_size > 500000) {
-	int F1[256][259] = {{0}};
-	while (in < in_end-8) {
-	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-
-	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-	}
-	l = cc[3];
-
-	while (in < in_end) {
-	    F0[l][c = *in++]++;
-	    T0[l]++;
-	    l = c;
-	}
-
-	int i, j;
-	for (i = 0; i < 256; i++)
-	    for (j = 0; j < 256; j++)
-		F0[i][j] += F1[i][j];
-    } else {
-	while (in < in_end-8) {
-	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-
-	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-	}
-	l = cc[3];
-
-	while (in < in_end) {
-	    F0[l][c = *in++]++;
-	    T0[l]++;
-	    l = c;
-	}
-    }
-
-    for (i = 0; i < 256; i++)
-	T0[i]+=T1[i]+T2[i]+T3[i];
-}
 
 #ifndef NO_THREADS
 /*
@@ -537,7 +449,7 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
     out_end = out_buf + (int)(1.05*in_size) + 257*257*3 + 9;
     cp = out_buf+9;
 
-    hist1_4(in, in_size, F, T);
+    hist1_4(in, in_size, (uint32_t (*)[256])F, (uint32_t *)T);
 
     F[0][in[1*(in_size>>2)]]++;
     F[0][in[2*(in_size>>2)]]++;
