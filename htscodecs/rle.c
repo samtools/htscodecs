@@ -169,7 +169,7 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
 	    uint32_t rlen;
 	    run += var_get_u32(run, run_end, &rlen);
 	    if (rlen) {
-		if (outp + rlen > out_end)
+		if (outp + rlen >= out_end)
 		    goto err;
 		memset(outp, b, rlen+1);
 		outp += rlen+1;
