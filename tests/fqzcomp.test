@@ -11,7 +11,7 @@ do
     awk '{print $1}' < $f > $out/fqz
     for s in 0 1 2 3
     do
-        echo -n Testing fqzcomp_qual -r -s $s on $f "	"
+        printf 'Testing fqzcomp_qual -r -s %s on %s\t' $s "$f"
 
 	# Round trip
         ./fqzcomp_qual -r -s $s $out/fqz > $out/fqz.comp 2>>$out/fqz.stderr || exit 1

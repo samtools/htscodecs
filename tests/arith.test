@@ -15,7 +15,7 @@ do
 	then
 	    continue
 	fi
-        echo -n Testing arith_dynamic -r -o$o on $f "	"
+        printf 'Testing arith_dynamic -r -o%s on %s\t' $o "$f"
 
 	# Round trip
         ./arith_dynamic -r -o$o $out/arith-nl $out/arith.comp 2>>$out/arith.stderr || exit 1
