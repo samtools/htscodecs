@@ -234,6 +234,8 @@ static name_context *create_context(int max_names) {
      memset(&ctx->token_icount[0], 0, sizeof(int));
      ctx->max_tok = 1;
 
+     ctx->lc[0].last_ntok = 0;
+
     return ctx;
 }
 
@@ -1087,6 +1089,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 	    break;
 
 	case N_DDELTA0:
+	    if (ntok >= ctx->lc[pnum].last_ntok) return -1;
 	    if (decode_token_int1(ctx, ntok, N_DDELTA0, &v) < 0) return -1;
 	    v += ctx->lc[pnum].last_token_int[ntok];
 	    if (len+ctx->lc[pnum].last_token_str[ntok]+1 >= name_len) return -1;
@@ -1107,6 +1110,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 	    break;
 
 	case N_DDELTA:
+	    if (ntok >= ctx->lc[pnum].last_ntok) return -1;
 	    if (decode_token_int1(ctx, ntok, N_DDELTA, &v) < 0) return -1;
 	    v += ctx->lc[pnum].last_token_int[ntok];
 	    if (len+20 >= name_len) return -1;
@@ -1121,6 +1125,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 	    break;
 
 	case N_MATCH:
+	    if (ntok >= ctx->lc[pnum].last_ntok) return -1;
 	    switch (ctx->lc[pnum].last_token_type[ntok]) {
 	    case N_CHAR:
 		if (len+1 >= name_len) return -1;
