@@ -24,6 +24,8 @@ htscodecs/.deps/
 htscodecs/.libs/
 htscodecs/Makefile
 
+htscodecs/version.h
+
 tests/*.log
 tests/*.trs
 tests/.deps/

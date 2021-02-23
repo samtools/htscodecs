@@ -52,8 +52,34 @@ libhtscodecs_la_SOURCES = \
 	c_range_coder.h \
 	c_simple_model.h \
 	varint.h \
+	htscodecs.c \
+	htscodecs.h \
 	htscodecs_endian.h \
 	utils.h
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
 libhtscodecs_la_LIBADD = @LIBZ@
+
+version.h: force
+	@ if `git describe 2>/dev/null >/dev/null`; then \
+	    echo '#define HTSCODECS_VERSION_TEXT "'`git describe --match 'v[0-9]\.[0-9]*' --dirty|sed 's/^v//'`'"' > _version.h; \
+	else \
+	    echo '#define HTSCODECS_VERSION_TEXT "@PACKAGE_VERSION@"' > _version.h; \
+	fi;
+	@ if ( [ ! -e version.h ] || ! cmp -s version.h _version.h); then \
+	    echo "Update version.h: `cat _version.h`"; \
+	    mv _version.h version.h; \
+	else \
+	    rm _version.h; \
+	fi
+
+force:
+
+.PHONY: force
+
+# Manually added as the auto-dependency generation won't pick up a file that
+# may not yet exist.
+BUILT_SOURCES = version.h
+
+distclean-local:
+	rm version.h

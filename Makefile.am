@@ -42,7 +42,7 @@ nobase_include_HEADERS = \
 	htscodecs/tokenise_name3.h \
 	htscodecs/pack.h \
 	htscodecs/rle.h \
-	htscodecs/varint.h
-	htscodecs/htscodecs_endian.h
+	htscodecs/varint.h \
+	htscodecs/htscodecs.h
 
-EXTRA_DIST = README.md LICENSE.md
+EXTRA_DIST = README.md LICENSE.md NEWS
