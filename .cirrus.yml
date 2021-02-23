@@ -30,7 +30,15 @@ task:
     image: gcc:latest
 
   # Base environment already includes the packages we need.
-  << : *COMPILE
+
+  # One system with more excessive validation
+  compile_script:
+    - autoreconf -i
+    - ./configure CC="gcc -fsanitize=address,undefined"
+    - make -j4 CFLAGS="-g -O3 -Wall -Werror"
+
+  test_script:
+    - make check CFLAGS="-g -O3 -Wall -Werror"
 
 # CentOS
 centos_task:
