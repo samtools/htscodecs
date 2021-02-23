@@ -331,7 +331,7 @@ int main(int argc, char **argv) {
     extern int optind;
     int opt;
 
-    while ((opt = getopt(argc, argv, "ds:s:b:r")) != -1) {
+    while ((opt = getopt(argc, argv, "ds:s:b:rx:")) != -1) {
 	switch (opt) {
 	case 'd':
 	    decomp = 1;
