@@ -39,6 +39,7 @@ task:
 
   test_script:
     - make check CFLAGS="-g -O3 -Wall -Werror"
+    - make distcheck
 
 # CentOS
 centos_task:
