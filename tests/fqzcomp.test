@@ -8,7 +8,7 @@ fi
 for f in `ls -1 $srcdir/dat/q* $srcdir/htscodecs-corpus/dat/q* 2>/dev/null`
 do
     comp=${f%/*/*}/dat/fqzcomp/${f##*/}
-    awk '{print $1}' < $f > $out/fqz
+    cut -f 1 $f > $out/fqz
     for s in 0 1 2 3
     do
         printf 'Testing fqzcomp_qual -r -s %s on %s\t' $s "$f"
