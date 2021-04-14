@@ -1058,6 +1058,8 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 	tok = decode_token_type(ctx, ntok);
 	//fprintf(stderr, "Tok %d = %d\n", ntok, tok);
 
+	ctx->lc[cnum].last_ntok = 0;
+
 	switch (tok) {
 	case N_CHAR:
 	    if (len+1 >= name_len) return -1;
