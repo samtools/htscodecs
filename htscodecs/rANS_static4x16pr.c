@@ -31,17 +31,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// As per standard rANS_static but using optional RLE or bit-packing
-// techniques prior to entropy encoding.  This is a significant
-// reduction in some data sets.
-
-// top bits in order byte
-#define X_PACK   0x80    // Pack 2,4,8 or infinite symbols into a byte.
-#define X_RLE    0x40    // Run length encoding with runs & lits encoded separately
-#define X_CAT    0x20    // Nop; for tiny segments where rANS overhead is too big
-#define X_NOSZ   0x10    // Don't store the original size; used by STRIPE mode
-#define X_STRIPE 0x08    // For N-byte integer data; rotate & encode N streams.
-
 // FIXME Can we get decoder to return the compressed sized read, avoiding
 // us needing to store it?  Yes we can.  See c-size comments.  If we added all these
 // together we could get rans_uncompress_to_4x16 to return the number of bytes
@@ -73,7 +62,7 @@
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
-#include "varint.h"
+#include "rANS_static16_int.h"
 #include "pack.h"
 #include "rle.h"
 #include "utils.h"
@@ -100,274 +89,18 @@
  * are easier to understand, but can be up to 2x slower.
  */
 
-// Rounds to next power of 2.
-// credit to http://graphics.stanford.edu/~seander/bithacks.html
-static uint32_t round2(uint32_t v) {
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-}
-
-static int normalise_freq(uint32_t *F, int size, uint32_t tot) {
-    int m, M, j, loop = 0;
-    uint64_t tr;
-    if (!size)
-	return 0;
-
- again:
-    tr = ((uint64_t)tot<<31)/size + (1<<30)/size;
-
-    for (size = m = M = j = 0; j < 256; j++) {
-	if (!F[j])
-	    continue;
-
-	if (m < F[j])
-	    m = F[j], M = j;
-
-	if ((F[j] = (F[j]*tr)>>31) == 0)
-	    F[j] = 1;
-	size += F[j];
-    }
-
-    int adjust = tot - size;
-    if (adjust > 0) {
-	F[M] += adjust;
-    } else if (adjust < 0) {
-	if (F[M] > -adjust && (loop == 1 || F[M]/2 >= -adjust)) {
-	    F[M] += adjust;
-	} else {
-	    if (loop < 1) {
-		loop++;
-		goto again;
-	    }
-	    adjust += F[M]-1;
-	    F[M] = 1;
-	    for (j = 0; adjust && j < 256; j++) {
-		if (F[j] < 2) continue;
-
-		int d = F[j] > -adjust;
-		int m = d ? adjust : 1-F[j];
-		F[j]   += m;
-		adjust -= m;
-	    }
-	}
-    }
-
-    //printf("F[%d]=%d\n", M, F[M]);
-    return F[M]>0 ? 0 : -1;
-}
-
-// A specialised version of normalise_freq_shift where the input size
-// is already normalised to a power of 2, meaning we can just perform
-// shifts instead of hard to define multiplications and adjustments.
-static void normalise_freq_shift(uint32_t *F, uint32_t size,
-				 uint32_t max_tot) {
-    if (size == 0 || size == max_tot)
-	return;
-
-    int shift = 0, i;
-    while (size < max_tot)
-	size*=2, shift++;
-
-    for (i = 0; i < 256; i++)
-	F[i] <<= shift;
-}
-
-// symbols only
-static int encode_alphabet(uint8_t *cp, uint32_t *F) {
-    uint8_t *op = cp;
-    int rle, j;
-
-    for (rle = j = 0; j < 256; j++) {
-	if (F[j]) {
-	    // j
-	    if (rle) {
-		rle--;
-	    } else {
-		*cp++ = j;
-		if (!rle && j && F[j-1])  {
-		    for(rle=j+1; rle<256 && F[rle]; rle++)
-			;
-		    rle -= j+1;
-		    *cp++ = rle;
-		}
-		//fprintf(stderr, "%d: %d %d\n", j, rle, N[j]);
-	    }
-	}
-    }
-    *cp++ = 0;
-    
-    return cp - op;
-}
-
-static int decode_alphabet(uint8_t *cp, uint8_t *cp_end, uint32_t *F) {
-    if (cp == cp_end)
-	return 0;
-
-    uint8_t *op = cp;
-    int rle = 0;
-    int j = *cp++;
-    if (cp+2 >= cp_end)
-	goto carefully;
-
-    do {
-	F[j] = 1;
-	if (!rle && j+1 == *cp) {
-	    j = *cp++;
-	    rle = *cp++;
-	} else if (rle) {
-	    rle--;
-	    j++;
-	    if (j > 255)
-		return 0;
-	} else {
-	    j = *cp++;
-	}
-    } while(j && cp+2 < cp_end);
-
- carefully:
-    if (j) {
-	do {
-	    F[j] = 1;
-	    if(cp >= cp_end) return 0;
-	    if (!rle && j+1 == *cp) {
-		if (cp+1 >= cp_end) return 0;
-		j = *cp++;
-		rle = *cp++;
-	    } else if (rle) {
-		rle--;
-		j++;
-		if (j > 255)
-		    return 0;
-	    } else {
-		if (cp >= cp_end) return 0;
-		j = *cp++;
-	    }
-	} while(j && cp < cp_end);
-    }
-
-    return cp - op;
-}
-
-static int encode_freq(uint8_t *cp, uint32_t *F) {
-    uint8_t *op = cp;
-    int j;
-
-    cp += encode_alphabet(cp, F);
-
-    for (j = 0; j < 256; j++) {
-	if (F[j])
-	    cp += var_put_u32(cp, NULL, F[j]);
-    }
-
-    return cp - op;
-}
-
-static int decode_freq(uint8_t *cp, uint8_t *cp_end, uint32_t *F,
-		       uint32_t *fsum) {
-    if (cp == cp_end)
-	return 0;
-
-    uint8_t *op = cp;
-    cp += decode_alphabet(cp, cp_end, F);
-
-    int j, tot = 0;
-    for (j = 0; j < 256; j++) {
-	if (F[j]) {
-	    cp += var_get_u32(cp, cp_end, (unsigned int *)&F[j]);
-	    tot += F[j];
-	}
-    }
-
-    *fsum = tot;
-    return cp - op;
-}
-
-
-// Use the order-0 freqs in F0 to encode the order-1 stats in F.
-// All symbols present in F are present in F0, but some in F0 will
-// be empty in F.  Thus we run-length encode the 0 frequencies.
-static int encode_freq_d(uint8_t *cp, uint32_t *F0, uint32_t *F) {
-    uint8_t *op = cp;
-    int j, dz;
-
-    for (dz = j = 0; j < 256; j++) {
-	if (F0[j]) {
-	    if (F[j] != 0) {
-		if (dz) {
-		    // Replace dz zeros with zero + dz-1 run length
-		    cp -= dz-1;
-		    *cp++ = dz-1;
-		}
-		dz = 0;
-		cp += var_put_u32(cp, NULL, F[j]);
-	    } else {
-		//fprintf(stderr, "2: j=%d F0[j]=%d, F[j]=%d, dz=%d\n", j, F0[j], F[j], dz);
-		dz++;
-		*cp++ = 0;
-	    }
-	} else {
-	    assert(F[j] == 0);
-	}
-    }
-    
-    if (dz) {
-	cp -= dz-1;
-	*cp++ = dz-1;
-    }
-
-    return cp - op;
-}
-
-static int decode_freq_d(uint8_t *cp, uint8_t *cp_end, uint32_t *F0,
-			 uint32_t *F, uint32_t *total) {
-    if (cp == cp_end)
-	return 0;
-
-    uint8_t *op = cp;
-    int j, dz, T = 0;
-
-    for (j = dz = 0; j < 256 && cp < cp_end; j++) {
-	//if (F0[j]) fprintf(stderr, "F0[%d]=%d\n", j, F0[j]);
-	if (!F0[j])
-	    continue;
-
-	uint32_t f;
-	if (dz) {
-	    f = 0;
-	    dz--;
-	} else {
-	    if (cp >= cp_end) return 0;
-	    cp += var_get_u32(cp, cp_end, &f);
-	    if (f == 0) {
-		if (cp >= cp_end) return 0;
-		dz = *cp++;
-	    }
-	}
-	F[j] = f;
-	T += f;
-    }
-
-    if (total) *total = T;
-    return cp - op;
-}
-
-unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
-    int N = order>>8;
+unsigned inline int rans_compress_bound_4x16(unsigned int size, int order) {
+    int N = (order>>8) & 0xff;
     if (!N) N=4;
 
     order &= 0xff;
     unsigned int sz = (order == 0
 	? 1.05*size + 257*3 + 4
 	: 1.05*size + 257*257*3 + 4 + 257*3+4) +
-	((order & X_PACK) ? 1 : 0) +
-	((order & X_RLE) ? 1 + 257*3+4: 0) + 20 +
-	((order & X_STRIPE) ? 1 + 5*N: 0);
+	((order & RANS_ORDER_PACK) ? 1 : 0) +
+	((order & RANS_ORDER_RLE) ? 1 + 257*3+4: 0) + 20 +
+	((order & RANS_ORDER_X32) ? (32-4)*4 : 0) +
+	((order & RANS_ORDER_STRIPE) ? 1 + 5*N: 0);
     return sz + (sz&1) + 2; // make this even so buffers are word aligned
 }
 
@@ -375,7 +108,6 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
 //
 // NB: The output buffer does not hold the original size, so it is up to
 // the caller to store this.
-static
 unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end;
@@ -493,11 +225,6 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     return out;
 }
 
-typedef struct {
-    unsigned char R[TOTFREQ];
-} ari_decoder;
-
-static
 unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 				       unsigned char *out, unsigned int out_sz) {
     if (in_size < 16) // 4-states at least
@@ -578,20 +305,19 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 	    R[0] = sfreq[m0] * (R[0] >> TF_SHIFT) + sbase[m0];
 	    R[1] = sfreq[m1] * (R[1] >> TF_SHIFT) + sbase[m1];
 
+	    RansState m2 = RansDecGet(&R[2], TF_SHIFT);
+	    RansState m3 = RansDecGet(&R[3], TF_SHIFT);
+
 	    RansDecRenorm(&R[0], &cp);
 	    RansDecRenorm(&R[1], &cp);
 
+	    R[2] = sfreq[m2] * (R[2] >> TF_SHIFT) + sbase[m2];
+	    R[3] = sfreq[m3] * (R[3] >> TF_SHIFT) + sbase[m3];
+
 	    out[i+j+0] = ssym[m0];
 	    out[i+j+1] = ssym[m1];
-
-	    RansState m3 = RansDecGet(&R[2], TF_SHIFT);
-	    RansState m4 = RansDecGet(&R[3], TF_SHIFT);
-
-	    R[2] = sfreq[m3] * (R[2] >> TF_SHIFT) + sbase[m3];
-	    R[3] = sfreq[m4] * (R[3] >> TF_SHIFT) + sbase[m4];
-
-	    out[i+j+2] = ssym[m3];
-	    out[i+j+3] = ssym[m4];
+	    out[i+j+2] = ssym[m2];
+	    out[i+j+3] = ssym[m3];
 
 	    RansDecRenorm(&R[2], &cp);
 	    RansDecRenorm(&R[3], &cp);
@@ -626,8 +352,7 @@ double fast_log(double a) {
 // 10 bit means smaller memory footprint when decoding and
 // more speed due to cache hits, but it *may* be a poor
 // compression fit.
-static int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
-			 int *S) {
+int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
     int i, j;
 
     double e10 = 0, e12 = 0;
@@ -691,11 +416,10 @@ static int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
     return shift;
 }
 
-
 static
 unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
-    unsigned char *cp, *out_end, *op;
+    unsigned char *cp, *out_end;
     unsigned int tab_size;
     RansEncSymbol syms[256][256];
     int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
@@ -711,78 +435,11 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	bound--;
     out_end = out + bound;
 
-    uint32_t F[256][256] = {{0}}, T[256+MAGIC] = {0};
-    int i, j;
-
-    //memset(F, 0, 256*256*sizeof(int));
-    //memset(T, 0, 256*sizeof(int));
-
-    hist1_4(in, in_size, F, T);
-    F[0][in[1*(in_size>>2)]]++;
-    F[0][in[2*(in_size>>2)]]++;
-    F[0][in[3*(in_size>>2)]]++;
-    T[0]+=3;
-
-    op = cp = out;
-    *cp++ = 0; // uncompressed header marker
-
-    // Encode the order-0 symbols for use in the order-1 frequency tables
-    uint32_t F0[256+MAGIC] = {0};
-    present8(in, in_size, F0);
-    F0[0]=1;
-    cp += encode_alphabet(cp, F0);
-
-    // Decide between 10-bit and 12-bit freqs.
-    // Fills out S[] to hold the new scaled maximum value.
-    int S[256] = {0};
-    int shift = compute_shift(F0, F, T, S);
-
-    // Normalise so T[i] == TOTFREQ_O1
-    for (i = 0; i < 256; i++) {
-	unsigned int x;
-
-	if (F0[i] == 0)
-	    continue;
-
-	int max_val = S[i];
-	if (shift == TF_SHIFT_O1_FAST && max_val > TOTFREQ_O1_FAST)
-	    max_val = TOTFREQ_O1_FAST;
-
-	if (normalise_freq(F[i], T[i], max_val) < 0)
-	    return NULL;
-	T[i]=max_val;
-
-	cp += encode_freq_d(cp, F0, F[i]);
-
-	normalise_freq_shift(F[i], T[i], 1<<shift); T[i]=1<<shift;
-
-	uint32_t *F_i_ = F[i];
-	for (x = j = 0; j < 256; j++) {
-	    RansEncSymbolInit(&syms[i][j], x, F_i_[j], shift);
-	    x += F_i_[j];
-	}
-
-    }
-
-    *op = shift<<4;
-    if (cp - op > 1000) {
-	// try rans0 compression of header
-	unsigned int u_freq_sz = cp-(op+1);
-	unsigned int c_freq_sz;
-	unsigned char *c_freq = rans_compress_O0_4x16(op+1, u_freq_sz, NULL, &c_freq_sz);
-	if (c_freq && c_freq_sz + 6 < cp-op) {
-	    *op++ |= 1; // compressed
-	    op += var_put_u32(op, NULL, u_freq_sz);
-	    op += var_put_u32(op, NULL, c_freq_sz);
-	    memcpy(op, c_freq, c_freq_sz);
-	    cp = op+c_freq_sz;
-	}
-	free(c_freq);
-    }
-
-    //write(2, out+4, cp-(out+4));
+    cp = out;
+    int shift = encode_freq1(in, in_size, 4, syms, &cp); 
+    if (shift < 0)
+	return NULL;
     tab_size = cp - out;
-    assert(tab_size < 257*257*3);
 
     RansState rans0, rans1, rans2, rans3;
     RansEncInit(&rans0);
@@ -854,7 +511,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 pthread_once_t rans_once = PTHREAD_ONCE_INIT;
 pthread_key_t rans_key;
 
-static void rans_tls_init(void) {
+void rans_tls_init(void) {
     pthread_key_create(&rans_key, free);
 }
 #endif
@@ -862,10 +519,6 @@ static void rans_tls_init(void) {
 //#define MAGIC2 111
 #define MAGIC2 179
 //#define MAGIC2 0
-typedef struct {
-    uint16_t f;
-    uint16_t b;
-} fb_t;
 
 static
 unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
@@ -919,6 +572,10 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2)
                            + 256*256*sizeof(fb_t), sizeof(*sfb_));
 #endif
+    uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])sfb_;
+    // reuse the same memory for the fast mode lookup, but this only works
+    // if we're on e.g. 12-bit freqs vs 10-bit freqs as needs 4x larger array.
+    //uint32_t s3[256][TOTFREQ_O1_FAST];
 
     if (!sfb_)
 	return NULL;
@@ -967,6 +624,8 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     if (cp >= c_freq_end)
 	goto err;
 
+    const int s3_fast_on = in_size >= 100000;
+
     for (i = 0; i < 256; i++) {
 	if (F0[i] == 0)
 	    continue;
@@ -990,9 +649,15 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 		if (F[j] > (1<<shift) - x)
 		    goto err;
 
-		memset(&sfb[i][x], j, F[j]);
-		fb[i][j].f = F[j];
-		fb[i][j].b = x;
+		if (shift == TF_SHIFT_O1_FAST && s3_fast_on) {
+		    int y;
+		    for (y = 0; y < F[j]; y++)
+			s3[i][y+x] = (((uint32_t)F[j])<<(shift+8)) |(y<<8) |j;
+		} else {
+		    memset(&sfb[i][x], j, F[j]);
+		    fb[i][j].f = F[j];
+		    fb[i][j].b = x;
+		}
 		x += F[j];
 	    }
 	}
@@ -1071,8 +736,10 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
 	    l3 = c3;
 	}
-    } else {
-	// TF_SHIFT_O1 = 10
+    } else if (!s3_fast_on) {
+	// TF_SHIFT_O1 = 10 with sfb[256][1024] & fb[256]256] array lookup
+	// Slightly faster for -o193 on q4 (high comp), but also less
+	// initialisation cost for smaller data
 	const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
 	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
 	    uint16_t m, c;
@@ -1114,6 +781,57 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
 	    l3 = c3;
 	}
+    } else {
+	// TF_SHIFT_O1_FAST.
+	// Significantly faster for -o1 on q40 (low comp).
+	// Higher initialisation cost, so only use if big blocks.
+	const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
+	for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
+	    uint32_t S0 = s3[l0][R[0] & mask];
+	    uint32_t S1 = s3[l1][R[1] & mask];
+	    l0 = out[i4[0]] = S0;
+	    l1 = out[i4[1]] = S1;
+	    uint16_t F0 = S0>>(TF_SHIFT_O1_FAST+8);
+	    uint16_t F1 = S1>>(TF_SHIFT_O1_FAST+8);
+	    uint16_t B0 = (S0>>8) & mask;
+	    uint16_t B1 = (S1>>8) & mask;
+
+	    R[0] = F0 * (R[0]>>TF_SHIFT_O1_FAST) + B0;
+	    R[1] = F1 * (R[1]>>TF_SHIFT_O1_FAST) + B1;
+
+	    uint32_t S2 = s3[l2][R[2] & mask];
+	    uint32_t S3 = s3[l3][R[3] & mask];
+	    l2 = out[i4[2]] = S2;
+	    l3 = out[i4[3]] = S3;
+	    uint16_t F2 = S2>>(TF_SHIFT_O1_FAST+8);
+	    uint16_t F3 = S3>>(TF_SHIFT_O1_FAST+8);
+	    uint16_t B2 = (S2>>8) & mask;
+	    uint16_t B3 = (S3>>8) & mask;
+
+	    R[2] = F2 * (R[2]>>TF_SHIFT_O1_FAST) + B2;
+	    R[3] = F3 * (R[3]>>TF_SHIFT_O1_FAST) + B3;
+
+	    if (ptr < ptr_end) {
+		RansDecRenorm(&R[0], &ptr);
+		RansDecRenorm(&R[1], &ptr);
+		RansDecRenorm(&R[2], &ptr);
+		RansDecRenorm(&R[3], &ptr);
+	    } else {
+		RansDecRenormSafe(&R[0], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[1], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
+	    }
+	}
+
+	// Remainder
+	for (; i4[3] < out_sz; i4[3]++) {
+	    uint32_t S = s3[l3][R[3] & ((1u<<TF_SHIFT_O1_FAST)-1)];
+	    l3 = out[i4[3]] = S;
+	    R[3] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[3]>>TF_SHIFT_O1_FAST)
+		+ ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
+	    RansDecRenormSafe(&R[3], &ptr, ptr_end + 8);
+	}
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
@@ -1132,6 +850,262 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     return NULL;
 }
 
+/*-----------------------------------------------------------------------------
+ * r32x16 implementation, included here for now for simplicity
+ */
+#include "rANS_static32x16pr.h"
+
+// Test interface for restricting the auto-detection methods so we
+// can forcibly compare different implementations on the same machine.
+// See RANS_CPU_ defines in rANS_static4x16.h
+static int rans_cpu = 0xFFFF; // all
+void rans_set_cpu(int opts) {
+    rans_cpu = opts;
+}
+
+#if defined(__GNUC__) && defined(__x86_64__)
+// Icc and Clang both also set __GNUC__
+#include <cpuid.h>
+
+static inline
+unsigned char *(*rans_enc_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int *out_size) {
+    if (do_simd) {
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+	int have_ssse3   = 0;
+	int have_sse4_1  = 0;
+	int have_popcnt  = 0;
+	int have_avx2    = 0;
+	int have_avx512f = 0;
+
+	int level = __get_cpuid_max(0, NULL);
+	if (level >= 1) {
+	    __cpuid_count(1, 0, eax, ebx, ecx, edx);
+#if defined(bit_SSSE3)
+	    have_ssse3 = ecx & bit_SSSE3;
+#endif
+#if defined(bit_POPCNT)
+	    have_popcnt = ecx & bit_POPCNT;
+#endif
+#if defined(bit_SSE4_1)
+	    have_sse4_1 = ecx & bit_SSE4_1;
+#endif
+	}
+	if (level >= 7) {
+	    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+#if defined(bit_AVX2)
+	    have_avx2 = ebx & bit_AVX2;
+#endif
+#if defined(bit_AVX2)
+	    have_avx512f = ebx & bit_AVX512F;
+#endif
+	}
+
+	if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
+	if (!have_ssse3)  have_sse4_1 = 0;
+
+	if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_avx512f = 0;
+	if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_avx2 = 0;
+	if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_sse4_1 = 0;
+
+	if (order & 1) {
+	    return have_avx512f
+		? rans_compress_O1_32x16_avx512
+		: (have_avx2
+		   ? rans_compress_O1_32x16_avx2
+		   : (have_sse4_1
+		      ? rans_compress_O1_32x16
+		      : rans_compress_O1_32x16));
+	} else {
+	    return have_avx512f
+		? rans_compress_O0_32x16_avx512
+		: (have_avx2
+		   ? rans_compress_O0_32x16_avx2
+		   : (have_sse4_1
+		      ? rans_compress_O0_32x16//_sse4
+		      : rans_compress_O0_32x16));
+	}
+    }
+
+    // Else all SIMD disabled
+    return order & 1
+	? rans_compress_O1_4x16
+	: rans_compress_O0_4x16;
+}
+
+static inline
+unsigned char *(*rans_dec_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int out_size) {
+
+    if (do_simd) {
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+	int have_ssse3   = 0;
+	int have_sse4_1  = 0;
+	int have_popcnt  = 0;
+	int have_avx2    = 0;
+	int have_avx512f = 0;
+
+	int level = __get_cpuid_max(0, NULL);
+	if (level >= 1) {
+	    __cpuid_count(1, 0, eax, ebx, ecx, edx);
+#if defined(bit_SSSE3)
+	    have_ssse3 = ecx & bit_SSSE3;
+#endif
+#if defined(bit_POPCNT)
+	    have_popcnt = ecx & bit_POPCNT;
+#endif
+#if defined(bit_SSE4_1)
+	    have_sse4_1 = ecx & bit_SSE4_1;
+#endif
+	}
+	if (level >= 7) {
+	    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+#if defined(bit_AVX2)
+	    have_avx2 = ebx & bit_AVX2;
+#endif
+#if defined(bit_AVX2)
+	    have_avx512f = ebx & bit_AVX512F;
+#endif
+	}
+
+	if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
+	if (!have_ssse3)  have_sse4_1 = 0;
+
+	if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_avx512f = 0;
+	if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_avx2 = 0;
+	if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_sse4_1 = 0;
+
+//	fprintf(stderr, "SSSE3 %d, SSE4.1 %d, POPCNT %d, AVX2 %d, AVX512F %d\n",
+//		have_ssse3, have_sse4_1, have_popcnt, have_avx2, have_avx512f);
+
+	if (order & 1) {
+	    return have_avx512f
+		? rans_uncompress_O1_32x16_avx512
+		: (have_avx2
+		   ? rans_uncompress_O1_32x16_avx2
+		   : (have_sse4_1
+		      ? rans_uncompress_O1_32x16_sse4
+		      : rans_uncompress_O1_32x16));
+	} else {
+	    return have_avx512f
+		? rans_uncompress_O0_32x16_avx512
+		: (have_avx2
+		   ? rans_uncompress_O0_32x16_avx2
+		   : (have_sse4_1
+		      ? rans_uncompress_O0_32x16_sse4
+		      : rans_uncompress_O0_32x16));
+	}
+    }
+
+    // Else all SIMD disabled
+    return order & 1
+	? rans_uncompress_O1_4x16
+	: rans_uncompress_O0_4x16;
+}
+
+#elif defined(__ARM_NEON)
+static inline
+unsigned char *(*rans_enc_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int *out_size) {
+
+    if (do_simd) {
+	if (rans_cpu & RANS_CPU_ENC_NEON)
+	    return order & 1
+		? rans_compress_O1_32x16_neon
+		: rans_compress_O0_32x16_neon;
+	else
+	    return order & 1
+		? rans_compress_O1_32x16
+		: rans_compress_O0_32x16;
+    } else {
+	return order & 1
+	    ? rans_compress_O1_4x16
+	    : rans_compress_O0_4x16;
+    }
+}
+
+static inline
+unsigned char *(*rans_dec_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int out_size) {
+
+    if (do_simd) {
+	if (rans_cpu & RANS_CPU_DEC_NEON)
+	    return order & 1
+		? rans_uncompress_O1_32x16_neon
+		: rans_uncompress_O0_32x16_neon;
+	else
+	    return order & 1
+		? rans_uncompress_O1_32x16
+		: rans_uncompress_O0_32x16;
+    } else {
+	return order & 1
+	    ? rans_uncompress_O1_4x16
+	    : rans_uncompress_O0_4x16;
+    }
+}
+
+#else // defined(__GNUC__) && defined(__x86_64__)
+
+// We may well be able to write generate AVX2 code, but if we can't auto-detect
+// it then it's pointless.  We can however still use the 32-way codec as
+// we may be decoding on a machine with AVX2 support and the CPU hit isn't
+// vast.
+#ifdef HAVE_AVX2
+#  undef HAVE_AVX2
+#endif
+
+#ifdef HAVE_AVX2
+#  undef HAVE_AVX512
+#endif
+static inline
+unsigned char *(*rans_enc_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int *out_size) {
+
+    if (do_simd) {
+	return order & 1
+	    ? rans_compress_O1_32x16
+	    : rans_compress_O0_32x16;
+    } else {
+	return order & 1
+	    ? rans_compress_O1_4x16
+	    : rans_compress_O0_4x16;
+    }
+}
+
+static inline
+unsigned char *(*rans_dec_func(int do_simd, int order))
+    (unsigned char *in,
+     unsigned int in_size,
+     unsigned char *out,
+     unsigned int out_size) {
+
+    if (do_simd) {
+	return order & 1
+	    ? rans_uncompress_O1_32x16
+	    : rans_uncompress_O0_32x16;
+    } else {
+	return order & 1
+	    ? rans_uncompress_O1_4x16
+	    : rans_uncompress_O0_4x16;
+    }
+}
+
+#endif
 
 /*-----------------------------------------------------------------------------
  * Simple interface to the order-0 vs order-1 encoders and decoders.
@@ -1149,17 +1123,25 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	if (!(out = malloc(*out_size)))
 	    return NULL;
     }
+    if (*out_size == 0)
+	return NULL;
+
     unsigned char *out_end = out + *out_size;
 
+    // Permit 32-way unrolling for large blocks, paving the way for
+    // AVX2 and AVX512 SIMD variants.
+    if ((order & RANS_ORDER_SIMD_AUTO) && in_size >= 50000
+	&& !(order & RANS_ORDER_STRIPE))
+	order |= X_32;
+
     if (in_size <= 20)
-	order &= ~X_STRIPE;
+	order &= ~RANS_ORDER_STRIPE;
+    if (in_size <= 1000)
+	order &= ~RANS_ORDER_X32;
 
-    if (order & X_STRIPE) {
-	int N = (order>>8);
+    if (order & RANS_ORDER_STRIPE) {
+	int N = (order>>8) & 0xff;
 	if (N == 0) N = 4; // default for compatibility with old tests
-
-	if (N > 255)
-	    return NULL;
 
 	unsigned char *transposed = malloc(in_size);
 	unsigned int part_len[256];
@@ -1199,41 +1181,64 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned int olen2;
 	unsigned char *out2, *out2_start;
 	c_meta_len = 1;
-	*out = order & ~X_NOSZ;
+	*out = order & ~RANS_ORDER_NOSZ;
 	c_meta_len += var_put_u32(out+c_meta_len, out_end, in_size);
 	out[c_meta_len++] = N;
 	
+	unsigned char *out_best = NULL;
+	unsigned int out_best_len = 0;
+
 	out2_start = out2 = out+2+5*N; // shares a buffer with c_meta
         for (i = 0; i < N; i++) {
             // Brute force try all methods.
             int j, m[] = {1,64,128,0}, best_j = 0, best_sz = in_size+10;
-            for (j = 0; j < 4; j++) {
+            for (j = 0; j < sizeof(m)/sizeof(*m); j++) {
 		if ((order & m[j]) != m[j])
                     continue;
+
+		// order-1 *only*; bit check above cannot elide order-0
+		if ((order & RANS_ORDER_STRIPE_NO0) && (m[j]&1) == 0)
+		    continue;
                 olen2 = *out_size - (out2 - out);
                 rans_compress_to_4x16(transposed+idx[i], part_len[i],
-				      out2, &olen2, m[j] | X_NOSZ);
+				      out2, &olen2,
+				      m[j] | RANS_ORDER_NOSZ
+				      | (order&RANS_ORDER_X32));
                 if (best_sz > olen2) {
                     best_sz = olen2;
                     best_j = j;
+		    if (j < sizeof(m)/sizeof(*m) && olen2 > out_best_len) {
+			unsigned char *tmp = realloc(out_best, olen2);
+			if (!tmp)
+			    return NULL;
+			out_best = tmp;
+			out_best_len = olen2;
+		    }
+
+		    // Cache a copy of the best so far
+		    memcpy(out_best, out2, olen2);
                 }
             }
-	    if (best_j != j-1) {
-		olen2 = *out_size - (out2 - out);
-		rans_compress_to_4x16(transposed+idx[i], part_len[i],
-				      out2, &olen2, m[best_j] | X_NOSZ);
+	    if (best_j < sizeof(m)/sizeof(*m)) {
+		// Copy the best compression to output buffer if not current
+		memcpy(out2, out_best, best_sz);
+		olen2 = best_sz;
 	    }
+
             out2 += olen2;
             c_meta_len += var_put_u32(out+c_meta_len, out_end, olen2);
         }
+	if (out_best)
+	    free(out_best);
+
 	memmove(out+c_meta_len, out2_start, out2-out2_start);
 	free(transposed);
 	*out_size = c_meta_len + out2-out2_start;
 	return out;
     }
 
-    if (order & X_CAT) {
-	out[0] = X_CAT;
+    if (order & RANS_ORDER_CAT) {
+	out[0] = RANS_ORDER_CAT;
 	c_meta_len = 1;
 	c_meta_len += var_put_u32(&out[1], out_end, in_size);
 	memcpy(out+c_meta_len, in, in_size);
@@ -1241,9 +1246,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	return out;
     }
 
-    int do_pack = order & X_PACK;
-    int do_rle  = order & X_RLE;
-    int no_size = order & X_NOSZ;
+    int do_pack = order & RANS_ORDER_PACK;
+    int do_rle  = order & RANS_ORDER_RLE;
+    int no_size = order & RANS_ORDER_NOSZ;
+    int do_simd = order & RANS_ORDER_X32;
 
     out[0] = order;
     c_meta_len = 1;
@@ -1251,7 +1257,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (!no_size)
 	c_meta_len += var_put_u32(&out[1], out_end, in_size);
 
-    order &= 0xf;
+    order &= 3;
 
     // Format is compressed meta-data, compressed data.
     // Meta-data can be empty, pack, rle lengths, or pack + rle lengths.
@@ -1264,7 +1270,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	uint64_t packed_len;
 	packed = hts_pack(in, in_size, out+c_meta_len, &pmeta_len, &packed_len);
 	if (!packed || (pmeta_len == 1 && out[c_meta_len] > 16)) {
-	    out[0] &= ~X_PACK;
+	    out[0] &= ~RANS_ORDER_PACK;
 	    do_pack = 0;
 	    free(packed);
 	    packed = NULL;
@@ -1280,7 +1286,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    *out_size -= sz;
 	}
     } else if (do_pack) {
-	out[0] &= ~X_PACK;
+	out[0] &= ~RANS_ORDER_PACK;
     }
 
     if (do_rle && in_size) {
@@ -1303,7 +1309,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 
 	if (!rle || rle_len + rmeta_len >= .99*in_size) {
 	    // Not worth the speed hit.
-	    out[0] &= ~X_RLE;
+	    out[0] &= ~RANS_ORDER_RLE;
 	    do_rle = 0;
 	    free(rle);
 	    rle = NULL;
@@ -1312,7 +1318,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    int sz = var_put_u32(out+c_meta_len, out_end, rmeta_len*2), sz2;
 	    sz += var_put_u32(out+c_meta_len+sz, out_end, rle_len);
 	    c_rmeta_len = *out_size - (c_meta_len+sz+5);
-	    rans_compress_O0_4x16(meta, rmeta_len, out+c_meta_len+sz+5, &c_rmeta_len);
+	    rans_enc_func(do_simd, 0)(meta, rmeta_len, out+c_meta_len+sz+5, &c_rmeta_len);
 	    if (c_rmeta_len < rmeta_len) {
 		sz2 = var_put_u32(out+c_meta_len+sz, out_end, c_rmeta_len);
 		memmove(out+c_meta_len+sz+sz2, out+c_meta_len+sz+5, c_rmeta_len);
@@ -1332,7 +1338,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 
 	free(meta);
     } else if (do_rle) {
-	out[0] &= ~X_RLE;
+	out[0] &= ~RANS_ORDER_RLE;
     }
 
     *out_size -= c_meta_len;
@@ -1341,14 +1347,11 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	order  &= ~1;
     }
 
-    if (order == 1)
-	rans_compress_O1_4x16(in, in_size, out+c_meta_len, out_size);
-    else
-	rans_compress_O0_4x16(in, in_size, out+c_meta_len, out_size);
+    rans_enc_func(do_simd, order)(in, in_size, out+c_meta_len, out_size);
 
     if (*out_size >= in_size) {
 	out[0] &= ~3;
-	out[0] |= X_CAT | no_size;
+	out[0] |= RANS_ORDER_CAT | no_size;
 	memcpy(out+c_meta_len, in, in_size);
 	*out_size = in_size;
     }
@@ -1374,7 +1377,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     if (in_size == 0)
 	return NULL;
 
-    if (*in & X_STRIPE) {
+    if (*in & RANS_ORDER_STRIPE) {
 	unsigned int ulen, olen, c_meta_len = 1;
 	int i;
 	uint64_t clen_tot = 0;
@@ -1452,17 +1455,18 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     }
 
     int order = *in++;  in_size--;
-    int do_pack = order & X_PACK;
-    int do_rle  = order & X_RLE;
-    int do_cat  = order & X_CAT;
-    int no_size = order & X_NOSZ;
+    int do_pack = order & RANS_ORDER_PACK;
+    int do_rle  = order & RANS_ORDER_RLE;
+    int do_cat  = order & RANS_ORDER_CAT;
+    int no_size = order & RANS_ORDER_NOSZ;
+    int do_simd = order & RANS_ORDER_X32;
     order &= 1;
 
     int sz = 0;
     unsigned int osz;
-    if (!no_size)
+    if (!no_size) {
 	sz = var_get_u32(in, in_end, &osz);
-    else
+    } else
 	sz = 0, osz = *out_size;
     in += sz;
     in_size -= sz;
@@ -1538,7 +1542,6 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	tmp3 = out;
     }
 
-    
     // Decode the bit-packing map.
     uint8_t map[16] = {0};
     int npacked_sym = 0;
@@ -1579,7 +1582,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	} else {
 	    sz += var_get_u32(in+sz, in_end, &c_meta_size);
 	    u_meta_size /= 2;
-	    meta_free = meta = rans_uncompress_O0_4x16(in+sz, in_size-sz, NULL, u_meta_size);
+
+	    meta_free = meta = rans_dec_func(do_simd, 0)(in+sz, in_size-sz, NULL, u_meta_size);
 	    if (!meta)
 		goto err;
 	}
@@ -1589,7 +1593,6 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	in_size -= c_meta_size+sz;
 	tmp1_size = rle_len;
     }
-   
     //fprintf(stderr, "    meta_size %d bytes\n", (int)(in - orig_in)); //c-size
 
     // uncompress RLE data.  in -> tmp1
@@ -1602,9 +1605,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 		goto err;
 	    memcpy(tmp1, in, tmp1_size);
 	} else {
-	    tmp1 = order
-		? rans_uncompress_O1_4x16(in, in_size, tmp1, tmp1_size)
-		: rans_uncompress_O0_4x16(in, in_size, tmp1, tmp1_size);
+	    tmp1 = rans_dec_func(do_simd, order)(in, in_size, tmp1, tmp1_size);
 	    if (!tmp1)
 		goto err;
 	}
