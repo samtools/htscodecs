@@ -211,7 +211,7 @@ static name_context *create_context(int max_names) {
 	if (!ctx) return NULL;
 	ctx->max_names = max_names;
 	pthread_setspecific(tok_key, ctx);
-    } else if (ctx->max_names < max_names) {
+    } else if (ctx->max_names < max_names+1) {
 	ctx = realloc(ctx, sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
 	if (!ctx) return NULL;
 	ctx->max_names = max_names;
