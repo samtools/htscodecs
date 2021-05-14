@@ -158,14 +158,13 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
     uint8_t *lit_end = lit + lit_len;
     uint8_t *out_end = out + *out_len;
     uint8_t *outp = out;
+
     while (lit < lit_end) {
 	if (outp >= out_end)
 	    goto err;
 
-	uint8_t b = *lit++;
-	if (!saved[b]) {
-	    *outp++ = b;
-	} else {
+	uint8_t b = *lit;
+	if (saved[b]) {
 	    uint32_t rlen;
 	    run += var_get_u32(run, run_end, &rlen);
 	    if (rlen) {
@@ -176,7 +175,10 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
 	    } else {
 		*outp++ = b;
 	    }
+	} else {
+	    *outp++ = b;
 	}
+	lit++;
     }
 
     *out_len = outp-out;
