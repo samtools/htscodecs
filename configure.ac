@@ -70,7 +70,6 @@ dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL
 LT_INIT
-AC_PROG_LIBTOOL
 
 # # by Marcelo Magallon <mmagallo@efis.ucr.ac.cr>
 # # Turn around -rpath problem with libtool 1.0c
@@ -108,7 +107,6 @@ dnl 	AC_DEFINE([HAVE_LIBBSC],1,[Define to 1 if you have the libbsc library.])])
 AX_LIBDEFLATE
 
 dnl Checks for header files.
-AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS(fcntl.h limits.h unistd.h malloc.h)
 AC_CHECK_HEADER(zlib.h)
@@ -116,4 +114,5 @@ AC_CHECK_HEADER(zlib.h)
 dnl Checks for library functions.
 AC_SEARCH_LIBS([pthread_join], [pthread])
 
-AC_OUTPUT(Makefile htscodecs/Makefile tests/Makefile)
+AC_CONFIG_FILES([Makefile htscodecs/Makefile tests/Makefile])
+AC_OUTPUT

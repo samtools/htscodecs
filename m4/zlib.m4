@@ -4,7 +4,7 @@
 AC_DEFUN([ZLIB_CHECK_CONFIG],
 [
   AC_ARG_WITH(zlib,
-	      AC_HELP_STRING([--with-zlib=DIR],[look for zlib in DIR]),
+	      AS_HELP_STRING([--with-zlib=DIR],[look for zlib in DIR]),
 	      [_zlib_with=$withval],[_zlib_with="no"])
 
   ZLIB_ROOT=""
@@ -24,11 +24,10 @@ AC_DEFUN([ZLIB_CHECK_CONFIG],
     CPPFLAGS="$CPPFLAGS -I${ZLIB_ROOT}/include"
     _ldflags=$LDFLAGS
     LDFLAGS="$LFDLAGS -L${ZLIB_ROOT}/lib"
-    AC_LANG_SAVE
-    AC_LANG_C
+    AC_LANG_PUSH([C])
     AC_CHECK_LIB(z, inflateEnd,
 	[AC_CHECK_HEADER(zlib.h, zlib_ok=yes, zlib_ok=no)])
-    AC_LANG_RESTORE
+    AC_LANG_POP([C])
     if test "$zlib_ok" != "yes"
     then
         # Backout and whinge
