@@ -31,7 +31,7 @@
 AC_DEFUN([AX_LIBDEFLATE],
 [
   AC_ARG_WITH(libdeflate,
-	      AC_HELP_STRING([--with-libdeflate=DIR],[look for libdeflate in DIR]),
+	      AS_HELP_STRING([--with-libdeflate=DIR],[look for libdeflate in DIR]),
 	      [ac_libdeflate_with=$withval],[ac_libdeflate_with="no"])
 
   # Check if it's a working library
