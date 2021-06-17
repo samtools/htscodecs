@@ -1,3 +1,32 @@
+Release 1.1:
+--------------------------
+
+This release contains the following minoring changes.
+Please see the "git log" for the full details.
+
+Improvements / changes:
+
+- Modernised autoconf usage to avoid warnings with newer versions.
+  (John Marshall)
+
+- Avoid using awk with large records, due to some systems
+  (e.g. Solaris / OpenIndiana) with line length limits .
+  (John Marshall)
+
+- Applied Debian patch to make the library link against -lm.
+
+Bug fixes:
+
+- Fixed an issue with the name tokeniser when a slice (name_context)
+  has exactly 1 more name than the previous call. (James Bonfield)
+
+- Removed access to an uninitialised variable in the name tokeniser
+  decode when given malformed data.  This occurs when we use delta
+  encoding for the very first name. (James Bonfield, OSS-Fuzz)
+
+- Minor fixes to distcheck and distclean targets
+
+
 Release 1.0: 23rd Feb 2021
 --------------------------
 
