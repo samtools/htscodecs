@@ -58,7 +58,7 @@ libhtscodecs_la_SOURCES = \
 	utils.h
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
-libhtscodecs_la_LIBADD = @LIBZ@
+libhtscodecs_la_LIBADD = @LIBZ@ -lm
 
 version.h: force
 	@ if `git describe 2>/dev/null >/dev/null`; then \
