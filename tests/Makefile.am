@@ -43,15 +43,17 @@ arith_dynamic_SOURCES = arith_dynamic_test.c
 tokenise_name3_SOURCES = tokenise_name3_test.c
 varint_SOURCES = varint_test.c
 
-TESTS = \
+test_scripts = \
 	rans4x8.test \
 	rans4x16.test \
 	arith.test \
 	tok3.test \
-	fqzcomp.test \
+	fqzcomp.test
+
+TESTS = $(test_scripts) \
 	varint
 
-EXTRA_DIST = $(TESTS) dat names
+EXTRA_DIST = $(test_scripts) dat names
 
 test_outdir = test.out
 

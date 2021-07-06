@@ -32,7 +32,7 @@
 AUTOMAKE_OPTIONS = foreign no-dependencies
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = htscodecs tests
+SUBDIRS = htscodecs . tests
 
 nobase_include_HEADERS = \
 	htscodecs/arith_dynamic.h \

@@ -82,4 +82,4 @@ force:
 BUILT_SOURCES = version.h
 
 distclean-local:
-	rm version.h
+	rm -f version.h
