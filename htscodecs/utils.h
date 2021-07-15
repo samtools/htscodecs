@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <math.h>
 
 /*
  * Data transpose by N.  Common to rANS4x16 and arith_dynamic decoders.
@@ -99,6 +100,49 @@ void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
 
     for (i = 0; i < 256; i++)
 	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
+}
+
+// Hist8 with a crude entropy (bits / byte) estimator.
+static inline
+double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
+    uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
+    uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
+    uint32_t F7[256+MAGIC] = {0};
+
+#ifdef __GNUC__
+    double e = 0, in_size_r2 = log(1.0/in_size)/log(2);
+#else
+    double e = 0, in_size_r2 = log(1.0/in_size);
+#endif
+
+    unsigned int i, i8 = in_size & ~7;
+    for (i = 0; i < i8; i+=8) {
+	F0[in[i+0]]++;
+	F1[in[i+1]]++;
+	F2[in[i+2]]++;
+	F3[in[i+3]]++;
+	F4[in[i+4]]++;
+	F5[in[i+5]]++;
+	F6[in[i+6]]++;
+	F7[in[i+7]]++;
+    }
+    while (i < in_size)
+	F0[in[i++]]++;
+
+    for (i = 0; i < 256; i++) {
+	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
+#ifdef __GNUC__
+	e -= F0[i] * (32 - __builtin_clz(F0[i]) + in_size_r2);
+#else
+	extern double fast_log(double);
+	e -= F0[i] * (fast_log(F0[i]) + in_size_r2);
+#endif
+    }
+
+#ifndef __GNUC__
+    e /= log(2);
+#endif
+    return e/in_size;
 }
 
 /*

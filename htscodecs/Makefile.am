@@ -44,6 +44,13 @@ libhtscodecs_la_SOURCES = \
 	rANS_static4x16pr.c \
 	rANS_static4x16.h \
 	rANS_word.h \
+	rANS_static32x16pr.c \
+	rANS_static32x16pr.h \
+	rANS_static32x16pr_sse4.c \
+	rANS_static32x16pr_avx2.c \
+	rANS_static32x16pr_avx512.c \
+	rANS_static16_int.h \
+	permute.h \
 	tokenise_name3.c \
 	tokenise_name3.h \
 	pooled_alloc.h \
@@ -59,6 +66,14 @@ libhtscodecs_la_SOURCES = \
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
 libhtscodecs_la_LIBADD = @LIBZ@ -lm
+
+# AM_CFLAGS so users can override CFLAGS without breaking the build.
+rANS_static32x16pr_sse4.o:   AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
+rANS_static32x16pr_sse4.lo:  AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
+rANS_static32x16pr_avx2.o:   AM_CFLAGS+=@MAVX2@
+rANS_static32x16pr_avx2.lo:  AM_CFLAGS+=@MAVX2@
+rANS_static32x16pr_avx512.o:   AM_CFLAGS+=@MAVX512@
+rANS_static32x16pr_avx512.lo:  AM_CFLAGS+=@MAVX512@
 
 version.h: force
 	@ if `git describe 2>/dev/null >/dev/null`; then \

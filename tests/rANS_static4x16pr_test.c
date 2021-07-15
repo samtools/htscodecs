@@ -93,6 +93,9 @@ int main(int argc, char **argv) {
 
     extern char *optarg;
     extern int optind;
+    extern void force_sw32_decoder(void);
+    extern void rans_disable_avx512(void);
+    extern void rans_disable_avx2(void);
 
     while ((opt = getopt(argc, argv, "o:dtr")) != -1) {
 	switch (opt) {
@@ -101,6 +104,12 @@ int main(int argc, char **argv) {
 	    order = strtol(optarg, &optend, 0);
 	    if (*optend == '.')
 		order += atoi(optend+1)<<8;
+	    if (order & 0x400 /*X_SW32_DEC*/)
+		force_sw32_decoder();
+	    if (order & 0x800 /*X_NO_AVX512*/)
+		rans_disable_avx512();
+	    if (order & 0x1000 /*X_NO_AVX2*/)
+		rans_disable_avx2();
 	    break;
 	}
 
@@ -208,8 +217,13 @@ int main(int argc, char **argv) {
 	    gettimeofday(&tv4, NULL);
 
 	    for (i = 0; i < nb; i++) {
-		if (b[i].sz != bu[i].sz || memcmp(b[i].blk, bu[i].blk, b[i].sz))
-		    fprintf(stderr, "Mismatch in block %d, sz %d/%d\n", i, b[i].sz, bu[i].sz);
+		if (b[i].sz != bu[i].sz || memcmp(b[i].blk, bu[i].blk, b[i].sz)) {
+		    int z;
+		    for (z = 0; z < b[i].sz; z++)
+			if (b[i].blk[z] != bu[i].blk[z])
+			    break;
+		    fprintf(stderr, "Mismatch in block %d, sz %d/%d, pos %d, got %d wanted %d\n", i, b[i].sz, bu[i].sz, z, b[i].blk[z], bu[i].blk[z]);
+		}
 		//free(bc[i].blk);
 		//free(bu[i].blk);
 	    }
