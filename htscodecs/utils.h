@@ -195,6 +195,7 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 	    l = c;
 	}
     }
+    T0[l]++;
 
     int i;
     for (i = 0; i < 256; i++)
