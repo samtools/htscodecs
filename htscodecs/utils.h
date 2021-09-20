@@ -79,26 +79,56 @@ static inline void unstripe(unsigned char *out, unsigned char *outN,
  */
 static inline
 void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
-    uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
-    uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
-    uint32_t F7[256+MAGIC] = {0};
+    if (in_size > 500000) {
+	uint32_t f0[65536+37] = {0};
+	uint32_t f1[65536+37] = {0};
+	uint32_t f2[65536+37] = {0};
 
-    unsigned int i, i8 = in_size & ~7;
-    for (i = 0; i < i8; i+=8) {
-	F0[in[i+0]]++;
-	F1[in[i+1]]++;
-	F2[in[i+2]]++;
-	F3[in[i+3]]++;
-	F4[in[i+4]]++;
-	F5[in[i+5]]++;
-	F6[in[i+6]]++;
-	F7[in[i+7]]++;
+	uint32_t i, i8 = in_size & ~15;
+
+	for (i = 0; i < i8; i+=16) {
+	    uint16_t i16a[4], i16b[4];
+	    memcpy(i16a, in+i, 8);
+	    f0[i16a[0]]++;
+	    f1[i16a[1]]++;
+	    f2[i16a[2]]++;
+	    f0[i16a[3]]++;
+
+	    memcpy(i16b, in+i+8, 8);
+	    f1[i16b[0]]++;
+	    f0[i16b[1]]++;
+	    f1[i16b[2]]++;
+	    f2[i16b[3]]++;
+	}
+
+	while (i < in_size)
+	    F0[in[i++]]++;
+
+	for (i = 0; i < 65536; i++) {
+	    F0[i & 0xff] += f0[i] + f1[i] + f2[i];
+	    F0[i >> 8  ] += f0[i] + f1[i] + f2[i];
+	}
+    } else {
+	uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
+	uint32_t i, i8 = in_size & ~7;
+
+	for (i = 0; i < i8; i+=8) {
+	    F0[in[i+0]]++;
+	    F1[in[i+1]]++;
+	    F2[in[i+2]]++;
+	    F3[in[i+3]]++;
+	    F0[in[i+4]]++;
+	    F1[in[i+5]]++;
+	    F2[in[i+6]]++;
+	    F3[in[i+7]]++;
+	}
+
+	while (i < in_size)
+	    F0[in[i++]]++;
+
+	for (i = 0; i < 256; i++)
+	    F0[i] += F1[i] + F2[i] + F3[i];
     }
-    while (i < in_size)
-	F0[in[i++]]++;
-
-    for (i = 0; i < 256; i++)
-	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
 }
 
 /*
@@ -133,11 +163,10 @@ void present8(unsigned char *in, unsigned int in_size,
 /*
  * Order 1 histogram construction.  4-way unrolled to avoid cache collisions.
  */
+#if 1
 static inline
 void hist1_4(unsigned char *in, unsigned int in_size,
 	     uint32_t F0[256][256], uint32_t *T0) {
-    uint32_t T1[256+MAGIC] = {0}, T2[256+MAGIC] = {0}, T3[256+MAGIC] = {0};
-
     unsigned char l = 0, c;
     unsigned char *in_end = in + in_size;
 
@@ -146,58 +175,118 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 	uint32_t F1[256][259] = {{0}};
 	while (in < in_end-8) {
 	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
+	    F0[cc[4]][cc[0]]++;
+	    F1[cc[0]][cc[1]]++;
+	    F0[cc[1]][cc[2]]++;
+	    F1[cc[2]][cc[3]]++;
 	    cc[4] = cc[3];
 
 	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F1[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F1[cc[2]][cc[3]]++;
+	    F0[cc[4]][cc[0]]++;
+	    F1[cc[0]][cc[1]]++;
+	    F0[cc[1]][cc[2]]++;
+	    F1[cc[2]][cc[3]]++;
 	    cc[4] = cc[3];
 	}
 	l = cc[3];
 
 	while (in < in_end) {
 	    F0[l][c = *in++]++;
-	    T0[l]++;
 	    l = c;
 	}
+	T0[l]++;
 
 	int i, j;
-	for (i = 0; i < 256; i++)
-	    for (j = 0; j < 256; j++)
+	for (i = 0; i < 256; i++) {
+	    int tt = 0;
+	    for (j = 0; j < 256; j++) {
 		F0[i][j] += F1[i][j];
+		tt += F0[i][j];
+	    }
+	    T0[i]+=tt;
+	}
     } else {
 	while (in < in_end-8) {
 	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
+	    F0[cc[4]][cc[0]]++;
+	    F0[cc[0]][cc[1]]++;
+	    F0[cc[1]][cc[2]]++;
+	    F0[cc[2]][cc[3]]++;
 	    cc[4] = cc[3];
 
 	    memcpy(cc, in, 4); in += 4;
-	    T0[cc[4]]++; F0[cc[4]][cc[0]]++;
-	    T1[cc[0]]++; F0[cc[0]][cc[1]]++;
-	    T2[cc[1]]++; F0[cc[1]][cc[2]]++;
-	    T3[cc[2]]++; F0[cc[2]][cc[3]]++;
+	    F0[cc[4]][cc[0]]++;
+	    F0[cc[0]][cc[1]]++;
+	    F0[cc[1]][cc[2]]++;
+	    F0[cc[2]][cc[3]]++;
 	    cc[4] = cc[3];
 	}
 	l = cc[3];
 
 	while (in < in_end) {
 	    F0[l][c = *in++]++;
-	    T0[l]++;
 	    l = c;
 	}
-    }
-    T0[l]++;
+	T0[l]++;
 
-    int i;
-    for (i = 0; i < 256; i++)
-	T0[i]+=T1[i]+T2[i]+T3[i];
+	int i, j;
+	for (i = 0; i < 256; i++) {
+	    int tt = 0;
+	    for (j = 0; j < 256; j++)
+		tt += F0[i][j];
+	    T0[i]+=tt;
+	}
+    }
 }
+
+#else
+// 16 bit mode, similar to O0 freq.
+// This is better on some low entropy data, but generally we prefer to do
+// bit-packing and/or RLE to turn it into higher-entropy data first.
+//
+// Kept here for posterity incase we need it again, as it's quick tricky.
+static inline
+void hist1_4(unsigned char *in, unsigned int in_size,
+	     uint32_t F0[256][256], uint32_t *T0) {
+    uint32_t f0[65536+MAGIC] = {0};
+    uint32_t f1[65536+MAGIC] = {0};
+
+    uint32_t i, i8 = (in_size-1) & ~15;
+
+    T0[0]++; f0[in[0]<<8]++;
+    for (i = 0; i < i8; i+=16) {
+	uint16_t i16a[16];
+        memcpy(i16a,   in+i,   16); // faster in 2 as gcc recognises this
+	memcpy(i16a+8, in+i+1, 16); // faster in 2 as gcc recognises this
+
+        f0[i16a[0]]++;
+        f1[i16a[1]]++;
+        f0[i16a[2]]++;
+        f1[i16a[3]]++;
+        f0[i16a[4]]++;
+        f1[i16a[5]]++;
+        f0[i16a[6]]++;
+        f1[i16a[7]]++;
+        f0[i16a[8]]++;
+        f1[i16a[9]]++;
+        f0[i16a[10]]++;
+        f1[i16a[11]]++;
+        f0[i16a[12]]++;
+        f1[i16a[13]]++;
+        f0[i16a[14]]++;
+        f1[i16a[15]]++;
+    }
+
+    while (i < in_size-1) {
+	F0[in[i]][in[i+1]]++;
+	T0[in[i+1]]++;
+	i++;
+    }
+
+    for (i = 0; i < 65536; i++) {
+        F0[i&0xff][i>>8] += f0[i] + f1[i];
+	T0[i>>8]         += f0[i] + f1[i];
+    }
+}
+
+#endif /* RANS_UTILS_H */
