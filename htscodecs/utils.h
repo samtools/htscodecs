@@ -46,17 +46,44 @@ static inline void unstripe(unsigned char *out, unsigned char *outN,
     if (ulen >= N) {
 	switch (N) {
 	case 4:
+#define LLN 16
+	    if (ulen >= 4*LLN) {
+		while (j < ulen-4*LLN) {
+		    int l;
+		    for (l = 0; l < LLN; l++) {
+			for (k = 0; k < 4; k++)
+			    out[j+k+l*4] = outN[idxN[k]+l];
+		    }
+		    for (k = 0; k < 4; k++)
+			idxN[k] += LLN;
+		    j += 4*LLN;
+		}
+	    }
 	    while (j < ulen-4) {
 		for (k = 0; k < 4; k++)
 		    out[j++] = outN[idxN[k]++];
 	    }
+#undef LLN
 	    break;
 
 	case 2:
+#define LLN 4
+	    if (ulen >= 2*LLN) {
+		while (j < ulen-2*LLN) {
+		    int l;
+		    for (l = 0; l < LLN; l++) {
+			for (k = 0; k < 2; k++)
+			    out[j++] = outN[idxN[k]+l];
+		    }
+		    for (k = 0; k < 2; k++)
+			idxN[k] += l;
+		}
+	    }
 	    while (j < ulen-2) {
 		for (k = 0; k < 2; k++)
 		    out[j++] = outN[idxN[k]++];
 	    }
+#undef LLN
 	    break;
 
 	default:

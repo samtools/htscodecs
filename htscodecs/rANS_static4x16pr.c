@@ -1171,10 +1171,24 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	    idx[i] = i ? idx[i-1] + part_len[i-1] : 0; // cumulative index
 	}
 
-	for (i = x = 0; i < in_size-N; i += N, x++) {
+#define KN 8
+	i = x = 0;
+	if (in_size >= N*KN) {
+	    for (; i < in_size-N*KN;) {
+		int k;
+		unsigned char *ink = in+i;
+		for (j = 0; j < N; j++)
+		    for (k = 0; k < KN; k++)
+			transposed[idx[j]+x+k] = ink[j+N*k];
+		x += KN; i+=N*KN;
+	    }
+	}
+#undef KN
+	for (; i < in_size-N; i += N, x++) {
 	    for (j = 0; j < N; j++)
 		transposed[idx[j]+x] = in[i+j];
 	}
+
 	for (; i < in_size; i += N, x++) {
 	    for (j = 0; i+j < in_size; j++)
 		transposed[idx[j]+x] = in[i+j];
