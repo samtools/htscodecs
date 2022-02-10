@@ -1,5 +1,7 @@
-Htscodecs: version 1.1.1
-========================
+Htscodecs
+=========
+
+See the NEWS file for a list of updates and version details.
 
 [![Build Status](https://api.cirrus-ci.com/github/jkbonfield/htscodecs.svg?branch=master)](https://cirrus-ci.com/github/jkbonfield/htscodecs)
 
