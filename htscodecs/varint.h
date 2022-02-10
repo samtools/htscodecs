@@ -1,7 +1,7 @@
 // FIXME: make get functions const uint8_t *
 
 /*
- * Copyright (c) 2019,2020,2021 Genome Research Ltd.
+ * Copyright (c) 2019-2021 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
