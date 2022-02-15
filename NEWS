@@ -1,3 +1,11 @@
+Release 1.2.1: 15th February 2022
+---------------------------------
+
+The only change in this release is a minor adjustment to the histogram
+code so it works on systems with small stacks.  This was detected on
+Windows Mingw builds.
+
+
 Release 1.2: 10th February 2022
 -------------------------------
 

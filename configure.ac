@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(htscodecs, 1.2.0)
+AC_INIT(htscodecs, 1.2.1)
 
 # Some functions benefit from -O3 optimisation, so if the user didn't
 # explicitly set any compiler flags, we'll plump for O3.
@@ -60,7 +60,7 @@ AM_MAINTAINER_MODE
 #       libhtscodecs.so.1.1.0
 
 VERS_CURRENT=2
-VERS_REVISION=4
+VERS_REVISION=5
 VERS_AGE=0
 AC_SUBST(VERS_CURRENT)
 AC_SUBST(VERS_REVISION)
