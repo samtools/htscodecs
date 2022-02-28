@@ -31,7 +31,7 @@
 # 
 
 # Standalone test programs
-noinst_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint
+noinst_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint entropy
 
 LDADD = $(top_builddir)/htscodecs/libhtscodecs.la
 AM_CPPFLAGS = -I$(top_srcdir)
@@ -42,8 +42,10 @@ rans4x16pr_SOURCES = rANS_static4x16pr_test.c
 arith_dynamic_SOURCES = arith_dynamic_test.c
 tokenise_name3_SOURCES = tokenise_name3_test.c
 varint_SOURCES = varint_test.c
+entropy_SOURCES = entropy.c
 
 test_scripts = \
+	entropy.test \
 	rans4x8.test \
 	rans4x16.test \
 	arith.test \
