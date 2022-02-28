@@ -791,7 +791,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
     return NULL;
 }
 
-#ifndef NO_THRADS
+#ifndef NO_THREADS
 // Reuse the rANS_static4x16pr variables
 extern pthread_once_t rans_once;
 extern pthread_key_t rans_key;
@@ -1755,15 +1755,9 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
     free(out_free);
     free(c_freq);
 
