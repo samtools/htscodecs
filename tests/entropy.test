@@ -1,0 +1,2 @@
+#!/bin/sh
+./entropy $srcdir/dat/q4
