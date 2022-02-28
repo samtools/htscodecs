@@ -362,7 +362,7 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
     if (!N) N=4;
 
     order &= 0xff;
-    int sz = (order == 0
+    unsigned int sz = (order == 0
 	? 1.05*size + 257*3 + 4
 	: 1.05*size + 257*257*3 + 4 + 257*3+4) +
 	((order & X_PACK) ? 1 : 0) +
