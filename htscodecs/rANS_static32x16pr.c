@@ -69,7 +69,7 @@
 #define TOTFREQ_O1_FAST (1<<TF_SHIFT_O1_FAST)
 
 
-#ifndef NO_THRADS
+#ifndef NO_THREADS
 // Reuse the rANS_static4x16pr variables
 extern pthread_once_t rans_once;
 extern pthread_key_t rans_key;
@@ -87,17 +87,18 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
 				      unsigned int in_size,
 				      unsigned char *out,
 				      unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     RansEncSymbol syms[256];
     RansState ransN[NX];
     uint8_t* ptr;
     uint32_t F[256+MAGIC] = {0};
     int i, j, tab_size = 0, rle, x, z;
-    int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
+    // -20 for order/size/meta
+    unsigned int bound = rans_compress_bound_4x16(in_size,0)-20;
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out = out_free = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -122,8 +123,10 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
     if (max_val > TOTFREQ)
 	max_val = TOTFREQ;
 
-    if (normalise_freq(F, fsum, max_val) < 0)
+    if (normalise_freq(F, fsum, max_val) < 0) {
+	free(out_free);
 	return NULL;
+    }
     fsum=max_val;
 
     cp = out;
@@ -131,8 +134,10 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
     tab_size = cp-out;
     //write(2, out+4, cp-(out+4));
 
-    if (normalise_freq(F, fsum, TOTFREQ) < 0)
+    if (normalise_freq(F, fsum, TOTFREQ) < 0) {
+	free(out_free);
 	return NULL;
+    }
 
     // Encode statistics.
     for (x = rle = j = 0; j < 256; j++) {

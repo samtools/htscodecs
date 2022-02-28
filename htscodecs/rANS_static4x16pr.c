@@ -89,7 +89,7 @@
  * are easier to understand, but can be up to 2x slower.
  */
 
-unsigned inline int rans_compress_bound_4x16(unsigned int size, int order) {
+unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
     int N = (order>>8) & 0xff;
     if (!N) N=4;
 
