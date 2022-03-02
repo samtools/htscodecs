@@ -18,13 +18,16 @@ skip_tags: true
 #    - docs/*
 #    - '**/*.html'
 
+# Appveyor Windows images are based on Visual studio version
+image: Visual Studio 2019
+
 # We use Mingw/Msys, so use pacman for installs
 install:
   - set HOME=.
   - set MSYSTEM=MINGW64
   - set PATH=C:/msys64/usr/bin;C:/msys64/mingw64/bin;%PATH%
   - set MINGWPREFIX=x86_64-w64-mingw32
-  - "sh -lc \"pacman -S --noconfirm --needed base-devel mingw-w64-x86_64-toolchain\""
+  - "sh -lc \"pacman -S --noconfirm --needed base-devel mingw-w64-x86_64-toolchain mingw-w64-x86_64-autotools\""
 
 build_script:
   - set HOME=.
