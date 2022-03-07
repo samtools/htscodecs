@@ -58,9 +58,6 @@
 #include <string.h>
 #include <sys/time.h>
 #include <limits.h>
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
 
 #include "arith_dynamic.h"
 #include "varint.h"

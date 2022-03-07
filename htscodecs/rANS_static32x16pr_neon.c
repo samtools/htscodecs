@@ -1380,17 +1380,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
     int i, j = -999;
     unsigned int x;
 
-#ifndef NO_THREADS
-    pthread_once(&rans_once, rans_tls_init);
-
-    uint8_t *sfb_ = pthread_getspecific(rans_key);
-    if (!sfb_) {
-	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
-	pthread_setspecific(rans_key, sfb_);
-    }
-#else
-    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
-#endif
+    uint8_t *sfb_ = htscodecs_tls_alloc(256*(TOTFREQ_O1+MAGIC2)*sizeof(*sfb_));
     uint32_t s3[256][TOTFREQ_O1_FAST];
 
     if (!sfb_)
@@ -1884,15 +1874,11 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(sfb_);
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(sfb_);
     free(out_free);
     free(c_freq);
 

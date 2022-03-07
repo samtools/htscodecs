@@ -52,10 +52,6 @@
 #include <math.h>
 #include <x86intrin.h>
 
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
-
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #define ROT32_SIMD
@@ -440,18 +436,6 @@ static inline void transpose_and_copy_avx512(uint8_t *out, int iN[32],
 }
 #endif // TBUF
 
-#ifndef NO_THREADS
-/*
- * Thread local storage per thread in the pool.
- */
-static pthread_once_t rans_once = PTHREAD_ONCE_INIT;
-static pthread_key_t rans_key;
-
-static void rans_tls_init(void) {
-    pthread_key_create(&rans_key, free);
-}
-#endif
-
 unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
 					     unsigned int in_size,
 					     unsigned char *out,
@@ -672,22 +656,9 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
     unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
     unsigned char *c_freq = NULL;
 
-#ifndef NO_THREADS
-    pthread_once(&rans_once, rans_tls_init);
-    uint8_t *s3_ = pthread_getspecific(rans_key);
-    if (!s3_) {
-	s3_ = malloc(256*TOTFREQ_O1*4);
-	if (!s3_)
-	    return NULL;
-	pthread_setspecific(rans_key, s3_);
-    }
-    uint32_t (*s3)[TOTFREQ_O1] = (uint32_t (*)[TOTFREQ_O1])s3_;
-
-#else
-    uint32_t (*s3)[TOTFREQ_O1] = malloc(256*TOTFREQ_O1*4);
+    uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
     if (!s3)
 	return NULL;
-#endif
     uint32_t (*s3F)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])s3;
 
     if (!out)
@@ -1072,15 +1043,11 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	}
     }
 
-#ifdef NO_THREADS
-    free(s3);
-#endif
+    htscodecs_tls_free(s3);
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(s3);
-#endif
+    htscodecs_tls_free(s3);
     free(out_free);
     free(c_freq);
 
