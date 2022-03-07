@@ -56,9 +56,6 @@
 #include <sys/time.h>
 #include <limits.h>
 #include <math.h>
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
@@ -419,14 +416,14 @@ int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
 static
 unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-    RansEncSymbol syms[256][256];
+
     int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -435,10 +432,18 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	bound--;
     out_end = out + bound;
 
+    RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
+    if (!syms) {
+	free(out_free);
+	return NULL;
+    }
+
     cp = out;
     int shift = encode_freq1(in, in_size, 4, syms, &cp); 
-    if (shift < 0)
+    if (shift < 0) {
+	htscodecs_tls_free(syms);
 	return NULL;
+    }
     tab_size = cp - out;
 
     RansState rans0, rans1, rans2, rans3;
@@ -501,20 +506,9 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     cp = out;
     memmove(out + tab_size, ptr, out_end-ptr);
 
+    htscodecs_tls_free(syms);
     return out;
 }
-
-#ifndef NO_THREADS
-/*
- * Thread local storage per thread in the pool.
- */
-pthread_once_t rans_once = PTHREAD_ONCE_INIT;
-pthread_key_t rans_key;
-
-void rans_tls_init(void) {
-    pthread_key_create(&rans_key, free);
-}
-#endif
 
 //#define MAGIC2 111
 #define MAGIC2 179
@@ -540,38 +534,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     int i, j = -999;
     unsigned int x;
 
-#ifndef NO_THREADS
-    /*
-     * The calloc below is expensive as it's a large structure.  We
-     * could use malloc, but we're only initialising parts of the structure
-     * that we need to, as dictated by the frequency table.  This is far
-     * faster than initialising everything (ie malloc+memset => calloc).
-     * Not initialising the data means malformed input with mismatching
-     * frequency tables to actual data can lead to accessing of the
-     * uninitialised sfb table and in turn potential leakage of the
-     * uninitialised memory returned by malloc.  That could be anything at
-     * all, including important encryption keys used within a server (for
-     * example).
-     *
-     * However (I hope!) we don't care about leaking about the sfb symbol
-     * frequencies previously computed by an earlier execution of *this*
-     * code.  So calloc once and reuse is the fastest alternative.
-     *
-     * We do this through pthread local storage as we don't know if this
-     * code is being executed in many threads simultaneously.
-     */
-    pthread_once(&rans_once, rans_tls_init);
-
-    uint8_t *sfb_ = pthread_getspecific(rans_key);
-    if (!sfb_) {
-	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2)
-                      + 256*256*sizeof(fb_t), sizeof(*sfb_));
-	pthread_setspecific(rans_key, sfb_);
-    }
-#else
-    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2)
-                           + 256*256*sizeof(fb_t), sizeof(*sfb_));
-#endif
+    uint8_t *sfb_ = htscodecs_tls_alloc(256*(TOTFREQ_O1+MAGIC2)*sizeof(*sfb_));
     uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])sfb_;
     // reuse the same memory for the fast mode lookup, but this only works
     // if we're on e.g. 12-bit freqs vs 10-bit freqs as needs 4x larger array.
@@ -579,7 +542,9 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
     if (!sfb_)
 	return NULL;
-    fb_t (*fb)[256] = (fb_t (*)[256]) (sfb_ + 256*(TOTFREQ_O1+MAGIC2));
+    fb_t (*fb)[256] = htscodecs_tls_alloc(256 * sizeof(*fb));
+    if (!fb)
+	goto err;
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
@@ -835,15 +800,13 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(fb);
+    htscodecs_tls_free(sfb_);
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(fb);
+    htscodecs_tls_free(sfb_);
     free(out_free);
     free(c_freq);
 
@@ -899,7 +862,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 #if defined(bit_AVX2)
 	    have_avx2 = ebx & bit_AVX2;
 #endif
-#if defined(bit_AVX2)
+#if defined(bit_AVX512F)
 	    have_avx512f = ebx & bit_AVX512F;
 #endif
 	}
@@ -969,7 +932,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 #if defined(bit_AVX2)
 	    have_avx2 = ebx & bit_AVX2;
 #endif
-#if defined(bit_AVX2)
+#if defined(bit_AVX512F)
 	    have_avx512f = ebx & bit_AVX512F;
 #endif
 	}
@@ -1117,14 +1080,15 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 				     int order) {
     unsigned int c_meta_len;
     uint8_t *meta = NULL, *rle = NULL, *packed = NULL;
+    uint8_t *out_free = NULL;
 
     if (!out) {
 	*out_size = rans_compress_bound_4x16(in_size, order);
-	if (!(out = malloc(*out_size)))
+	if (*out_size == 0)
+	    return NULL;
+	if (!(out_free = out = malloc(*out_size)))
 	    return NULL;
     }
-    if (*out_size == 0)
-	return NULL;
 
     unsigned char *out_end = out + *out_size;
 
@@ -1146,8 +1110,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned char *transposed = malloc(in_size);
 	unsigned int part_len[256];
 	unsigned int idx[256];
-	if (!transposed)
+	if (!transposed) {
+	    free(out_free);
 	    return NULL;
+	}
 	int i, j, x;
 
 	for (i = 0; i < N; i++) {
@@ -1209,8 +1175,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
                     best_j = j;
 		    if (j < sizeof(m)/sizeof(*m) && olen2 > out_best_len) {
 			unsigned char *tmp = realloc(out_best, olen2);
-			if (!tmp)
+			if (!tmp) {
+			    free(out_free);
 			    return NULL;
+			}
 			out_best = tmp;
 			out_best_len = olen2;
 		    }
@@ -1294,8 +1262,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned int rmeta_len, c_rmeta_len;
 	uint64_t rle_len;
 	c_rmeta_len = in_size+257;
-	if (!(meta = malloc(c_rmeta_len)))
+	if (!(meta = malloc(c_rmeta_len))) {
+	    free(out_free);
 	    return NULL;
+	}
 
 	uint8_t rle_syms[256];
 	int rle_nsyms = 0;

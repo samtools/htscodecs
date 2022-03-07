@@ -316,7 +316,10 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
     uint8_t *out = *cp_p, *cp = out;
 
     // Compute O1 frequency statistics
-    uint32_t F[256][256] = {{0}}, T[256+MAGIC] = {0};
+    uint32_t (*F)[256] = htscodecs_tls_calloc(256, (sizeof(*F)));
+    if (!F)
+	return -1;
+    uint32_t T[256+MAGIC] = {0};
     int isz4 = in_size/Nway;
     hist1_4(in, in_size, F, T);
     for (z = 1; z < Nway; z++)
@@ -374,7 +377,7 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
 	    max_val = TOTFREQ_O1_FAST;
 
 	if (normalise_freq(F[i], T[i], max_val) < 0)
-	    return -1;
+	    goto err;
 	T[i]=max_val;
 
 	// Encode our frequency array
@@ -412,7 +415,12 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
     assert(tab_size < 257*257*3);
 
     *cp_p = cp;
+    htscodecs_tls_free(F);
     return shift;
+
+ err:
+    htscodecs_tls_free(F);
+    return -1;
 }
 
 // Part of decode_freq1 below.  This decodes an order-1 frequency table

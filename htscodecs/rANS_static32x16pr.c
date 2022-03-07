@@ -42,9 +42,6 @@
 #include <sys/time.h>
 #include <limits.h>
 #include <math.h>
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
@@ -68,14 +65,6 @@
 #define TOTFREQ_O1 (1<<TF_SHIFT_O1)
 #define TOTFREQ_O1_FAST (1<<TF_SHIFT_O1_FAST)
 
-
-#ifndef NO_THREADS
-// Reuse the rANS_static4x16pr variables
-extern pthread_once_t rans_once;
-extern pthread_key_t rans_key;
-
-extern void rans_tls_init(void);
-#endif
 
 #define NX 32
 
@@ -402,9 +391,8 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 				      unsigned int in_size,
 				      unsigned char *out,
 				      unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-    RansEncSymbol syms[256][256];
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[NX];
 
@@ -413,7 +401,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -422,11 +410,19 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 	bound--;
     out_end = out + bound;
 
-    cp = out;
-
-    int shift = encode_freq1(in, in_size, 32, syms, &cp); 
-    if (shift < 0)
+    RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
+    if (!syms) {
+	free(out_free);
 	return NULL;
+    }
+
+    cp = out;
+    int shift = encode_freq1(in, in_size, 32, syms, &cp); 
+    if (shift < 0) {
+	free(out_free);
+	htscodecs_tls_free(syms);
+	return NULL;
+    }
     tab_size = cp - out;
 
     for (z = 0; z < NX; z++)
@@ -499,6 +495,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
     cp = out;
     memmove(out + tab_size, ptr, out_end-ptr);
 
+    htscodecs_tls_free(syms);
     return out;
 }
 
@@ -526,41 +523,16 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     unsigned char *c_freq = NULL;
     int i;
 
-#ifndef NO_THREADS
-    /*
-     * The calloc below is expensive as it's a large structure.  We
-     * could use malloc, but we're only initialising parts of the structure
-     * that we need to, as dictated by the frequency table.  This is far
-     * faster than initialising everything (ie malloc+memset => calloc).
-     * Not initialising the data means malformed input with mismatching
-     * frequency tables to actual data can lead to accessing of the
-     * uninitialised sfb table and in turn potential leakage of the
-     * uninitialised memory returned by malloc.  That could be anything at
-     * all, including important encryption keys used within a server (for
-     * example).
-     *
-     * However (I hope!) we don't care about leaking about the sfb symbol
-     * frequencies previously computed by an earlier execution of *this*
-     * code.  So calloc once and reuse is the fastest alternative.
-     *
-     * We do this through pthread local storage as we don't know if this
-     * code is being executed in many threads simultaneously.
-     */
-    pthread_once(&rans_once, rans_tls_init);
-
-    uint8_t *sfb_ = pthread_getspecific(rans_key);
-    if (!sfb_) {
-	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
-	pthread_setspecific(rans_key, sfb_);
-    }
-#else
-    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
-#endif
-    uint32_t s3[256][TOTFREQ_O1_FAST];
-
+    uint8_t *sfb_ = htscodecs_tls_alloc(256*
+					((TOTFREQ_O1+256)*sizeof(*sfb_)
+					 +TOTFREQ_O1_FAST * sizeof(uint32_t)
+					 +256 * sizeof(fb_t)));
     if (!sfb_)
 	return NULL;
-    fb_t fb[256][256];
+    uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])
+	(sfb_+(TOTFREQ_O1+256)*sizeof(*sfb_));
+    fb_t (*fb)[256] = (fb_t (*)[256])
+	((uint8_t *)s3 + 256*TOTFREQ_O1_FAST*sizeof(uint32_t));
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
@@ -737,15 +709,11 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(sfb_);
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(sfb_);
-#endif
+    htscodecs_tls_free(sfb_);
     free(out_free);
     free(c_freq);
 

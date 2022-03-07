@@ -46,10 +46,6 @@
 #include <math.h>
 #include <x86intrin.h>
 
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
-
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #define ROT32_SIMD
@@ -136,12 +132,6 @@ static inline __m256i _mm256_i32gather_epi32x(int *b, __m256i idx, int size) {
 #else
 #define _mm256_i32gather_epi32x _mm256_i32gather_epi32
 #endif
-
-static inline __m128i _mm_i32gather_epi32x(int *b, __m128i idx, int size) {
-    int c[4] __attribute__((aligned(32)));
-    _mm_store_si128((__m128i *)c, idx);
-    return _mm_set_epi32(b[c[3]], b[c[2]], b[c[1]], b[c[0]]);
-}
 
 unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
 					   unsigned int in_size,
@@ -673,9 +663,8 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 
 unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_size,
 					   unsigned char *out, unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-    RansEncSymbol syms[256][256] __attribute__((aligned(32)));
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[NX] __attribute__((aligned(32)));
 
@@ -693,10 +682,19 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
 	bound--;
     out_end = out + bound;
 
+    RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
+    if (!syms) {
+	free(out_free);
+	return NULL;
+    }
+
     cp = out;
     int shift = encode_freq1(in, in_size, 32, syms, &cp); 
-    if (shift < 0)
+    if (shift < 0) {
+	free(out_free);
+	htscodecs_tls_free(syms);
 	return NULL;
+    }
     tab_size = cp - out;
 
     for (z = 0; z < NX; z++)
@@ -986,20 +984,9 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
     cp = out;
     memmove(out + tab_size, ptr, out_end-ptr);
 
+    htscodecs_tls_free(syms);
     return out;
 }
-
-#ifndef NO_THREADS
-/*
- * Thread local storage per thread in the pool.
- */
-static pthread_once_t rans_once = PTHREAD_ONCE_INIT;
-static pthread_key_t rans_key;
-
-static void rans_tls_init(void) {
-    pthread_key_create(&rans_key, free);
-}
-#endif
 
 /*
  * A 32 x 32 matrix transpose and serialise from t[][] to out.
@@ -1038,22 +1025,9 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
     unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
     unsigned char *c_freq = NULL;
 
-#ifndef NO_THREADS
-    pthread_once(&rans_once, rans_tls_init);
-    uint8_t *s3_ = pthread_getspecific(rans_key);
-    if (!s3_) {
-	s3_ = malloc(256*TOTFREQ_O1*4);
-	if (!s3_)
-	    return NULL;
-	pthread_setspecific(rans_key, s3_);
-    }
-    uint32_t (*s3)[TOTFREQ_O1] = (uint32_t (*)[TOTFREQ_O1])s3_;
-
-#else
-    uint32_t (*s3)[TOTFREQ_O1] = malloc(256*TOTFREQ_O1*4);
+    uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
     if (!s3)
 	return NULL;
-#endif
     //uint32_t s3[256][TOTFREQ_O1] __attribute__((aligned(32)));
     uint32_t (*s3F)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])s3;
 
@@ -1628,15 +1602,11 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 	}
     }
 
-#ifdef NO_THREADS
-    free(s3);
-#endif
+    htscodecs_tls_free(s3);
     return out;
 
  err:
-#ifdef NO_THREADS
-    free(s3);
-#endif
+    htscodecs_tls_free(s3);
     free(out_free);
     free(c_freq);
 

@@ -38,26 +38,16 @@
 #include <stdlib.h>
 #include <math.h>
 
-// pthread_once is used to allocate large local memory blocks in hist8
-// and hist1_4.  This avoids issues with systems having small stacks, and
-// removes overheads of repeated malloc/free cycles.
-//
-// If NO_THREADS is defined it reverts back to the more traditional malloc
-// and free instead.
-#ifndef NO_THREADS
-#include <pthread.h>
-
-static pthread_once_t hist_once = PTHREAD_ONCE_INIT;
-static pthread_key_t hist_key;
-
-static void hist_tb_free(void *vp) {
-    free(vp);
-}
-
-static void hist_tls_init(void) {
-    pthread_key_create(&hist_key, hist_tb_free);
-}
-#endif
+/*
+ * Allocates size bytes from the global Thread Local Storage pool.
+ * This is shared by all subsequent calls within this thread.
+ *
+ * Note this is NOT a general purpose allocator and usage outside of this
+ * library is not advised due to assumptions and limitations in the design.
+ */
+void *htscodecs_tls_alloc(size_t size);
+void *htscodecs_tls_calloc(size_t nmemb, size_t size);
+void  htscodecs_tls_free(void *ptr);
 
 /*
  * Data transpose by N.  Common to rANS4x16 and arith_dynamic decoders.
@@ -133,22 +123,7 @@ static inline void unstripe(unsigned char *out, unsigned char *outN,
 static inline
 void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
     if (in_size > 500000) {
-	// Note this is a static inline so we allocate more blocks than
-	// we really need, so we could consider moving this initialisation
-	// code to a utils.c instead.
-	// However it's relatively bounded and not a leak.
-#ifndef NO_THREADS
-	pthread_once(&hist_once, hist_tls_init);
-	uint32_t *f0 = pthread_getspecific(hist_key);
-	if (!f0) {
-	    f0 = calloc((65536+37)*3, sizeof(uint32_t));
-	    pthread_setspecific(hist_key, f0);
-	} else {
-	    memset(f0, 0, (65536+37)*3*sizeof(*f0));
-	}
-#else
-	uint32_t *f0 = calloc((65536+37)*3, sizeof(*f0));
-#endif
+	uint32_t *f0 = htscodecs_tls_calloc((65536+37)*3, sizeof(*f0));
 	uint32_t *f1 = f0 + 65536+37;
 	uint32_t *f2 = f1 + 65536+37;
 
@@ -176,9 +151,7 @@ void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
 	    F0[i & 0xff] += f0[i] + f1[i] + f2[i];
 	    F0[i >> 8  ] += f0[i] + f1[i] + f2[i];
 	}
-#ifdef NO_THREADS
-	free(f0);
-#endif
+	htscodecs_tls_free(f0);
     } else {
 	uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
 	uint32_t i, i8 = in_size & ~7;
@@ -286,25 +259,7 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 
     unsigned char cc[5] = {0};
     if (in_size > 500000) {
-#ifndef NO_THREADS
-	pthread_once(&hist_once, hist_tls_init);
-	// NB (*F1)[259] works better on old Opterons or other systems
-	// with low N-way associative caches.  However it's slightly poorer
-	// on more modern CPUs.  Mileage may vary by CPU and compiler.
-	//
-	// Note our pthread_once key is shared by both this and hist8, so
-	// the buffer allocated here is reused by both functions and has to
-	// be allocated accordingly (hence to the larger hist8 size).
-	uint32_t (*F1)[259] = pthread_getspecific(hist_key);
-	if (!F1) {
-	    F1 = calloc((65536+37)*3, sizeof(uint32_t));
-	    pthread_setspecific(hist_key, F1);
-	} else {
-	    memset(F1, 0, 256*sizeof(*F1));
-	}
-#else
-	uint32_t (*F1)[259] = calloc(256, sizeof(*F1));
-#endif
+	uint32_t (*F1)[259] = htscodecs_tls_calloc(256, sizeof(*F1));
 	while (in < in_end-8) {
 	    memcpy(cc, in, 4); in += 4;
 	    F0[cc[4]][cc[0]]++;
@@ -337,9 +292,7 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 	    }
 	    T0[i]+=tt;
 	}
-#ifdef NO_THREADS
-	free(F1);
-#endif
+	htscodecs_tls_free(F1);
     } else {
 	while (in < in_end-8) {
 	    memcpy(cc, in, 4); in += 4;

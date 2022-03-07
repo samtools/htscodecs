@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
 	    in_sz += len;
 	}
 
-	int trials = 2;
+	int trials = 5;
 	while (trials--) {
 	    bc = malloc(nb*sizeof(*bc));
 	    bu = malloc(nb*sizeof(*bu));

@@ -46,10 +46,6 @@
 #include <math.h>
 #include <x86intrin.h>
 
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
-
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #include "rANS_static16_int.h"
@@ -791,14 +787,6 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
     return NULL;
 }
 
-#ifndef NO_THREADS
-// Reuse the rANS_static4x16pr variables
-extern pthread_once_t rans_once;
-extern pthread_key_t rans_key;
-
-extern void rans_tls_init(void);
-#endif
-
 //#define MAGIC2 111
 #define MAGIC2 179
 //#define MAGIC2 0
@@ -993,7 +981,9 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
     unsigned char *c_freq = NULL;
 
-    uint32_t s3[256][TOTFREQ_O1];
+    uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
+    if (!s3)
+	return NULL;
     uint32_t (*s3F)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])s3;
 
     if (!out)
@@ -1755,9 +1745,11 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
+    htscodecs_tls_free(s3);
     return out;
 
  err:
+    htscodecs_tls_free(s3);
     free(out_free);
     free(c_freq);
 
