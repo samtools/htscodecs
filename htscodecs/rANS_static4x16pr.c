@@ -418,7 +418,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end;
     unsigned int tab_size;
-    RansEncSymbol syms[256][256];
+
     int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
 
     if (!out) {
@@ -432,10 +432,16 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 	bound--;
     out_end = out + bound;
 
+    RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
+    if (!syms)
+	return NULL;
+
     cp = out;
     int shift = encode_freq1(in, in_size, 4, syms, &cp); 
-    if (shift < 0)
+    if (shift < 0) {
+	htscodecs_tls_free(syms);
 	return NULL;
+    }
     tab_size = cp - out;
 
     RansState rans0, rans1, rans2, rans3;
@@ -498,6 +504,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     cp = out;
     memmove(out + tab_size, ptr, out_end-ptr);
 
+    htscodecs_tls_free(syms);
     return out;
 }
 

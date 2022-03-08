@@ -890,7 +890,6 @@ unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
 					   unsigned int *out_size) {
     unsigned char *cp, *out_end;
     unsigned int tab_size;
-    RansEncSymbol syms[256][256];
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[NX];
 
@@ -908,10 +907,16 @@ unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
 	bound--;
     out_end = out + bound;
 
+    RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
+    if (!syms)
+	return NULL;
+
     cp = out;
     int shift = encode_freq1(in, in_size, 32, syms, &cp); 
-    if (shift < 0)
+    if (shift < 0) {
+	htscodecs_tls_free(syms);
 	return NULL;
+    }
     tab_size = cp - out;
 
     for (z = 0; z < NX; z++)
@@ -1177,6 +1182,7 @@ unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
     cp = out;
     memmove(out + tab_size, ptr, out_end-ptr);
 
+    htscodecs_tls_free(syms);
     return out;
 }
 
