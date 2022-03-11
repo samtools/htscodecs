@@ -416,14 +416,14 @@ int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
 static
 unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
 
     int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -433,8 +433,10 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
     out_end = out + bound;
 
     RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
-    if (!syms)
+    if (!syms) {
+	free(out_free);
 	return NULL;
+    }
 
     cp = out;
     int shift = encode_freq1(in, in_size, 4, syms, &cp); 
@@ -540,7 +542,8 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
     if (!sfb_)
 	return NULL;
-    fb_t fb[256][256];
+    //fb_t fb[256][256];
+    fb_t (*fb)[256] = htscodecs_tls_alloc(256 * sizeof(*fb));
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
@@ -796,10 +799,12 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size
 
+    htscodecs_tls_free(fb);
     htscodecs_tls_free(sfb_);
     return out;
 
  err:
+    htscodecs_tls_free(fb);
     htscodecs_tls_free(sfb_);
     free(out_free);
     free(c_freq);
@@ -1077,11 +1082,11 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 
     if (!out) {
 	*out_size = rans_compress_bound_4x16(in_size, order);
+	if (*out_size == 0)
+	    return NULL;
 	if (!(out = malloc(*out_size)))
 	    return NULL;
     }
-    if (*out_size == 0)
-	return NULL;
 
     unsigned char *out_end = out + *out_size;
 

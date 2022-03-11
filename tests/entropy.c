@@ -48,6 +48,11 @@
 #include <assert.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/time.h>
+#ifndef _WIN32
+#include <sys/resource.h>
+#include <pthread.h>
+#endif
 
 #include "htscodecs/arith_dynamic.h"
 #include "htscodecs/rANS_static.h"
@@ -100,6 +105,13 @@ int main(int argc, char **argv) {
 	}
     }
 
+#ifndef _WIN32
+    // Specify an extra small stack, eg as in Alpine linux threads.
+    // This checks we're not accidentally needing high stack usage.
+    struct rlimit r = {64*1024, 64*1024};
+    setrlimit(RLIMIT_STACK, &r);
+#endif
+
     uint32_t in_size, csize, usize;
     unsigned char *in = load(infp, &in_size);
     int order_a[] = {0,1,                            // r4x8
@@ -113,7 +125,7 @@ int main(int argc, char **argv) {
 	uint8_t *comp, *uncomp;
 	for (j = 0; j < 4; j++) {
 	    int chigh = 4, clow = 0, c;
-	    for (c = 0; c < 4; c++) {
+	    for (c = 0; c < 4; c+=(j==2)?1:4) {
 		// Test combinations of SIMD implementations
 		uint32_t chex = (clow<<8) | chigh;
 		clow  = 1<<c;
@@ -184,6 +196,12 @@ int main(int argc, char **argv) {
     }
 
     free(in);
+
+#ifndef _WIN32
+    // We wouldn't normally exit this way, but we explicitly call it to
+    // check htscodecs_tls_free_all has no leaks.
+    pthread_exit(NULL);
+#endif
 
     return 0;
 }

@@ -391,7 +391,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 				      unsigned int in_size,
 				      unsigned char *out,
 				      unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[NX];
@@ -401,7 +401,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -411,12 +411,15 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
     out_end = out + bound;
 
     RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
-    if (!syms)
+    if (!syms) {
+	free(out_free);
 	return NULL;
+    }
 
     cp = out;
     int shift = encode_freq1(in, in_size, 32, syms, &cp); 
     if (shift < 0) {
+	free(out_free);
 	htscodecs_tls_free(syms);
 	return NULL;
     }
@@ -520,12 +523,16 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     unsigned char *c_freq = NULL;
     int i;
 
-    uint8_t *sfb_ = htscodecs_tls_alloc(256*(TOTFREQ_O1+MAGIC2)*sizeof(*sfb_));
-    uint32_t s3[256][TOTFREQ_O1_FAST];
-
+    uint8_t *sfb_ = htscodecs_tls_alloc(256*
+					((TOTFREQ_O1+256)*sizeof(*sfb_)
+					 +TOTFREQ_O1_FAST * sizeof(uint32_t)
+					 +256 * sizeof(fb_t)));
     if (!sfb_)
 	return NULL;
-    fb_t fb[256][256];
+    uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])
+	(sfb_+(TOTFREQ_O1+256)*sizeof(*sfb_));
+    fb_t (*fb)[256] = (fb_t (*)[256])
+	((uint8_t *)s3 + 256*TOTFREQ_O1_FAST*sizeof(uint32_t));
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)

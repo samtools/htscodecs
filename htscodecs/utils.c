@@ -90,6 +90,9 @@ static void htscodecs_tls_free_all(void *ptr) {
 	if (tls->bufs[i])
 	    fprintf(stderr, "Free %ld = %p\n", tls->sizes[i], tls->bufs[i]);
 #endif
+	if (tls->used[i]) {
+	    fprintf(stderr, "Closing thread while TLS data is in use\n");
+	}
 	free(tls->bufs[i]);
     }
 

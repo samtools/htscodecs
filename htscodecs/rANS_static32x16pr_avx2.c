@@ -133,12 +133,6 @@ static inline __m256i _mm256_i32gather_epi32x(int *b, __m256i idx, int size) {
 #define _mm256_i32gather_epi32x _mm256_i32gather_epi32
 #endif
 
-static inline __m128i _mm_i32gather_epi32x(int *b, __m128i idx, int size) {
-    int c[4] __attribute__((aligned(32)));
-    _mm_store_si128((__m128i *)c, idx);
-    return _mm_set_epi32(b[c[3]], b[c[2]], b[c[1]], b[c[0]]);
-}
-
 unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
 					   unsigned int in_size,
 					   unsigned char *out,
@@ -669,7 +663,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 
 unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_size,
 					   unsigned char *out, unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[NX] __attribute__((aligned(32)));
@@ -689,12 +683,15 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
     out_end = out + bound;
 
     RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
-    if (!syms)
+    if (!syms) {
+	free(out_free);
 	return NULL;
+    }
 
     cp = out;
     int shift = encode_freq1(in, in_size, 32, syms, &cp); 
     if (shift < 0) {
+	free(out_free);
 	htscodecs_tls_free(syms);
 	return NULL;
     }

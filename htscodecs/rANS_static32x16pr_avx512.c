@@ -440,7 +440,7 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
 					     unsigned int in_size,
 					     unsigned char *out,
 					     unsigned int *out_size) {
-    unsigned char *cp, *out_end;
+    unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
     int bound = rans_compress_bound_4x16(in_size,1)-20, z;
     RansState ransN[32] __attribute__((aligned(64)));
@@ -460,12 +460,15 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
     out_end = out + bound;
 
     RansEncSymbol (*syms)[256] = htscodecs_tls_alloc(256 * (sizeof(*syms)));
-    if (!syms)
+    if (!syms) {
+	free(out_free);
 	return NULL;
+    }
 
     cp = out;
     int shift = encode_freq1(in, in_size, 32, syms, &cp); 
     if (shift < 0) {
+	free(out_free);
 	htscodecs_tls_free(syms);
 	return NULL;
     }
