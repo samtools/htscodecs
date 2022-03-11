@@ -88,7 +88,7 @@ static unsigned char *load(FILE *infp, uint32_t *lenp) {
 
 int main(int argc, char **argv) {
     FILE *infp = stdin;
-
+    int result = EXIT_SUCCESS;
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);
         _setmode(_fileno(stdout), _O_BINARY);
@@ -125,6 +125,8 @@ int main(int argc, char **argv) {
 	uint8_t *comp, *uncomp;
 	for (j = 0; j < 4; j++) {
 	    int chigh = 4, clow = 0, c;
+            uint8_t *comp0 = NULL;
+            uint32_t csize0 = 0;
 	    for (c = 0; c < 4; c+=(j==2)?1:4) {
 		// Test combinations of SIMD implementations
 		uint32_t chex = (clow<<8) | chigh;
@@ -160,6 +162,16 @@ int main(int argc, char **argv) {
 		    printf("%10s-o%d      \t", codec[j], order);
 		printf("%10d uncomp, %10d comp", in_size, csize);
 
+                if (comp0) {
+                    if (csize != csize0 || memcmp(comp, comp0, csize) != 0) {
+                        printf("\tFAIL (comp)\n");
+                        result = EXIT_FAILURE;
+                    }
+                } else {
+                    csize0 = csize;
+                    comp0 = comp;
+                }
+
 		// decode
 		switch (j) {
 		case 0: // r4x8
@@ -183,23 +195,31 @@ int main(int argc, char **argv) {
 		    break;
 		}
 
-		if (usize != in_size || memcmp(in, uncomp, usize) != 0)
+		if (usize != in_size || memcmp(in, uncomp, usize) != 0) {
 		    printf("\tFAIL\n");
-		else
+                    result = EXIT_FAILURE;
+		} else {
 		    printf("\tpass\n");
+                }
 
-		free(comp);
+		if (comp != comp0)
+                    free(comp);
 		free(uncomp);
 	    }
+            free(comp0);
 	}
 	printf("\n");
     }
 
     free(in);
 
+    if (result != EXIT_SUCCESS)
+        return result;
+
 #ifndef _WIN32
     // We wouldn't normally exit this way, but we explicitly call it to
-    // check htscodecs_tls_free_all has no leaks.
+    // check htscodecs_tls_free_all has no leaks.  Note that this will
+    // cause the program to return an exit status of zero.
     pthread_exit(NULL);
 #endif
 

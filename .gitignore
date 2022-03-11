@@ -31,6 +31,7 @@ tests/*.trs
 tests/.deps/
 tests/.libs/
 tests/arith_dynamic
+tests/entropy
 tests/fqzcomp_qual
 tests/Makefile
 tests/rans4x16pr
