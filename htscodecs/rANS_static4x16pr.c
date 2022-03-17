@@ -542,8 +542,9 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
     if (!sfb_)
 	return NULL;
-    //fb_t fb[256][256];
     fb_t (*fb)[256] = htscodecs_tls_alloc(256 * sizeof(*fb));
+    if (!fb)
+	goto err;
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
@@ -861,7 +862,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 #if defined(bit_AVX2)
 	    have_avx2 = ebx & bit_AVX2;
 #endif
-#if defined(bit_AVX2)
+#if defined(bit_AVX512F)
 	    have_avx512f = ebx & bit_AVX512F;
 #endif
 	}
@@ -931,7 +932,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 #if defined(bit_AVX2)
 	    have_avx2 = ebx & bit_AVX2;
 #endif
-#if defined(bit_AVX2)
+#if defined(bit_AVX512F)
 	    have_avx512f = ebx & bit_AVX512F;
 #endif
 	}
@@ -1079,12 +1080,13 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 				     int order) {
     unsigned int c_meta_len;
     uint8_t *meta = NULL, *rle = NULL, *packed = NULL;
+    uint8_t *out_free = NULL;
 
     if (!out) {
 	*out_size = rans_compress_bound_4x16(in_size, order);
 	if (*out_size == 0)
 	    return NULL;
-	if (!(out = malloc(*out_size)))
+	if (!(out_free = out = malloc(*out_size)))
 	    return NULL;
     }
 
@@ -1108,8 +1110,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned char *transposed = malloc(in_size);
 	unsigned int part_len[256];
 	unsigned int idx[256];
-	if (!transposed)
+	if (!transposed) {
+	    free(out_free);
 	    return NULL;
+	}
 	int i, j, x;
 
 	for (i = 0; i < N; i++) {
@@ -1171,8 +1175,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
                     best_j = j;
 		    if (j < sizeof(m)/sizeof(*m) && olen2 > out_best_len) {
 			unsigned char *tmp = realloc(out_best, olen2);
-			if (!tmp)
+			if (!tmp) {
+			    free(out_free);
 			    return NULL;
+			}
 			out_best = tmp;
 			out_best_len = olen2;
 		    }
@@ -1256,8 +1262,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	unsigned int rmeta_len, c_rmeta_len;
 	uint64_t rle_len;
 	c_rmeta_len = in_size+257;
-	if (!(meta = malloc(c_rmeta_len)))
+	if (!(meta = malloc(c_rmeta_len))) {
+	    free(out_free);
 	    return NULL;
+	}
 
 	uint8_t rle_syms[256];
 	int rle_nsyms = 0;

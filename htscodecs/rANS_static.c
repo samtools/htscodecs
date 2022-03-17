@@ -570,17 +570,8 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     unsigned int x;
     unsigned int out_sz, in_sz;
     char *out_buf = NULL;
-    RansDecSymbol32 (*syms)[256];
-    uint8_t *mem = htscodecs_tls_calloc(256, sizeof(ari_decoder)
-					+ sizeof(*syms));
-    if (!mem)
-	return NULL;
-    ari_decoder *const D = (ari_decoder *)mem;
-    syms = (RansDecSymbol32 (*)[256])(mem + 256*sizeof(ari_decoder));
-    int16_t map[256], map_i = 0;
-    
-    memset(map, -1, 256*sizeof(*map));
 
+    // Sanity checking
     if (in_size < 27) // Need at least this many bytes to start
         return NULL;
 
@@ -594,6 +585,18 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 
     if (out_sz >= INT_MAX)
 	return NULL; // protect against some overflow cases
+
+    // Allocate decoding lookup tables
+    RansDecSymbol32 (*syms)[256];
+    uint8_t *mem = htscodecs_tls_calloc(256, sizeof(ari_decoder)
+					+ sizeof(*syms));
+    if (!mem)
+	return NULL;
+    ari_decoder *const D = (ari_decoder *)mem;
+    syms = (RansDecSymbol32 (*)[256])(mem + 256*sizeof(ari_decoder));
+    int16_t map[256], map_i = 0;
+    
+    memset(map, -1, 256*sizeof(*map));
 
     // For speeding up the fuzzer only.
     // Small input can lead to large uncompressed data.
@@ -689,10 +692,10 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     RansState rans0, rans1, rans2, rans3;
     uint8_t *ptr = cp;
     if (cp > ptr_end - 16) goto cleanup; // Not enough input bytes left
-    RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans2, &ptr); if (rans2 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans3, &ptr); if (rans3 < RANS_BYTE_L) return NULL;
+    RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans2, &ptr); if (rans2 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans3, &ptr); if (rans3 < RANS_BYTE_L) goto cleanup;
 
     RansState R[4];
     R[0] = rans0;
