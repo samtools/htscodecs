@@ -121,9 +121,6 @@
 enum name_type {N_ERR = -1, N_TYPE = 0, N_ALPHA, N_CHAR, N_DIGITS0, N_DZLEN, N_DUP, N_DIFF, 
 		N_DIGITS, N_DDELTA, N_DDELTA0, N_MATCH, N_NOP, N_END, N_ALL};
 
-char *types[]={"TYPE", "ALPHA", "CHAR", "DIG0", "DZLEN", "DUP", "DIFF",
-	       "DIGITS", "DDELTA", "DDELTA0", "MATCH", "NOP", "END"};
-
 typedef struct trie {
     char c;
     int count;
@@ -1299,8 +1296,8 @@ static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
  * Returns a malloced buffer holding compressed data of size *out_len,
  *         or NULL on failure
  */
-uint8_t *encode_names(char *blk, int len, int level, int use_arith,
-		      int *out_len, int *last_start_p) {
+uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+			   int *out_len, int *last_start_p) {
     int last_start = 0, i, j, nreads;
 
     // Count lines
@@ -1505,13 +1502,20 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
     return out;
 }
 
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *encode_names(char *blk, int len, int level, int use_arith,
+		      int *out_len, int *last_start_p) {
+    return tok3_encode_names(blk, len, level, use_arith, out_len,
+			     last_start_p);
+}
+
 /*
  * Decodes a compressed block of read names into \0 separated names.
  * The size of the data returned (malloced) is in *out_len.
  *
  * Returns NULL on failure.
  */
-uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
     if (sz < 9)
 	return NULL;
 
@@ -1658,4 +1662,9 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
  err:
     free_context(ctx);
     return NULL;
+}
+
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+    return tok3_decode_names(in, sz, out_len);
 }

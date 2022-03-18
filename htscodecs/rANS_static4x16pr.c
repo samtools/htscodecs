@@ -340,7 +340,7 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 
 //-----------------------------------------------------------------------------
 
-double fast_log(double a) {
+static double fast_log(double a) {
   union { double d; long long x; } u = { a };
   return (u.x - 4606921278410026770) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
 }
@@ -349,7 +349,7 @@ double fast_log(double a) {
 // 10 bit means smaller memory footprint when decoding and
 // more speed due to cache hits, but it *may* be a poor
 // compression fit.
-int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
+int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
     int i, j;
 
     double e10 = 0, e12 = 0;
@@ -1270,8 +1270,8 @@ unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
 	uint8_t rle_syms[256];
 	int rle_nsyms = 0;
 	uint64_t rmeta_len64;
-	rle = rle_encode(in, in_size, meta, &rmeta_len64,
-			 rle_syms, &rle_nsyms, NULL, &rle_len);
+	rle = hts_rle_encode(in, in_size, meta, &rmeta_len64,
+			     rle_syms, &rle_nsyms, NULL, &rle_len);
 	memmove(meta+1+rle_nsyms, meta, rmeta_len64);
 	meta[0] = rle_nsyms;
 	memcpy(meta+1, rle_syms, rle_nsyms);
@@ -1591,9 +1591,9 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	int rle_nsyms = *meta ? *meta : 256;
 	if (u_meta_size < 1+rle_nsyms)
 	    goto err;
-	if (!rle_decode(tmp1, tmp1_size,
-			meta+1+rle_nsyms, u_meta_size-(1+rle_nsyms),
-			meta+1, rle_nsyms, tmp2, &unrle_size))
+	if (!hts_rle_decode(tmp1, tmp1_size,
+			    meta+1+rle_nsyms, u_meta_size-(1+rle_nsyms),
+			    meta+1, rle_nsyms, tmp2, &unrle_size))
 	    goto err;
 	tmp3_size = tmp2_size = unrle_size;
 	free(meta_free);

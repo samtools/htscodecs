@@ -78,7 +78,7 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
 unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 				       unsigned char *out, unsigned int out_sz);
 
-int compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S);
+int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S);
 
 // Rounds to next power of 2.
 // credit to http://graphics.stanford.edu/~seander/bithacks.html
@@ -363,7 +363,7 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
     // Decide between 10-bit and 12-bit freqs.
     // Fills out S[] to hold the new scaled maximum value.
     int S[256] = {0};
-    int shift = compute_shift(T, F, T, S);
+    int shift = rans_compute_shift(T, F, T, S);
 
     // Normalise so T[i] == TOTFREQ_O1
     for (i = 0; i < 256; i++) {
