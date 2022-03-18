@@ -97,10 +97,10 @@ static void rle_find_syms(uint8_t *data, uint64_t data_len,
     *rle_nsyms = n;
 }
 
-uint8_t *rle_encode(uint8_t *data, uint64_t data_len,
-		    uint8_t *run,  uint64_t *run_len,
-		    uint8_t *rle_syms, int *rle_nsyms,
-		    uint8_t *out, uint64_t *out_len) {
+uint8_t *hts_rle_encode(uint8_t *data, uint64_t data_len,
+			uint8_t *run,  uint64_t *run_len,
+			uint8_t *rle_syms, int *rle_nsyms,
+			uint8_t *out, uint64_t *out_len) {
     uint64_t i, j, k;
     if (!out)
 	if (!(out = malloc(data_len*2)))
@@ -139,10 +139,10 @@ uint8_t *rle_encode(uint8_t *data, uint64_t data_len,
 
 // On input *out_len holds the allocated size of out[].
 // On output it holds the used size of out[].
-uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
-		    uint8_t *run, uint64_t run_len,
-		    uint8_t *rle_syms, int rle_nsyms,
-		    uint8_t *out, uint64_t *out_len) {
+uint8_t *hts_rle_decode(uint8_t *lit, uint64_t lit_len,
+			uint8_t *run, uint64_t run_len,
+			uint8_t *rle_syms, int rle_nsyms,
+			uint8_t *out, uint64_t *out_len) {
     uint64_t j;
     uint8_t *run_end = run + run_len;
 
@@ -188,3 +188,20 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
     return NULL;
 }
 
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *rle_encode(uint8_t *data, uint64_t data_len,
+		    uint8_t *run,  uint64_t *run_len,
+		    uint8_t *rle_syms, int *rle_nsyms,
+		    uint8_t *out, uint64_t *out_len) {
+    return hts_rle_encode(data, data_len, run, run_len,
+			  rle_syms, rle_nsyms, out, out_len);
+}
+
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,
+		    uint8_t *run, uint64_t run_len,
+		    uint8_t *rle_syms, int rle_nsyms,
+		    uint8_t *out, uint64_t *out_len) {
+    return hts_rle_decode(lit, lit_len, run, run_len,
+			  rle_syms, rle_nsyms, out, out_len);
+}

@@ -126,7 +126,8 @@ static int encode(int argc, char **argv) {
 	int out_len;
 	unsigned char *in = load(fp, &in_len), *out;
 	if (!in) exit(1);
-	out = encode_names((char *)in, in_len, level, use_arith, &out_len, NULL);
+	out = tok3_encode_names((char *)in, in_len, level, use_arith,
+				&out_len, NULL);
 	if (!out || write(1, out, out_len) < out_len) exit(1);   // encoded data
 	free(in);
 	free(out);
@@ -142,7 +143,8 @@ static int encode(int argc, char **argv) {
 	    len += blk_offset;
 
 	    int out_len;
-	    uint8_t *out = encode_names(blk, len, level, use_arith, &out_len, &last_start);
+	    uint8_t *out = tok3_encode_names(blk, len, level, use_arith,
+					     &out_len, &last_start);
 	    if (write(1, &out_len, 4) < 4) exit(1);
 	    if (write(1, out, out_len) < out_len) exit(1);   // encoded data
 	    free(out);
@@ -177,7 +179,7 @@ static int decode(int argc, char **argv) {
 	unsigned char *in = load(stdin, &in_len), *out;
 	if (!in) exit(1);
 
-	if ((out = decode_names(in, in_len, &out_sz)) == NULL)
+	if ((out = tok3_decode_names(in, in_len, &out_sz)) == NULL)
 	    exit(1);
 	if (write(1, out, out_sz) != out_sz)
 	    exit(1);
@@ -195,7 +197,7 @@ static int decode(int argc, char **argv) {
 		return -1;
 	    }
 
-	    if ((out = decode_names(in, in_sz, &out_sz)) == NULL) {
+	    if ((out = tok3_decode_names(in, in_sz, &out_sz)) == NULL) {
 		free(in);
 		return -1;
 	    }
