@@ -1382,6 +1382,8 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	if (c_meta_len >= in_size)
 	    return NULL;
 	unsigned int N = in[c_meta_len++];
+        if (N < 1)  // Must be at least one stripe
+            return NULL;
 	unsigned int clenN[256], ulenN[256], idxN[256];
 	if (!out) {
 	    if (ulen >= INT_MAX)
