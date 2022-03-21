@@ -111,10 +111,15 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
     if (normalise_freq(F, fsum, TOTFREQ) < 0)
 	return NULL;
 
-    // Encode statistics.
+    // Encode statistics and build lookup tables for SIMD encoding.
+    uint32_t SB[256], SA[256], SD[256], SC[256];
     for (x = rle = j = 0; j < 256; j++) {
 	if (F[j]) {
 	    RansEncSymbolInit(&syms[j], x, F[j], TF_SHIFT);
+            SB[j] = syms[j].x_max;
+            SA[j] = syms[j].rcp_freq;
+            SD[j] = (syms[j].cmpl_freq<<0) | ((syms[j].rcp_shift-32)<<16);
+            SC[j] = syms[j].bias;
 	    x += F[j];
 	}
     }
@@ -125,15 +130,6 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
     z = i = in_size&(32-1);
     while (z-- > 0)
       RansEncPutSymbol(&ransN[z], &ptr, &syms[in[in_size-(i-z)]]);
-
-    // Build lookup tables for SIMD encoding
-    uint32_t SB[256], SA[256], SD[256], SC[256];
-    for (i = 0; i < 256; i++) {
-	SB[i] = syms[i].x_max;
-	SA[i] = syms[i].rcp_freq;
-	SD[i] = (syms[i].cmpl_freq<<0) | ((syms[i].rcp_shift-32)<<16);
-	SC[i] = syms[i].bias;
-    }
 
 #define LOAD512(a,b)					 \
     __m512i a##1 = _mm512_load_si512((__m512i *)&b[0]); \
