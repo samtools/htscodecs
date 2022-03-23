@@ -799,13 +799,17 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
 static inline void transpose_and_copy(uint8_t *out, int iN[32],
 				      uint8_t t[32][32]) {
     int z;
-//  for (z = 0; z < NX; z++) {
-//      int k;
-//      for (k = 0; k < 32; k++)
-//  	out[iN[z]+k] = t[k][z];
-//      iN[z] += 32;
-//  }
-
+#ifdef UBSAN
+    // Simplified version to avoid undefined behaviour sanitiser warnings.
+    for (z = 0; z < NX; z++) {
+	int k;
+	for (k = 0; k < 32; k++)
+	    out[iN[z]+k] = t[k][z];
+	iN[z] += 32;
+    }
+#else
+    // Unaligned access.  We know we can get away with this as this
+    // code is only ever executed on x86 platforms which permit this.
     for (z = 0; z < NX; z+=4) {
 	*(uint64_t *)&out[iN[z]] =
 	    ((uint64_t)(t[0][z])<< 0) +
@@ -960,6 +964,7 @@ static inline void transpose_and_copy(uint8_t *out, int iN[32],
 	iN[z+2] += 32;
 	iN[z+3] += 32;
     }
+#endif
 }
 
 unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
@@ -1386,7 +1391,8 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		uint32_t S = s3[l[z]][m];
 		unsigned char c = S & 0xff;
 		out[i4[z]++] = c;
-		R[z] = (S>>(TF_SHIFT_O1+8)) * (R[z]>>TF_SHIFT_O1) +
+		uint32_t F = S>>(TF_SHIFT_O1+8);
+		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
 		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
 		l[z] = c;
