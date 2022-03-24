@@ -505,7 +505,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp+16 > cp_end+8)
+    if (cp_end + 8 - cp < NX * 4)
 	goto err;
 
     int z;
@@ -1024,7 +1024,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     free(c_freq);
     c_freq = NULL;
 
-    if (cp+16 > cp_end)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     RansState R[NX];

@@ -286,6 +286,9 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
+    if (cp_end + 8 - cp < 32 * 4)
+        goto err;
+
     int z;
     RansState Rv[32] __attribute__((aligned(64)));
     for (z = 0; z < 32; z++) {
@@ -700,7 +703,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
     free(c_freq);
     c_freq = NULL;
 
-    if (cp+16 > cp_end)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     RansState R[NX] __attribute__((aligned(64)));
