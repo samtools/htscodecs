@@ -1580,7 +1580,6 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 		goto err;
 	}
     } else {
-	tmp1 = NULL;
 	tmp1_size = 0;
     }
     tmp2_size = tmp3_size = tmp1_size;

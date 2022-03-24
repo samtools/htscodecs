@@ -1140,7 +1140,6 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
 		goto err;
 	}
     } else {
-	tmp1 = NULL;
 	tmp1_size = 0;
     }
 
