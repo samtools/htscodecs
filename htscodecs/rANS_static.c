@@ -586,6 +586,15 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     if (out_sz >= INT_MAX)
 	return NULL; // protect against some overflow cases
 
+    // For speeding up the fuzzer only.
+    // Small input can lead to large uncompressed data.
+    // We reject this as it just slows things up instead of testing more code
+    // paths (once we've verified a few times for large data).
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    if (out_sz > 100000)
+	return NULL;
+#endif
+
     // Allocate decoding lookup tables
     RansDecSymbol32 (*syms)[256];
     uint8_t *mem = htscodecs_tls_calloc(256, sizeof(ari_decoder)
@@ -597,15 +606,6 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     int16_t map[256], map_i = 0;
     
     memset(map, -1, 256*sizeof(*map));
-
-    // For speeding up the fuzzer only.
-    // Small input can lead to large uncompressed data.
-    // We reject this as it just slows things up instead of testing more code
-    // paths (once we've verified a few times for large data).
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-    if (out_sz > 100000)
-	return NULL;
-#endif
 
     if (!D) goto cleanup;
     /* These memsets prevent illegal memory access in syms due to
