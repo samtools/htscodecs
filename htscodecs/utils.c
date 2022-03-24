@@ -169,7 +169,8 @@ void *htscodecs_tls_calloc(size_t nmemb, size_t size) {
     fprintf(stderr, "htscodecs_tls_calloc(%ld)\n", nmemb*size);
 #endif
     void *ptr = htscodecs_tls_alloc(nmemb * size);
-    memset(ptr, 0, nmemb * size);
+    if (ptr)
+        memset(ptr, 0, nmemb * size);
     return ptr;
 }
 
