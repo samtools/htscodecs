@@ -9,6 +9,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign])
 AM_MAINTAINER_MODE
+AM_EXTRA_RECURSIVE_TARGETS([fuzz])
 
 # For my own benefit, here's a summary of how versioning should work.
 #
