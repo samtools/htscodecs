@@ -42,10 +42,6 @@
 #include <ctype.h>
 
 #include "htscodecs/fqzcomp_qual.h"
-#include "htscodecs/fqzcomp_qual.c"
-#undef NSYM
-#define MODEL_256 // Prevent double definition
-#include "htscodecs/arith_dynamic.c"
 
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     size_t uncomp_size;

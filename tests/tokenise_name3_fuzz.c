@@ -42,13 +42,9 @@
 
 #include "htscodecs/tokenise_name3.h"
 
-#include "htscodecs/arith_dynamic.c"
-#include "htscodecs/rANS_static4x16pr.c"
-#include "htscodecs/tokenise_name3.c"
-
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     unsigned int uncomp_size;
-    unsigned char *uncomp = decode_names(in, in_size, &uncomp_size);
+    unsigned char *uncomp = tok3_decode_names(in, in_size, &uncomp_size);
     if (uncomp)
 	free(uncomp);
     
