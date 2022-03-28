@@ -449,7 +449,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ] __attribute__((aligned(32))); // For TF_SHIFT <= 12
 
@@ -471,7 +471,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp_end + 8 - cp < NX * 4)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -490,6 +490,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     __m256i maskv  = _mm256_set1_epi32(mask); // set mask in all lanes
     LOAD(Rv, R);
 
+    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	//for (z = 0; z < NX; z++)
 	//  m[z] = R[z] & mask;
@@ -519,6 +520,14 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 	Rv2 = _mm256_add_epi32(
 		  _mm256_mullo_epi32(
 		      _mm256_srli_epi32(Rv2,TF_SHIFT), fv2), bv2);
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	if ((uint8_t *)sp+64 > cp_end) {
+	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = overflow + sizeof(overflow);
+	}
 
 	// Tricky one:  out[i+z] = s[z];
 	//             ---h---g ---f---e  ---d---c ---b---a

@@ -591,7 +591,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]; // For TF_SHIFT <= 12
 
@@ -613,7 +613,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp+16 > cp_end+8)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -652,6 +652,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
     // of the manual tuning benefits.  Short of dropping to assembly, for now
     // I would recommend using gcc to compile this file.
     uint16_t *sp = (uint16_t *)cp;
+    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	// Decode freq, bias and symbol from s3 lookups
 	uint32x4_t Sv1, Sv2, Sv3, Sv4, Sv5, Sv6, Sv7, Sv8;
@@ -752,6 +753,15 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
 	uint32_t imask2 = vaddvq_u32(vandq_u32(Rlt2, bit));
 	uint32_t imask3 = vaddvq_u32(vandq_u32(Rlt3, bit));
 	uint32_t imask4 = vaddvq_u32(vandq_u32(Rlt4, bit));
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	if ((uint8_t *)sp+64 > cp_end) {
+	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = overflow + sizeof(overflow);
+	}
+
 	uint16x8_t norm12 =  vld1q_u16(sp);
 	sp += nbits[imask1] + nbits[imask2];
 	uint16x8_t norm34 =  vld1q_u16(sp);
