@@ -483,7 +483,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ] __attribute__((aligned(32))); // For TF_SHIFT <= 12
 
@@ -505,7 +505,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp_end + 8 - cp < NX * 4)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -524,6 +524,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
     __m128i maskv  = _mm_set1_epi32(mask); // set mask in all lanes
     LOAD128(Rv, R);
 
+    uint8_t overflow[72+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	//for (z = 0; z < NX; z++)
 	//  m[z] = R[z] & mask;
@@ -625,6 +626,17 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
 	    P(0,4,8,12),
 	};
 #undef _
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	// 72 = 7*8(imask1..7) + 16;  worse case for 8th _mm_loadu_si128 call.
+	// An extra 64 bytes is to avoid triggering this multiple times
+	// after we swap sp/cp_end over.
+	if ((uint8_t *)sp+72 > cp_end) {
+	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = (uint8_t *)overflow + sizeof(overflow);
+	}
 
 	// Shuffle the renorm values to correct lanes and incr sp pointer
 	__m128i Vv1 = _mm_cvtepu16_epi32(_mm_loadu_si128((__m128i *)sp));
@@ -1028,7 +1040,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -1054,7 +1066,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	LOAD128(Lv, l);
 
 	isz4 -= 64;
-	for (; i4[0] < isz4; ) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+72 < ptr_end; ) {
 	    //for (z = 0; z < NX; z++)
 	    //  m[z] = R[z] & mask;
 	    __m128i masked1 = _mm_and_si128(Rv1, maskv);
@@ -1394,7 +1406,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		uint32_t F = S>>(TF_SHIFT_O1+8);
 		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		l[z] = c;
 	    }
 	}
@@ -1408,7 +1420,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	    out[i4[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1+8)) * (R[z]>>TF_SHIFT_O1) +
 		((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    l[z] = c;
 	}
     } else {
@@ -1422,7 +1434,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	LOAD128(Lv, l);
 
 	isz4 -= 64;
-	for (; i4[0] < isz4; ) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+72 < ptr_end; ) {
 	    //for (z = 0; z < NX; z++)
 	    //  m[z] = R[z] & mask;
 	    __m128i masked1 = _mm_and_si128(Rv1, maskv);
@@ -1707,7 +1719,6 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		transpose_and_copy(out, i4, tbuf);
 		tidx = 0;
 	    }
-
 	}
 	isz4 += 64;
 
@@ -1731,7 +1742,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		out[i4[z]++] = c;
 		R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		l[z] = c;
 	    }
 	}
@@ -1745,7 +1756,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	    out[i4[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    l[z] = c;
 	}
     }

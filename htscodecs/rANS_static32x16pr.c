@@ -279,7 +279,7 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]; // For TF_SHIFT <= 12
 
@@ -301,7 +301,7 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp_end + 8 - cp < NX * 4)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -314,6 +314,7 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 
     int out_end = (out_sz&~(NX-1));
     const uint32_t mask = (1u << TF_SHIFT)-1;
+    cp_end -= NX*2; // worst case for renorm bytes
 
     // assume NX is divisible by 4
     assert(NX%4==0);
@@ -339,11 +340,19 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 	    out[i+z+2] = S[2];
 	    out[i+z+3] = S[3];
 
-	    RansDecRenorm(&R[z+0], &cp);
-	    RansDecRenorm(&R[z+1], &cp);
-	    RansDecRenorm(&R[z+2], &cp);
-	    RansDecRenorm(&R[z+3], &cp);
-
+	    if (cp < cp_end) {
+		// 6.8% (clang 13) performance hit, but safe.
+		// Plus we don't expect scalar version to be used much.
+		RansDecRenorm(&R[z+0], &cp);
+		RansDecRenorm(&R[z+1], &cp);
+		RansDecRenorm(&R[z+2], &cp);
+		RansDecRenorm(&R[z+3], &cp);
+	    } else {
+		RansDecRenormSafe(&R[z+0], &cp, cp_end+NX*2);
+		RansDecRenormSafe(&R[z+1], &cp, cp_end+NX*2);
+		RansDecRenormSafe(&R[z+2], &cp, cp_end+NX*2);
+		RansDecRenormSafe(&R[z+3], &cp, cp_end+NX*2);
+	    }
 	    if (NX%8==0) {
 		z += 4;
 		S[0] = s3[R[z+0] & mask];
@@ -365,10 +374,17 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 		out[i+z+2] = S[2];
 		out[i+z+3] = S[3];
 
-		RansDecRenorm(&R[z+0], &cp);
-		RansDecRenorm(&R[z+1], &cp);
-		RansDecRenorm(&R[z+2], &cp);
-		RansDecRenorm(&R[z+3], &cp);
+		if (cp < cp_end) {
+		    RansDecRenorm(&R[z+0], &cp);
+		    RansDecRenorm(&R[z+1], &cp);
+		    RansDecRenorm(&R[z+2], &cp);
+		    RansDecRenorm(&R[z+3], &cp);
+		} else {
+		    RansDecRenormSafe(&R[z+0], &cp, cp_end+NX*2);
+		    RansDecRenormSafe(&R[z+1], &cp, cp_end+NX*2);
+		    RansDecRenormSafe(&R[z+2], &cp, cp_end+NX*2);
+		    RansDecRenormSafe(&R[z+3], &cp, cp_end+NX*2);
+		}
 	    }
 	}
     }
@@ -579,7 +595,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 	goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size - 2*NX;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -629,10 +645,10 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 		    RansDecRenorm(&R[z+2], &ptr);
 		    RansDecRenorm(&R[z+3], &ptr);
 		} else {
-		    RansDecRenormSafe(&R[z+0], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+1], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+2], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+3], &ptr, ptr_end+8);
+		    RansDecRenormSafe(&R[z+0], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+1], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+2], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+3], &ptr, ptr_end+2*NX);
 		}
 	    }
 	}
@@ -644,7 +660,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 	    out[i4[NX-1]] = c;
 	    R[NX-1] = fb[l[NX-1]][c].f * (R[NX-1]>>TF_SHIFT_O1) +
 		m - fb[l[NX-1]][c].b;
-	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 8);
+	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 2*NX);
 	    l[NX-1] = c;
 	}
     } else {
@@ -690,10 +706,10 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 		    RansDecRenorm(&R[z+2], &ptr);
 		    RansDecRenorm(&R[z+3], &ptr);
 		} else {
-		    RansDecRenormSafe(&R[z+0], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+1], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+2], &ptr, ptr_end+8);
-		    RansDecRenormSafe(&R[z+3], &ptr, ptr_end+8);
+		    RansDecRenormSafe(&R[z+0], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+1], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+2], &ptr, ptr_end+2*NX);
+		    RansDecRenormSafe(&R[z+3], &ptr, ptr_end+2*NX);
 		}
 	    }
 	}
@@ -704,7 +720,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 	    out[i4[NX-1]] = l[NX-1] = S&0xff;
 	    R[NX-1] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[NX-1]>>TF_SHIFT_O1_FAST)
 		+ ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 8);
+	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 2*NX);
 	}
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size

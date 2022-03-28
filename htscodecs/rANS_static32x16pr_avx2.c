@@ -449,7 +449,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ] __attribute__((aligned(32))); // For TF_SHIFT <= 12
 
@@ -471,7 +471,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp_end + 8 - cp < NX * 4)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -490,6 +490,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     __m256i maskv  = _mm256_set1_epi32(mask); // set mask in all lanes
     LOAD(Rv, R);
 
+    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	//for (z = 0; z < NX; z++)
 	//  m[z] = R[z] & mask;
@@ -519,6 +520,14 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 	Rv2 = _mm256_add_epi32(
 		  _mm256_mullo_epi32(
 		      _mm256_srli_epi32(Rv2,TF_SHIFT), fv2), bv2);
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	if ((uint8_t *)sp+64 > cp_end) {
+	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = overflow + sizeof(overflow);
+	}
 
 	// Tricky one:  out[i+z] = s[z];
 	//             ---h---g ---f---e  ---d---c ---b---a
@@ -1069,7 +1078,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 	goto err;
 
     RansState R[NX] __attribute__((aligned(32)));
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -1103,7 +1112,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 
     if (shift == TF_SHIFT_O1) {
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m256i masked1 = _mm256_and_si256(Rv1, maskv);
 	    __m256i masked2 = _mm256_and_si256(Rv2, maskv);
@@ -1335,7 +1344,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 		uint32_t F = S>>(TF_SHIFT_O1+8);
 		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -1350,7 +1359,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 	    uint32_t F = S>>(TF_SHIFT_O1+8);
 	    R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     } else {
@@ -1359,7 +1368,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 	// SIMD version ends decoding early as it reads at most 64 bytes
 	// from input via 4 vectorised loads.
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m256i masked1 = _mm256_and_si256(Rv1, maskv);
 	    __m256i masked2 = _mm256_and_si256(Rv2, maskv);
@@ -1583,7 +1592,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 		out[iN[z]++] = c;
 		R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -1597,7 +1606,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 	    out[iN[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     }

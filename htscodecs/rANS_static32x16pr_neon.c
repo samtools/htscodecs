@@ -591,7 +591,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]; // For TF_SHIFT <= 12
 
@@ -613,7 +613,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp+16 > cp_end+8)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     int z;
@@ -652,6 +652,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
     // of the manual tuning benefits.  Short of dropping to assembly, for now
     // I would recommend using gcc to compile this file.
     uint16_t *sp = (uint16_t *)cp;
+    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	// Decode freq, bias and symbol from s3 lookups
 	uint32x4_t Sv1, Sv2, Sv3, Sv4, Sv5, Sv6, Sv7, Sv8;
@@ -752,6 +753,15 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
 	uint32_t imask2 = vaddvq_u32(vandq_u32(Rlt2, bit));
 	uint32_t imask3 = vaddvq_u32(vandq_u32(Rlt3, bit));
 	uint32_t imask4 = vaddvq_u32(vandq_u32(Rlt4, bit));
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	if ((uint8_t *)sp+64 > cp_end) {
+	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = overflow + sizeof(overflow);
+	}
+
 	uint16x8_t norm12 =  vld1q_u16(sp);
 	sp += nbits[imask1] + nbits[imask2];
 	uint16x8_t norm34 =  vld1q_u16(sp);
@@ -1492,7 +1502,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -1517,7 +1527,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	// Follow with 2nd copy doing scalar code instead?
 	unsigned char tbuf[32][32] = {0};
 	int tidx = 0;
-	for (; i4[0] < isz4;) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+64 < ptr_end;) {
 	    for (z = 0; z < NX; z+=16) {
 	        uint32x4_t Rv1 = vld1q_u32(&R[z+0]);
 		uint32x4_t Rv2 = vld1q_u32(&R[z+4]);
@@ -1687,7 +1697,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	    unsigned char c = sfb[l[NX-1]][m];
 	    out[i4[NX-1]] = c;
 	    R[NX-1] = fb[l[NX-1]][c].u.s.f * (R[NX-1]>>TF_SHIFT_O1) + m - fb[l[NX-1]][c].u.s.b;
-	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 8);
+	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end);
 	    l[NX-1] = c;
 	}
     } else {
@@ -1728,7 +1738,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 
 	uint32_t *S3 = (uint32_t *)s3;
 	
-	for (; i4[0] < isz4;) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+64 < ptr_end;) {
 	    int Z = 0;
 	    for (z = 0; z < NX; z+=16, Z+=4) {
 		// streamline these.  Could swap between two banks and pre-load
@@ -1878,7 +1888,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	    out[i4[NX-1]] = l[NX-1] = S&0xff;
 	    R[NX-1] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[NX-1]>>TF_SHIFT_O1_FAST)
 		+ ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end + 8);
+	    RansDecRenormSafe(&R[NX-1], &ptr, ptr_end);
 	}
     }
     //fprintf(stderr, "    1 Decoded %d bytes\n", (int)(ptr-in)); //c-size

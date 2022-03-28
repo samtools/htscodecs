@@ -264,7 +264,7 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
 
     /* Load in the static tables */
     unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]  __attribute__((aligned(64))); // For TF_SHIFT <= 12
 
@@ -286,7 +286,7 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
     if (rans_F_to_s3(F, TF_SHIFT, s3))
 	goto err;
 
-    if (cp_end + 8 - cp < 32 * 4)
+    if (cp_end - cp < 32 * 4)
         goto err;
 
     int z;
@@ -313,11 +313,20 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
     __m512i S1 = _mm512_i32gather_epi32(masked1, (int *)s3, sizeof(*s3));
     __m512i S2 = _mm512_i32gather_epi32(masked2, (int *)s3, sizeof(*s3));
 
-    int offset=0;
+    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=32) {
       //for (z = 0; z < 16; z++) {
+
+      // Protect against running off the end of in buffer.
+      // We copy it to a worst-case local buffer when near the end.
+      if ((uint8_t *)sp+64 > cp_end) {
+	memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	sp = (uint16_t *)overflow;
+	cp_end = overflow + sizeof(overflow);
+      }
+
       //uint32_t S = s3[R[z] & mask];
-      __m512i renorm_words1 = _mm512_cvtepu16_epi32(_mm256_loadu_si256((const __m256i *) (sp+offset))); // next 16 words
+      __m512i renorm_words1 = _mm512_cvtepu16_epi32(_mm256_loadu_si256((const __m256i *)sp)); // next 16 words
 
       //uint16_t f = S>>(TF_SHIFT+8), b = (S>>8) & mask;
       __m512i f1 = _mm512_srli_epi32(S1, TF_SHIFT+8);
@@ -339,9 +348,9 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
       renorm_mask1=_mm512_cmplt_epu32_mask(R1, _mm512_set1_epi32(RANS_BYTE_L));
       renorm_mask2=_mm512_cmplt_epu32_mask(R2, _mm512_set1_epi32(RANS_BYTE_L));
       // advance by however many words we actually read
-      offset += _mm_popcnt_u32(renorm_mask1);
+      sp += _mm_popcnt_u32(renorm_mask1);
       __m512i renorm_words2 = _mm512_cvtepu16_epi32(_mm256_loadu_si256(
-				      (const __m256i *)(sp+offset)));
+				      (const __m256i *)sp));
 
       // select masked only
       __m512i renorm_vals1, renorm_vals2;
@@ -367,7 +376,7 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
       S2 = _mm512_i32gather_epi32(masked2, (int *)s3, sizeof(*s3));
 
       // advance by however many words we actually read
-      offset += _mm_popcnt_u32(renorm_mask2);
+      sp += _mm_popcnt_u32(renorm_mask2);
 
       //out[i+z] = S;
       _mm_storeu_si128((__m128i *)(out+i),    _mm512_cvtepi32_epi8(S1_));
@@ -707,7 +716,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	goto err;
 
     RansState R[NX] __attribute__((aligned(64)));
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -740,7 +749,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 
     if (shift == TF_SHIFT_O1) {
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m512i _masked1 = _mm512_and_si512(_Rv1, _maskv);
 	    __m512i _masked2 = _mm512_and_si512(_Rv2, _maskv);
@@ -885,7 +894,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 		uint32_t F = S>>(TF_SHIFT_O1+8);
 		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -900,7 +909,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	    uint32_t F = S>>(TF_SHIFT_O1+8);
 	    R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     } else {
@@ -909,7 +918,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	// SIMD version ends decoding early as it reads at most 64 bytes
 	// from input via 4 vectorised loads.
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m512i _masked1 = _mm512_and_si512(_Rv1, _maskv);
 	    __m512i _masked2 = _mm512_and_si512(_Rv2, _maskv);
@@ -1032,7 +1041,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 		out[iN[z]++] = c;
 		R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -1046,7 +1055,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	    out[iN[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     }
