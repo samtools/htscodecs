@@ -160,6 +160,11 @@ int main(int argc, char **argv) {
 	    bu = malloc(sizeof(*bu));
 	    bc = malloc(sizeof(*bc));
 	    b[0].blk = load(infp, &blk_size);
+
+	    // Deliberately realloc down to in_size so we can use address
+	    // sanitizer to check for input buffer overruns.
+	    b[0].blk = realloc(b[0].blk, blk_size);
+
 	    b[0].sz = blk_size;
 	    bc[0].sz = rans_compress_bound_4x16(blk_size, order);
 	    bc[0].blk = malloc(bc[0].sz);
@@ -245,6 +250,10 @@ int main(int argc, char **argv) {
 	uint32_t in_size, out_size;
 	unsigned char *in = load(infp, &in_size), *out;
 	if (!in) exit(1);
+
+	// Deliberately realloc down to in_size so we can use address
+	// sanitizer to check for input buffer overruns.
+	in = realloc(in, in_size);
 
 	if (decode) {
 	    if (!(out = rans_uncompress_4x16(in, in_size, &out_size)))
