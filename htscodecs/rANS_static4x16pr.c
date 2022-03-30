@@ -1363,6 +1363,10 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 	if (!out) {
 	    if (ulen >= INT_MAX)
 		return NULL;
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+	    if (ulen > 100000)
+		return NULL;
+#endif
 	    if (!(out_free = out = malloc(ulen))) {
 		return NULL;
 	    }

@@ -1527,6 +1527,12 @@ uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
     if (ulen < 0 || ulen >= INT_MAX-1024)
 	return NULL;
 
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    // Speed up fuzzing by blocking excessive sizes
+    if (ulen > 100000)
+	return NULL;
+#endif
+
     //int nreads = *(uint32_t *)(in+4);
     int nreads = (in[4]<<0) | (in[5]<<8) | (in[6]<<16) | (((uint32_t)in[7])<<24);
     int use_arith = in[8];
