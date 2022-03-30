@@ -69,7 +69,7 @@ stream.)
 
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     int c;
-    unsigned int uncomp_size;
+    unsigned int uncomp_size = 0;
     unsigned char *uncomp;
 
     const int cpu_dec_a[] = {
