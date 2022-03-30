@@ -483,6 +483,16 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     }
 
     uint16_t *sp = (uint16_t *)cp;
+    uint8_t overflow[64+64] = {0};
+    cp_end -= 64;
+
+    // Protect against running off the end of in buffer.
+    // We copy it to a worst-case local buffer when near the end.
+    if ((uint8_t *)sp > cp_end) {
+	memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
+	sp = (uint16_t *)overflow;
+	cp_end = overflow + sizeof(overflow) - 64;
+    }
 
     int out_end = (out_sz&~(NX-1));
     const uint32_t mask = (1u << TF_SHIFT)-1;
@@ -490,7 +500,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
     __m256i maskv  = _mm256_set1_epi32(mask); // set mask in all lanes
     LOAD(Rv, R);
 
-    uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
 	//for (z = 0; z < NX; z++)
 	//  m[z] = R[z] & mask;
@@ -521,14 +530,15 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 		  _mm256_mullo_epi32(
 		      _mm256_srli_epi32(Rv2,TF_SHIFT), fv2), bv2);
 
+#ifdef __clang__
 	// Protect against running off the end of in buffer.
 	// We copy it to a worst-case local buffer when near the end.
-	if ((uint8_t *)sp+64 > cp_end) {
-	    memmove(overflow, sp, cp_end - (uint8_t *)sp);
+	if ((uint8_t *)sp > cp_end) {
+	    memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
 	    sp = (uint16_t *)overflow;
-	    cp_end = overflow + sizeof(overflow);
+	    cp_end = overflow + sizeof(overflow) - 64;
 	}
-
+#endif
 	// Tricky one:  out[i+z] = s[z];
 	//             ---h---g ---f---e  ---d---c ---b---a
 	//             ---p---o ---n---m  ---l---k ---j---i
@@ -642,6 +652,19 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 	Yv3 = _mm256_or_si256(Yv3, Vv3);
 	Vv4 = _mm256_permutevar8x32_epi32(Vv4, idx4);
 	Yv4 = _mm256_or_si256(Yv4, Vv4);
+
+#ifndef __clang__
+	// 26% faster here than above for gcc10, but former location is
+	// better on clang.
+
+	// Protect against running off the end of in buffer.
+	// We copy it to a worst-case local buffer when near the end.
+	if ((uint8_t *)sp > cp_end) {
+	    memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
+	    sp = (uint16_t *)overflow;
+	    cp_end = overflow + sizeof(overflow) - 64;
+	}
+#endif
 
 	sp += _mm_popcnt_u32(imask4);
 
