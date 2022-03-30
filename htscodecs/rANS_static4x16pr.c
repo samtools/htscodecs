@@ -911,16 +911,18 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
     uint8_t *sfb_ = pthread_getspecific(rans_key);
     if (!sfb_) {
-	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
+	sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2)
+                      + 256*256*sizeof(fb_t), sizeof(*sfb_));
 	pthread_setspecific(rans_key, sfb_);
     }
 #else
-    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2), sizeof(*sfb_));
+    uint8_t *sfb_ = calloc(256*(TOTFREQ_O1+MAGIC2)
+                           + 256*256*sizeof(fb_t), sizeof(*sfb_));
 #endif
 
     if (!sfb_)
 	return NULL;
-    fb_t fb[256][256];
+    fb_t (*fb)[256] = (fb_t (*)[256]) (sfb_ + 256*(TOTFREQ_O1+MAGIC2));
     uint8_t *sfb[256];
     if ((*cp >> 4) == TF_SHIFT_O1) {
 	for (i = 0; i < 256; i++)
