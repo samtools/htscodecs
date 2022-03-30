@@ -1596,6 +1596,8 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 	    i = (tnum<<4) | (ttype&15);
 	    if (j >= i)
 		goto err;
+            if (!ctx->desc[j].buf)
+                goto err; // Attempt to copy a non-existent stream
 
 	    ctx->desc[i].buf_l = 0;
 	    ctx->desc[i].buf_a = ctx->desc[j].buf_a;
