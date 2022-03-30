@@ -716,7 +716,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	goto err;
 
     RansState R[NX] __attribute__((aligned(64)));
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -749,7 +749,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 
     if (shift == TF_SHIFT_O1) {
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m512i _masked1 = _mm512_and_si512(_Rv1, _maskv);
 	    __m512i _masked2 = _mm512_and_si512(_Rv2, _maskv);
@@ -894,7 +894,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 		uint32_t F = S>>(TF_SHIFT_O1+8);
 		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -909,7 +909,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	    uint32_t F = S>>(TF_SHIFT_O1+8);
 	    R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     } else {
@@ -918,7 +918,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	// SIMD version ends decoding early as it reads at most 64 bytes
 	// from input via 4 vectorised loads.
 	isz4 -= 64;
-	for (; iN[0] < isz4; ) {
+	for (; iN[0] < isz4 && (uint8_t *)sp+64 < ptr_end; ) {
 	    // m[z] = R[z] & mask;
 	    __m512i _masked1 = _mm512_and_si512(_Rv1, _maskv);
 	    __m512i _masked2 = _mm512_and_si512(_Rv2, _maskv);
@@ -1041,7 +1041,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 		out[iN[z]++] = c;
 		R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		lN[z] = c;
 	    }
 	}
@@ -1055,7 +1055,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 	    out[iN[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    lN[z] = c;
 	}
     }

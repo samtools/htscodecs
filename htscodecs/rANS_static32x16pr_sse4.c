@@ -1040,7 +1040,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
 	RansDecInit(&R[z], &ptr);
@@ -1066,7 +1066,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	LOAD128(Lv, l);
 
 	isz4 -= 64;
-	for (; i4[0] < isz4; ) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+72 < ptr_end; ) {
 	    //for (z = 0; z < NX; z++)
 	    //  m[z] = R[z] & mask;
 	    __m128i masked1 = _mm_and_si128(Rv1, maskv);
@@ -1406,7 +1406,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		uint32_t F = S>>(TF_SHIFT_O1+8);
 		R[z] = (F?F:4096) * (R[z]>>TF_SHIFT_O1) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		l[z] = c;
 	    }
 	}
@@ -1420,7 +1420,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	    out[i4[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1+8)) * (R[z]>>TF_SHIFT_O1) +
 		((S>>8) & ((1u<<TF_SHIFT_O1)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    l[z] = c;
 	}
     } else {
@@ -1434,7 +1434,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	LOAD128(Lv, l);
 
 	isz4 -= 64;
-	for (; i4[0] < isz4; ) {
+	for (; i4[0] < isz4 && (uint8_t *)sp+72 < ptr_end; ) {
 	    //for (z = 0; z < NX; z++)
 	    //  m[z] = R[z] & mask;
 	    __m128i masked1 = _mm_and_si128(Rv1, maskv);
@@ -1719,7 +1719,6 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		transpose_and_copy(out, i4, tbuf);
 		tidx = 0;
 	    }
-
 	}
 	isz4 += 64;
 
@@ -1743,7 +1742,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 		out[i4[z]++] = c;
 		R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-		RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
 		l[z] = c;
 	    }
 	}
@@ -1757,7 +1756,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 	    out[i4[z]++] = c;
 	    R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
 		((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
-	    RansDecRenormSafe(&R[z], &ptr, ptr_end+8);
+	    RansDecRenormSafe(&R[z], &ptr, ptr_end);
 	    l[z] = c;
 	}
     }
