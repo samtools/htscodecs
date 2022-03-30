@@ -41,6 +41,32 @@ task:
     - make check CFLAGS="-g -O3 -Wall -Werror"
     - make distcheck
 
+task:
+  << : *ENVIRONMENT
+  name: linux-arm
+  arm_container:
+    image: ubuntu:latest
+    cpu: 2
+    memory: 1G
+
+  # Base environment already includes the packages we need.
+
+  # NB: we could consider building a docker image with these
+  # preinstalled and specifying that instead, to speed up testing.
+  install_script: |
+    apt-get update
+    apt-get install -y --no-install-suggests --no-install-recommends     \
+        ca-certificates clang libc-dev make git autoconf automake libtool
+
+  compile_script:
+    - autoreconf -i
+    - ./configure CC="clang" --disable-shared
+    - make -j4 CFLAGS="-g -O3 -Wall -Werror"
+
+  test_script:
+    - make check CFLAGS="-g -O3 -Wall -Werror"
+    - make distcheck
+
 # Rocky Linux
 rocky_task:
   << : *ENVIRONMENT

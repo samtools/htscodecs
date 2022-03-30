@@ -64,7 +64,8 @@ libhtscodecs_base_src = \
 
 libhtscodecs_simd_src = rANS_static32x16pr_sse4.c \
 	rANS_static32x16pr_avx2.c \
-	rANS_static32x16pr_avx512.c
+	rANS_static32x16pr_avx512.c \
+	rANS_static32x16pr_neon.c
 
 libhtscodecs_la_SOURCES = $(libhtscodecs_base_src) $(libhtscodecs_simd_src)
 

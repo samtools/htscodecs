@@ -32,7 +32,20 @@
  */
 
 #include "config.h"
+#ifdef __ARM_NEON
 #include <arm_neon.h>
+
+#include <limits.h>
+
+#include "rANS_word.h"
+#include "rANS_static4x16.h"
+#include "rANS_static16_int.h"
+#include "varint.h"
+#include "pack.h"
+#include "rle.h"
+#include "utils.h"
+
+#define NX 32
 
 // TODO: get access to MVE architecture so we can tune for the newer
 // SIMD instructions.
@@ -1905,3 +1918,4 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 }
 
 #undef MAGIC2
+#endif /* __ARM_NEON */

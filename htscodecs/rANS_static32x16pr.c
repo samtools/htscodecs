@@ -68,10 +68,6 @@
 
 #define NX 32
 
-#ifdef __ARM_NEON
-#  include "rANS_static32x16pr_neon.c"
-#endif
-
 unsigned char *rans_compress_O0_32x16(unsigned char *in,
 				      unsigned int in_size,
 				      unsigned char *out,
