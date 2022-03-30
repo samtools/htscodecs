@@ -1498,7 +1498,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
     free(c_freq);
     c_freq = NULL;
 
-    if (cp+16 > cp_end)
+    if (cp_end - cp < NX * 4)
 	goto err;
 
     RansState R[NX];
@@ -1527,7 +1527,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	// Follow with 2nd copy doing scalar code instead?
 	unsigned char tbuf[32][32] = {0};
 	int tidx = 0;
-	for (; i4[0] < isz4 && (uint8_t *)sp+64 < ptr_end;) {
+	for (; i4[0] < isz4 && ptr+64 < ptr_end;) {
 	    for (z = 0; z < NX; z+=16) {
 	        uint32x4_t Rv1 = vld1q_u32(&R[z+0]);
 		uint32x4_t Rv2 = vld1q_u32(&R[z+4]);
@@ -1691,6 +1691,20 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	    for (T = 0; T < tidx; T++)
 		out[i4[z]++] = tbuf[T][z];
 
+	// Scalar version for close to end of in[] array so we don't do
+	// SIMD loads beyond the end of the buffer
+	for (; i4[0] < isz4; ) {
+	    for (z = 0; z < NX; z++) {
+	        uint32_t m = R[z] & ((1u<<TF_SHIFT_O1)-1);
+		unsigned char c = sfb[l[z]][m];
+                out[i4[z]++] = c;
+		R[z] = fb[l[z]][c].u.s.f * (R[z]>>TF_SHIFT_O1) + m - fb[l[z]][c].u.s.b;
+		RansDecRenormSafe(&R[z], &ptr, ptr_end);
+		l[z] = c;
+	    }
+	}
+
+
 	// Remainder
 	for (; i4[NX-1] < out_sz; i4[NX-1]++) {
 	    uint32_t m = R[NX-1] & ((1u<<TF_SHIFT_O1)-1);
@@ -1738,7 +1752,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 
 	uint32_t *S3 = (uint32_t *)s3;
 	
-	for (; i4[0] < isz4 && (uint8_t *)sp+64 < ptr_end;) {
+	for (; i4[0] < isz4 && ptr+64 < ptr_end;) {
 	    int Z = 0;
 	    for (z = 0; z < NX; z+=16, Z+=4) {
 		// streamline these.  Could swap between two banks and pre-load
@@ -1874,6 +1888,13 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	    }
 	}
 
+	vst1q_u32(&R[ 0], RV[0]);
+	vst1q_u32(&R[ 4], RV[1]);
+	vst1q_u32(&R[ 8], RV[2]);
+	vst1q_u32(&R[12], RV[3]);
+	vst1q_u32(&R[16], RV[4]);
+	vst1q_u32(&R[20], RV[5]);
+	vst1q_u32(&R[24], RV[6]);
 	vst1q_u32(&R[28], RV[7]);
 
 	i4[0]-=tidx;
@@ -1881,6 +1902,21 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 	for (z = 0; z < NX; z++)
 	    for (T = 0; T < tidx; T++)
 		out[i4[z]++] = tbuf[T][z];
+
+	// Scalar version for close to end of in[] array so we don't do
+	// SIMD loads beyond the end of the buffer
+	for (; i4[0] < isz4; ) {
+	    for (z = 0; z < NX; z++) {
+		uint32_t m = R[z] & ((1u<<TF_SHIFT_O1_FAST)-1);
+		uint32_t S = s3[l[z]][m];
+                unsigned char c = S & 0xff;
+                out[i4[z]++] = c;
+                R[z] = (S>>(TF_SHIFT_O1_FAST+8)) * (R[z]>>TF_SHIFT_O1_FAST) +
+                    ((S>>8) & ((1u<<TF_SHIFT_O1_FAST)-1));
+                RansDecRenormSafe(&R[z], &ptr, ptr_end);
+                l[z] = c;
+	    }
+	}
 
 	// Remainder
 	for (; i4[NX-1] < out_sz; i4[NX-1]++) {
