@@ -1282,6 +1282,8 @@ int fqz_read_parameters(fqz_gparams *gp, unsigned char *in, size_t in_size) {
 	int e = fqz_read_parameters1(&gp->p[i], in + in_idx, in_size-in_idx);
 	if (e < 0)
 	    goto err;
+        if (gp->p[i].do_sel && gp->max_sel == 0)
+            goto err; // Inconsistent
 	in_idx += e;
 
 	if (gp->max_sym < gp->p[i].max_sym)
