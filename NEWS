@@ -1,3 +1,40 @@
+Release 1.2.2: 1st April 2022
+-----------------------------
+
+This release contains some fixes found during fuzzing with Clang's
+memory-sanitizer.  None of these are involving writing memory so there
+is no possibility for code execution vulnerabilities.  However some do
+could access uninitialised elements in locally allocated memory, which
+could leak private data if the library was used in conjunction with
+other tools which don't zero sensitive data before freeing.
+
+Bug fixes:
+
+- The name tokeniser now validates the stored length in the data
+  stream matches the actual decoded length.  Discovered by Taotao Gu.
+
+- Fixed an endless loop in arith_dynamic and rans4x16pr involving
+  X_STRIPE with 0 stripes.
+
+- Avoid a harmless (and wrong?) undefined behaviour sanitizer error
+  when calling memcpy(ptr, NULL, 0) in the name tokeniser.
+
+- Fixed possible uninitialised memory access in
+  rans_uncompress_O1_4x16.  If the frequency table didn't add up to
+  the correct amount, parts of the "fb" table were left unpopulated.
+  It was then possible to use these array elements in some of the rANS
+  calculations.
+
+- Similarly rans_uncompress_O0 could access an uninitialised element
+  4095 of the decoder tables if the frequencies summed to 4095 instead
+  of the expected 4096.
+
+- Improved error detection from fqzcomp's read_array function.
+
+- Reject fqzcomp parameters with inconsistent "sel" parameters, which
+  could lead to uninitialised access to the model.sel range coder.
+
+
 Release 1.2.1: 15th February 2022
 ---------------------------------
 
