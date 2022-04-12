@@ -100,16 +100,12 @@
 #include <errno.h>
 #include <time.h>
 
-//#define NO_THREADS
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
-
 #include "pooled_alloc.h"
 #include "arith_dynamic.h"
 #include "rANS_static4x16.h"
 #include "tokenise_name3.h"
 #include "varint.h"
+#include "utils.h"
 
 // 128 is insufficient for SAM names (max 256 bytes) as
 // we may alternate a0a0a0a0a0 etc.  However if we fail,
@@ -124,9 +120,6 @@
 
 enum name_type {N_ERR = -1, N_TYPE = 0, N_ALPHA, N_CHAR, N_DIGITS0, N_DZLEN, N_DUP, N_DIFF, 
 		N_DIGITS, N_DDELTA, N_DDELTA0, N_MATCH, N_NOP, N_END, N_ALL};
-
-char *types[]={"TYPE", "ALPHA", "CHAR", "DIG0", "DZLEN", "DUP", "DIFF",
-	       "DIGITS", "DDELTA", "DDELTA0", "MATCH", "NOP", "END"};
 
 typedef struct trie {
     char c;
@@ -173,18 +166,6 @@ typedef struct {
     int max_names;
 } name_context;
 
-#ifndef NO_THREADS
-/*
- * Thread local storage, used to avoid repeated malloc/free calls.
- */
-pthread_once_t tok_once = PTHREAD_ONCE_INIT;
-pthread_key_t tok_key;
-
-static void tok_tls_init(void) {
-    pthread_key_create(&tok_key, free);
-}
-#endif
-
 static name_context *create_context(int max_names) {
     if (max_names <= 0)
 	return NULL;
@@ -202,26 +183,10 @@ static name_context *create_context(int max_names) {
 	return NULL;
     }
 
-#ifndef NO_THREADS
-    pthread_once(&tok_once, tok_tls_init);
-
-    name_context *ctx = pthread_getspecific(tok_key);
-    if (!ctx) {
-	ctx = malloc(sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
-	if (!ctx) return NULL;
-	ctx->max_names = max_names;
-	pthread_setspecific(tok_key, ctx);
-    } else if (ctx->max_names < max_names+1) {
-	ctx = realloc(ctx, sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
-	if (!ctx) return NULL;
-	ctx->max_names = max_names;
-	pthread_setspecific(tok_key, ctx);
-    }
-#else
-    name_context *ctx = malloc(sizeof(*ctx) + ++max_names*sizeof(*ctx->lc));
+    name_context *ctx = htscodecs_tls_alloc(sizeof(*ctx) +
+					    ++max_names*sizeof(*ctx->lc));
     if (!ctx) return NULL;
     ctx->max_names = max_names;
-#endif
 
     ctx->counter = 0;
     ctx->t_head = NULL;
@@ -252,9 +217,7 @@ static void free_context(name_context *ctx) {
     for (i = 0; i < ctx->max_tok*16; i++)
 	free(ctx->desc[i].buf);
 
-#ifdef NO_THREADS
-    free(ctx);
-#endif
+    htscodecs_tls_free(ctx);
 }
 
 //-----------------------------------------------------------------------------
@@ -1333,8 +1296,8 @@ static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
  * Returns a malloced buffer holding compressed data of size *out_len,
  *         or NULL on failure
  */
-uint8_t *encode_names(char *blk, int len, int level, int use_arith,
-		      int *out_len, int *last_start_p) {
+uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+			   int *out_len, int *last_start_p) {
     int last_start = 0, i, j, nreads;
 
     // Count lines
@@ -1539,13 +1502,20 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
     return out;
 }
 
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *encode_names(char *blk, int len, int level, int use_arith,
+		      int *out_len, int *last_start_p) {
+    return tok3_encode_names(blk, len, level, use_arith, out_len,
+			     last_start_p);
+}
+
 /*
  * Decodes a compressed block of read names into \0 separated names.
  * The size of the data returned (malloced) is in *out_len.
  *
  * Returns NULL on failure.
  */
-uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
     if (sz < 9)
 	return NULL;
 
@@ -1556,6 +1526,12 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 
     if (ulen < 0 || ulen >= INT_MAX-1024)
 	return NULL;
+
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    // Speed up fuzzing by blocking excessive sizes
+    if (ulen > 100000)
+	return NULL;
+#endif
 
     //int nreads = *(uint32_t *)(in+4);
     int nreads = (in[4]<<0) | (in[5]<<8) | (in[6]<<16) | (((uint32_t)in[7])<<24);
@@ -1694,4 +1670,9 @@ uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
  err:
     free_context(ctx);
     return NULL;
+}
+
+// Deprecated interface; to remove when we next to an ABI breakage
+uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+    return tok3_decode_names(in, sz, out_len);
 }

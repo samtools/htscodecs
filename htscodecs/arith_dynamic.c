@@ -58,9 +58,6 @@
 #include <string.h>
 #include <sys/time.h>
 #include <limits.h>
-#ifndef NO_THREADS
-#include <pthread.h>
-#endif
 
 #include "arith_dynamic.h"
 #include "varint.h"
@@ -163,15 +160,21 @@ static
 unsigned char *arith_compress_O1(unsigned char *in, unsigned int in_size,
 				 unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
+    unsigned char *out_free = NULL;
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
 
-    SIMPLE_MODEL(256,_) byte_model[256];
+    SIMPLE_MODEL(256,_) *byte_model =
+	htscodecs_tls_alloc(256 * sizeof(*byte_model));
+    if (!byte_model) {
+	free(out_free);
+	return NULL;
+    }
     unsigned int m = 0;
     if (1 || in_size > 1000) {
 	for (i = 0; i < in_size; i++)
@@ -199,6 +202,7 @@ unsigned char *arith_compress_O1(unsigned char *in, unsigned int in_size,
     // Finalise block size and return it
     *out_size = RC_OutSize(&rc)+1;
 
+    htscodecs_tls_free(byte_model);
     return out;
 }
 
@@ -206,16 +210,24 @@ static
 unsigned char *arith_uncompress_O1(unsigned char *in, unsigned int in_size,
 				   unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
+    unsigned char *out_free = NULL;
 
-    SIMPLE_MODEL(256,_) byte_model[256];
+    if (!out)
+	out_free = out = malloc(out_sz);
+    if (!out)
+	return NULL;
+
+
+    SIMPLE_MODEL(256,_) *byte_model =
+	htscodecs_tls_alloc(256 * sizeof(*byte_model));
+    if (!byte_model) {
+	free(out_free);
+	return NULL;
+    }
+
     unsigned int m = in[0] ? in[0] : 256, i;
     for (i = 0; i < 256; i++)
 	SIMPLE_MODEL(256,_init)(&byte_model[i], m);
-    
-    if (!out)
-	out = malloc(out_sz);
-    if (!out)
-	return NULL;
 
     RC_SetInput(&rc, (char *)in+1, (char *)in+in_size);
     RC_StartDecode(&rc);
@@ -228,6 +240,7 @@ unsigned char *arith_uncompress_O1(unsigned char *in, unsigned int in_size,
 
     RC_FinishDecode(&rc);
     
+    htscodecs_tls_free(byte_model);
     return out;
 }
 
@@ -393,10 +406,11 @@ static
 unsigned char *arith_compress_O0_RLE(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
+    unsigned char *out_free = NULL;
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -411,7 +425,13 @@ unsigned char *arith_compress_O0_RLE(unsigned char *in, unsigned int in_size,
     SIMPLE_MODEL(256,_) byte_model;
     SIMPLE_MODEL(256,_init)(&byte_model, m);
 
-    SIMPLE_MODEL(NSYM,_) run_model[NSYM];
+    SIMPLE_MODEL(NSYM,_) *run_model =
+	htscodecs_tls_alloc(NSYM * sizeof(*run_model));
+    if (!run_model) {
+	free(out_free);
+	return NULL;
+    }
+
     for (i = 0; i < NSYM; i++)
 	SIMPLE_MODEL(NSYM,_init)(&run_model[i], MAX_RUN);
 
@@ -450,6 +470,7 @@ unsigned char *arith_compress_O0_RLE(unsigned char *in, unsigned int in_size,
 
     //fprintf(stderr, "RLE %d to %d\n", in_size, *out_size);
 
+    htscodecs_tls_free(run_model);
     return out;
 }
 
@@ -459,18 +480,25 @@ unsigned char *arith_uncompress_O0_RLE(unsigned char *in, unsigned int in_size,
     RangeCoder rc;
     int i;
     unsigned int m = in[0] ? in[0] : 256;
+    unsigned char *out_free = NULL;
+
+    if (!out)
+	out_free = out = malloc(out_sz);
+    if (!out)
+	return NULL;
 
     SIMPLE_MODEL(256,_) byte_model;
     SIMPLE_MODEL(256,_init)(&byte_model, m);
 
-    SIMPLE_MODEL(NSYM,_) run_model[NSYM];
+    SIMPLE_MODEL(NSYM,_) *run_model =
+	htscodecs_tls_alloc(NSYM * sizeof(*run_model));
+    if (!run_model) {
+	free(out_free);
+	return NULL;
+    }
+
     for (i = 0; i < NSYM; i++)
 	SIMPLE_MODEL(NSYM,_init)(&run_model[i], MAX_RUN);
-
-    if (!out)
-	out = malloc(out_sz);
-    if (!out)
-	return NULL;
 
     RC_SetInput(&rc, (char *)in+1, (char *)in+in_size);
     RC_StartDecode(&rc);
@@ -495,6 +523,7 @@ unsigned char *arith_uncompress_O0_RLE(unsigned char *in, unsigned int in_size,
 
     RC_FinishDecode(&rc);
 
+    htscodecs_tls_free(run_model);
     return out;
 }
 
@@ -502,10 +531,11 @@ static
 unsigned char *arith_compress_O1_RLE(unsigned char *in, unsigned int in_size,
 				     unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
+    unsigned char *out_free = NULL;
 
     if (!out) {
 	*out_size = bound;
-	out = malloc(*out_size);
+	out_free = out = malloc(*out_size);
     }
     if (!out || bound > *out_size)
 	return NULL;
@@ -517,14 +547,22 @@ unsigned char *arith_compress_O1_RLE(unsigned char *in, unsigned int in_size,
     m++;
     *out = m;
 
-    //SIMPLE_MODEL(256,_) byte_model;
-    //SIMPLE_MODEL(256,_init)(&byte_model, m);
-
-    SIMPLE_MODEL(256,_) byte_model[256];
+    SIMPLE_MODEL(256,_) *byte_model =
+	htscodecs_tls_alloc(256 * sizeof(*byte_model));
+    if (!byte_model) {
+	free(out_free);
+	return NULL;
+    }
     for (i = 0; i < 256; i++)
 	SIMPLE_MODEL(256,_init)(&byte_model[i], m);
 
-    SIMPLE_MODEL(NSYM,_) run_model[NSYM];
+    SIMPLE_MODEL(NSYM,_) *run_model =
+	htscodecs_tls_alloc(NSYM * sizeof(*run_model));
+    if (!run_model) {
+	htscodecs_tls_free(byte_model);
+	free(out_free);
+	return NULL;
+    }
     for (i = 0; i < NSYM; i++)
 	SIMPLE_MODEL(NSYM,_init)(&run_model[i], MAX_RUN);
 
@@ -563,6 +601,8 @@ unsigned char *arith_compress_O1_RLE(unsigned char *in, unsigned int in_size,
 
     //fprintf(stderr, "RLE %d to %d\n", in_size, *out_size);
 
+    htscodecs_tls_free(byte_model);
+    htscodecs_tls_free(run_model);
     return out;
 }
 
@@ -572,19 +612,31 @@ unsigned char *arith_uncompress_O1_RLE(unsigned char *in, unsigned int in_size,
     RangeCoder rc;
     int i;
     unsigned int m = in[0] ? in[0] : 256;
+    unsigned char *out_free = NULL;
 
-    SIMPLE_MODEL(256,_) byte_model[256];
+    if (!out)
+	out_free = out = malloc(out_sz);
+    if (!out)
+	return NULL;
+
+    SIMPLE_MODEL(256,_) *byte_model =
+	htscodecs_tls_alloc(256 * sizeof(*byte_model));
+    if (!byte_model) {
+	free(out_free);
+	return NULL;
+    }
     for (i = 0; i < 256; i++)
 	SIMPLE_MODEL(256,_init)(&byte_model[i], m);
 
-    SIMPLE_MODEL(NSYM,_) run_model[NSYM];
+    SIMPLE_MODEL(NSYM,_) *run_model =
+	htscodecs_tls_alloc(NSYM * sizeof(*run_model));
+    if (!run_model) {
+	htscodecs_tls_free(byte_model);
+	free(out_free);
+	return NULL;
+    }
     for (i = 0; i < NSYM; i++)
 	SIMPLE_MODEL(NSYM,_init)(&run_model[i], MAX_RUN);
-
-    if (!out)
-	out = malloc(out_sz);
-    if (!out)
-	return NULL;
 
     RC_SetInput(&rc, (char *)in+1, (char *)in+in_size);
     RC_StartDecode(&rc);
@@ -610,6 +662,8 @@ unsigned char *arith_uncompress_O1_RLE(unsigned char *in, unsigned int in_size,
 
     RC_FinishDecode(&rc);
 
+    htscodecs_tls_free(byte_model);
+    htscodecs_tls_free(run_model);
     return out;
 }
 

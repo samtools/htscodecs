@@ -41,10 +41,9 @@
 #include <sys/time.h>
 
 #include "htscodecs/arith_dynamic.h"
-#include "htscodecs/arith_dynamic.c"
 
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
-    unsigned int uncomp_size;
+    unsigned int uncomp_size = 0;
     unsigned char *uncomp = arith_uncompress(in, in_size, &uncomp_size);
     if (uncomp)
 	free(uncomp);

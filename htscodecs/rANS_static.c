@@ -33,16 +33,6 @@
 
 #include "config.h"
 
-#if defined(NO_THREADS) && (defined(__APPLE__) || defined(_WIN32))
-// When pthreads is available, we use a single malloc, otherwise we'll
-// (normally) use the stack instead.
-//
-// However the MacOS X default stack size can be tiny (512K), albeit
-// I think only when threading?  We request malloc/free for the large
-// local arrays instead to avoid this, but it does have a performance hit.
-#define USE_HEAP
-#endif
-
 // Use 11 for order-1?
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
@@ -369,49 +359,6 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
     return NULL;
 }
 
-
-#ifndef NO_THREADS
-/*
- * Thread local storage per thread in the pool.
- * This avoids needing to memset/calloc F and syms in the encoder,
- * which can be speed things this encoder up a little.
- */
-static pthread_once_t rans_enc_once = PTHREAD_ONCE_INIT;
-static pthread_key_t rans_enc_key;
-
-typedef struct {
-    RansEncSymbol (*syms)[256];
-    int (*F)[256];
-} thread_enc_data;
-
-static void rans_enc_free(void *vp) {
-    thread_enc_data *te = (thread_enc_data *)vp;
-    if (!te)
-	return;
-    free(te->F);
-    free(te->syms);
-    free(te);
-}
-
-static thread_enc_data *rans_enc_alloc(void) {
-    thread_enc_data *te = malloc(sizeof(*te));
-    if (!te)
-	return NULL;
-    te->F = calloc(256, sizeof(*te->F));
-    te->syms = calloc(256, sizeof(*te->syms));
-    if (!te->F || !te->syms) {
-	rans_enc_free(te);
-	return NULL;
-    }
-
-    return te;
-}
-
-static void rans_tls_enc_init(void) {
-    pthread_key_create(&rans_enc_key, rans_enc_free);
-}
-#endif
-
 static
 unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
 				unsigned int *out_size) {
@@ -419,36 +366,22 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
     unsigned int tab_size, rle_i, rle_j;
 
 
-#ifndef NO_THREADS
-    pthread_once(&rans_enc_once, rans_tls_enc_init);
-    thread_enc_data *te = pthread_getspecific(rans_enc_key);
-    if (!te) {
-	if (!(te = rans_enc_alloc()))
-	    return NULL;
-	pthread_setspecific(rans_enc_key, te);
-    }
-    RansEncSymbol (*syms)[256] = te->syms;
-    int (*F)[256] = te->F;
-    memset(F, 0, 256*sizeof(*F));
-#else
-#ifdef USE_HEAP
-    RansEncSymbol (*syms)[256] = malloc(256 * sizeof(*syms));
-    int (*F)[256] = calloc(256, sizeof(*F));
-#else
-    RansEncSymbol syms[256][256];
-    int F[256][256] = {{0}};
-#endif
-#endif
-    int T[256+MAGIC] = {0};
-    int i, j;
-
     if (in_size < 4)
 	return rans_compress_O0(in, in_size, out_size);
 
-#ifdef USE_HEAP
+    int (*F)[256];
+    RansEncSymbol (*syms)[256];
+
+    uint8_t *mem = htscodecs_tls_alloc(256 * (sizeof(*syms) + sizeof(*F)));
+    if (!mem)
+	return NULL;
+    syms = (RansEncSymbol (*)[256])mem;
+    F = (int (*)[256])(mem + 256*sizeof(*syms));
+    memset(F, 0, 256*sizeof(*F));
+
     if (!syms) goto cleanup;
-    if (!F) goto cleanup;
-#endif
+    int T[256+MAGIC] = {0};
+    int i, j;
 
     out_buf = malloc(1.05*in_size + 257*257*3 + 9);
     if (!out_buf) goto cleanup;
@@ -629,55 +562,10 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
     memmove(out_buf + tab_size, ptr, out_end-ptr);
 
  cleanup:
-#ifdef USE_HEAP
-    free(syms);
-    free(F);
-#endif
+    htscodecs_tls_free(syms);
 
     return out_buf;
 }
-
-#ifndef NO_THREADS
-/*
- * Thread local storage per thread in the pool.
- * This avoids needing to memset/calloc D and syms in the decoder,
- * which can be speed things this decoder up a little (~10%).
- */
-static pthread_once_t rans_once = PTHREAD_ONCE_INIT;
-static pthread_key_t rans_key;
-
-typedef struct {
-    ari_decoder *D;
-    RansDecSymbol32 (*syms)[256];
-} thread_data;
-
-static void rans_tb_free(void *vp) {
-    thread_data *tb = (thread_data *)vp;
-    if (!tb)
-	return;
-    free(tb->D);
-    free(tb->syms);
-    free(tb);
-}
-
-static thread_data *rans_tb_alloc(void) {
-    thread_data *tb = malloc(sizeof(*tb));
-    if (!tb)
-	return NULL;
-    tb->D = calloc(256, sizeof(*tb->D));
-    tb->syms = calloc(256, sizeof(*tb->syms));
-    if (!tb->D || !tb->syms) {
-	rans_tb_free(tb);
-	return NULL;
-    }
-
-    return tb;
-}
-
-static void rans_tls_init(void) {
-    pthread_key_create(&rans_key, rans_tb_free);
-}
-#endif
 
 static
 unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
@@ -689,32 +577,8 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     unsigned int x;
     unsigned int out_sz, in_sz;
     char *out_buf = NULL;
-    // D[] is 1Mb and syms[][] is 0.5Mb.
-#ifndef NO_THREADS
-    pthread_once(&rans_once, rans_tls_init);
-    thread_data *tb = pthread_getspecific(rans_key);
-    if (!tb) {
-	if (!(tb = rans_tb_alloc()))
-	    return NULL;
-	pthread_setspecific(rans_key, tb);
-    }
-    ari_decoder *const D = tb->D;
-    RansDecSymbol32 (*const syms)[256] = tb->syms;
-#else
-#ifdef USE_HEAP
-    //ari_decoder *const D = malloc(256 * sizeof(*D));
-    ari_decoder *const D = calloc(256, sizeof(*D));
-    RansDecSymbol32 (*const syms)[256] = malloc(256 * sizeof(*syms));
-    for (i = 1; i < 256; i++) memset(&syms[i][0], 0, sizeof(syms[0][0]));
-#else
-    ari_decoder D[256] = {{{0}}}; //256*4k    => 1.0Mb
-    RansDecSymbol32 syms[256][256+6] = {{{0}}}; //256*262*8 => 0.5Mb
-#endif
-#endif
-    int16_t map[256], map_i = 0;
-    
-    memset(map, -1, 256*sizeof(*map));
 
+    // Sanity checking
     if (in_size < 27) // Need at least this many bytes to start
         return NULL;
 
@@ -738,15 +602,25 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 	return NULL;
 #endif
 
-#if defined(USE_HEAP)
-    if (!D || !syms) goto cleanup;
+    // Allocate decoding lookup tables
+    RansDecSymbol32 (*syms)[256];
+    uint8_t *mem = htscodecs_tls_calloc(256, sizeof(ari_decoder)
+					+ sizeof(*syms));
+    if (!mem)
+	return NULL;
+    ari_decoder *const D = (ari_decoder *)mem;
+    syms = (RansDecSymbol32 (*)[256])(mem + 256*sizeof(ari_decoder));
+    int16_t map[256], map_i = 0;
+    
+    memset(map, -1, 256*sizeof(*map));
+
+    if (!D) goto cleanup;
     /* These memsets prevent illegal memory access in syms due to
        broken compressed data.  As D is calloc'd, all illegal transitions
        will end up in either row or column 0 of syms. */
     memset(&syms[0], 0, sizeof(syms[0]));
     for (i = 0; i < 256; i++)
 	memset(&syms[i][0], 0, sizeof(syms[0][0]));
-#endif
 
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
@@ -825,10 +699,10 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     RansState rans0, rans1, rans2, rans3;
     uint8_t *ptr = cp;
     if (cp > ptr_end - 16) goto cleanup; // Not enough input bytes left
-    RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans2, &ptr); if (rans2 < RANS_BYTE_L) return NULL;
-    RansDecInit(&rans3, &ptr); if (rans3 < RANS_BYTE_L) return NULL;
+    RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans2, &ptr); if (rans2 < RANS_BYTE_L) goto cleanup;
+    RansDecInit(&rans3, &ptr); if (rans3 < RANS_BYTE_L) goto cleanup;
 
     RansState R[4];
     R[0] = rans0;
@@ -918,12 +792,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     *out_size = out_sz;
 
  cleanup:
-#if defined(USE_HEAP)
-    if (D)
-        free(D);
-
-    free(syms);
-#endif
+    htscodecs_tls_free(D);
 
     return (unsigned char *)out_buf;
 }

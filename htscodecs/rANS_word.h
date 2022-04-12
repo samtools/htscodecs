@@ -74,8 +74,8 @@ static inline void RansEncInit(RansState* r)
 // Renormalize the encoder. Internal function.
 static inline RansState RansEncRenorm(RansState x, uint8_t** pptr, uint32_t freq, uint32_t scale_bits)
 {
-    uint32_t x_max = ((RANS_BYTE_L >> scale_bits) << 16) * freq; // this turns into a shift.
-    if (x >= x_max) {
+    uint32_t x_max = ((RANS_BYTE_L >> scale_bits) << 16) * freq-1; // this turns into a shift.
+    if (x > x_max) {
         uint16_t* ptr = (uint16_t *)*pptr;
         *--ptr = (uint16_t) (x & 0xffff);
         x >>= 16;
@@ -171,14 +171,24 @@ typedef struct {
     uint32_t x_max;     // (Exclusive) upper bound of pre-normalization interval
     uint32_t rcp_freq;  // Fixed-point reciprocal frequency
     uint32_t bias;      // Bias
+
+    // NB: This pair are read as a 32-bit value by the SIMD o1 encoder.
     uint16_t cmpl_freq; // Complement of frequency: (1 << scale_bits) - freq
     uint16_t rcp_shift; // Reciprocal shift
-
-    // FIXME: temporary
-    uint16_t scale_bits;
-    uint16_t freq;
-    uint16_t start;
 } RansEncSymbol;
+
+// As above, but with cmpl_freq and rcp_shift combined into
+// a single value.  This could be done with a cast, but it avoids
+// a type punning error.  We could use a union, but anonymous unions
+// are C11 only (still that's 10 year old!).  For now we just cheat
+// instead.
+typedef struct {
+    uint32_t x_max;     // (Exclusive) upper bound of pre-normalization interval
+    uint32_t rcp_freq;  // Fixed-point reciprocal frequency
+    uint32_t bias;      // Bias
+
+    uint32_t cmpl_freq; // cmpl_freq+rcp_shift
+} RansEncSymbol_simd;
 
 // Decoder symbols are straightforward.
 typedef struct {
@@ -210,12 +220,7 @@ static inline void RansEncSymbolInit(RansEncSymbol* s, uint32_t start, uint32_t 
     // set up our parameters such that the original encoder and
     // the fast encoder agree.
     
-    // FIXME: temporary
-    s->scale_bits = scale_bits;
-    s->freq = freq;
-    s->start = start;
-
-    s->x_max = ((RANS_BYTE_L >> scale_bits) << 16) * freq;
+    s->x_max = ((RANS_BYTE_L >> scale_bits) << 16) * freq -1;
     s->cmpl_freq = (uint16_t) ((1 << scale_bits) - freq);
     if (freq < 2) {
         // freq=0 symbols are never valid to encode, so it doesn't matter what
@@ -296,13 +301,13 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     // low entropy data, making this assertion generally true.
     // TODO: maybe have two different variants, and a detection mechanism
     // based on freq table to work out which method would be most efficient?
-    int c = x >= x_max;
+    int c = x > x_max;
     uint16_t* ptr = *(uint16_t **)pptr;
     ptr[-1] = x & 0xffff;
     x >>= c*16;
     *pptr = (uint8_t *)(ptr-c);
 #else
-    if (x >= x_max) {
+    if (x > x_max) {
 	uint8_t* ptr = *pptr;
         ptr -= 2;
 	ptr[0] = x & 0xff;
@@ -338,13 +343,14 @@ static inline void RansEncPutSymbol_branched(RansState* r, uint8_t** pptr, RansE
     uint32_t x_max = sym->x_max;
 
 #ifdef HTSCODECS_LITTLE_ENDIAN
-    if (x >= x_max) {
+    // The old non-branchless method
+    if (x > x_max) {
 	(*pptr) -= 2;
         **(uint16_t **)pptr = x;
 	x >>= 16;
     }
 #else
-    if (x >= x_max) {
+    if (x > x_max) {
 	uint8_t* ptr = *pptr;
         ptr -= 2;
 	ptr[0] = x & 0xff;
@@ -431,19 +437,26 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
 
 static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 {
-    // renormalize
+    // renormalize, branchless
     uint32_t x = *r;
-
-    // Up to 6% quicker (rans4x16pr -t) if using unaligned access,
-    // but normally closer.
-    uint32_t y = (*pptr)[0] | ((*pptr)[1]<<8);
-
-    if (x < RANS_BYTE_L)
-	(*pptr)+=2;
-    if (x < RANS_BYTE_L)
-	x = (x << 16) | y;
-
+    int cmp = (x < RANS_BYTE_L);
+    uint32_t y = (*pptr)[0] + ((*pptr)[1]<<8);
+    x = cmp ? (x << 16) | y : x;
+    (*pptr) += 2*cmp;
     *r = x;
+
+//    // renormalize, branched.  Faster on low-complexity data, but generally
+//    // that is best compressed with PACK and/or RLE which turns it back
+//    // into high complexity data.
+//    uint32_t x = *r;
+//    uint32_t y = (*pptr)[0] | ((*pptr)[1]<<8);
+//
+//    if (x < RANS_BYTE_L)
+//	(*pptr)+=2;
+//    if (x < RANS_BYTE_L)
+//	x = (x << 16) | y;
+//
+//    *r = x;
 }
 #endif /* __x86_64 */
 

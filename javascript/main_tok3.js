@@ -52,14 +52,17 @@ if (!argv.d) {
     if (raw)
 	blk_size = buf.length
     while (pos < buf.length) {
-	var buf2 = tok3.encode(buf.slice(pos, pos+blk_size), argv.a);
+	var blk_end = blk_size;
+	while (pos+blk_end < buf.length && buf[pos+blk_end-1] != 10)
+	    blk_end--;
+	var buf2 = tok3.encode(buf.slice(pos, pos+blk_end), argv.a);
 	var header = new Buffer.allocUnsafe(4);
 	if (!raw) {
 	    header.writeInt32LE(buf2.length, 0);
 	    process.stdout.write(header)
 	}
 	process.stdout.write(buf2)
-	pos += blk_size;
+	pos += blk_end;
 	out_len += buf2.length+4;
     }
     process.stderr.write("Compress "+buf.length+" => " + out_len + "\n");

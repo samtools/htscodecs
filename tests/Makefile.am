@@ -31,7 +31,7 @@
 # 
 
 # Standalone test programs
-noinst_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint
+noinst_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint entropy
 
 LDADD = $(top_builddir)/htscodecs/libhtscodecs.la
 AM_CPPFLAGS = -I$(top_srcdir)
@@ -42,8 +42,10 @@ rans4x16pr_SOURCES = rANS_static4x16pr_test.c
 arith_dynamic_SOURCES = arith_dynamic_test.c
 tokenise_name3_SOURCES = tokenise_name3_test.c
 varint_SOURCES = varint_test.c
+entropy_SOURCES = entropy.c
 
 test_scripts = \
+	entropy.test \
 	rans4x8.test \
 	rans4x16.test \
 	arith.test \
@@ -61,47 +63,53 @@ distclean-local:
 	-rm -rf $(test_outdir)
 
 # Fuzz testing programs, for local use.
-# Hence hardcoded pathnames for the "fuzz" target (we have a
-# rather broken local install of clang).
 #
-# Best configure the main package with (local):
-# ../configure --disable-shared CFLAGS="-g -Wall -O3 -fsanitize=address -gdwarf-2" CC=clang70
-# Then "cd tests;make fuzz" to recompile these tools.
+# Best configure the package in a build subdirectory
+# ../configure --disable-shared CFLAGS="-g -gdwarf-2 -Wall -O3 -fsanitize=address,undefined"
+# Then "make fuzz" to recompile these tools.
 #
 # We can get non-fuzzing code for valgrind use, having found a bug, with e.g.
-# clang70 -I. -I../../tests -I..  -I../.. -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -Wall -g -Wall -gdwarf-2 ../../tests/tokenise_name3_fuzz.c /software/badger/opt/gcc/8.1.0/lib64/libstdc++.a -DNOFUZZ -lbz2 -lpthread
+# clang70 -I. -I../../tests -I..  -I../.. -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -Wall -g -Wall -gdwarf-2 ../../tests/tokenise_name3_fuzz.c -DNOFUZZ -lbz2 -lpthread
 
 
-# Our fuzz tools #include the C code so we can recompile
-# them with -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION.
+# Our fuzz tools are built against a version of the library compiled
+# with -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION.
 # This limits the maximum size of some data blocks to speed up
 # fuzz testing, avoiding small inputs uncompressing to huge
 # outputs.
 
 fuzz: $(EXTRA_PROGRAMS)
-#fuzz: CC=/software/badger/opt/llvm/7.0.0/bin/clang
 
 # Additional flags
-FUZZ_LIB=/software/badger/opt/gcc/8.1.0/lib64/libstdc++.a
-FUZZ_CFLAGS=-fsanitize=fuzzer -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+fuzzer_cflags  = -fsanitize=fuzzer -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+fuzzer_ldflags = -fsanitize=fuzzer
+fuzzer_ldadd   = $(top_builddir)/htscodecs/libcodecsfuzz.a \
+	$(top_builddir)/htscodecs/libcodecsfuzz_sse4.a \
+	$(top_builddir)/htscodecs/libcodecsfuzz_avx2.a \
+	$(top_builddir)/htscodecs/libcodecsfuzz_avx512.a
 
 EXTRA_PROGRAMS = rans4x8_fuzz rans4x16pr_fuzz arith_dynamic_fuzz tokenise_name3_fuzz fqzcomp_qual_fuzz
 rans4x8_fuzz_SOURCES = rANS_static_fuzz.c
-rans4x8_fuzz_CFLAGS  = $(FUZZ_CFLAGS)
-rans4x8_fuzz_LDADD   = $(FUZZ_LIB)
+rans4x8_fuzz_CFLAGS  = $(fuzzer_cflags)
+rans4x8_fuzz_LDFLAGS = $(fuzzer_ldflags)
+rans4x8_fuzz_LDADD   = $(fuzzer_ldadd)
 
 rans4x16pr_fuzz_SOURCES = rANS_static4x16pr_fuzz.c
-rans4x16pr_fuzz_CFLAGS  = $(FUZZ_CFLAGS)
-rans4x16pr_fuzz_LDADD   = $(FUZZ_LIB)
+rans4x16pr_fuzz_CFLAGS  = $(fuzzer_cflags)
+rans4x16pr_fuzz_LDFLAGS = $(fuzzer_ldflags)
+rans4x16pr_fuzz_LDADD   = $(fuzzer_ldadd)
 
 arith_dynamic_fuzz_SOURCES = arith_dynamic_fuzz.c
-arith_dynamic_fuzz_CFLAGS  = $(FUZZ_CFLAGS)
-arith_dynamic_fuzz_LDADD   = $(FUZZ_LIB)
+arith_dynamic_fuzz_CFLAGS  = $(fuzzer_cflags)
+arith_dynamic_fuzz_LDFLAGS = $(fuzzer_ldflags)
+arith_dynamic_fuzz_LDADD   = $(fuzzer_ldadd)
 
 tokenise_name3_fuzz_SOURCES = tokenise_name3_fuzz.c
-tokenise_name3_fuzz_CFLAGS  = $(FUZZ_CFLAGS)
-tokenise_name3_fuzz_LDADD   = $(FUZZ_LIB)
+tokenise_name3_fuzz_CFLAGS  = $(fuzzer_cflags)
+tokenise_name3_fuzz_LDFLAGS = $(fuzzer_ldflags)
+tokenise_name3_fuzz_LDADD   = $(fuzzer_ldadd)
 
 fqzcomp_qual_fuzz_SOURCES = fqzcomp_qual_fuzz.c
-fqzcomp_qual_fuzz_CFLAGS  = $(FUZZ_CFLAGS)
-fqzcomp_qual_fuzz_LDADD   = $(FUZZ_LIB)
+fqzcomp_qual_fuzz_CFLAGS  = $(fuzzer_cflags)
+fqzcomp_qual_fuzz_LDFLAGS = $(fuzzer_ldflags)
+fqzcomp_qual_fuzz_LDADD   = $(fuzzer_ldadd)

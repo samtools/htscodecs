@@ -31,7 +31,7 @@
 # 
 lib_LTLIBRARIES = libhtscodecs.la
 
-libhtscodecs_la_SOURCES = \
+libhtscodecs_base_src = \
 	pack.c \
 	pack.h \
 	rle.c \
@@ -44,6 +44,10 @@ libhtscodecs_la_SOURCES = \
 	rANS_static4x16pr.c \
 	rANS_static4x16.h \
 	rANS_word.h \
+	rANS_static32x16pr.c \
+	rANS_static32x16pr.h \
+	rANS_static16_int.h \
+	permute.h \
 	tokenise_name3.c \
 	tokenise_name3.h \
 	pooled_alloc.h \
@@ -55,10 +59,45 @@ libhtscodecs_la_SOURCES = \
 	htscodecs.c \
 	htscodecs.h \
 	htscodecs_endian.h \
+	utils.c \
 	utils.h
+
+libhtscodecs_simd_src = rANS_static32x16pr_sse4.c \
+	rANS_static32x16pr_avx2.c \
+	rANS_static32x16pr_avx512.c \
+	rANS_static32x16pr_neon.c
+
+libhtscodecs_la_SOURCES = $(libhtscodecs_base_src) $(libhtscodecs_simd_src)
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
 libhtscodecs_la_LIBADD = @LIBZ@ -lm
+
+# AM_CFLAGS so users can override CFLAGS without breaking the build.
+rANS_static32x16pr_sse4.o:     AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
+rANS_static32x16pr_sse4.lo:    AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
+rANS_static32x16pr_avx2.o:     AM_CFLAGS+=@MAVX2@
+rANS_static32x16pr_avx2.lo:    AM_CFLAGS+=@MAVX2@
+rANS_static32x16pr_avx512.o:   AM_CFLAGS+=@MAVX512@
+rANS_static32x16pr_avx512.lo:  AM_CFLAGS+=@MAVX512@
+
+# Fuzz testing version of the library.  This is build using -fsanitize=fuzzer
+# and defines FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION to prevent things like
+# large allocations that would otherwise upset the fuzzer.
+fuzz: $(EXTRA_LIBRARIES)
+
+# Note that we build several libraries here, so we can get automake to
+# use the right options for the various parts.
+# See https://www.gnu.org/software/automake/manual/html_node/Per_002dObject-Flags.html
+EXTRA_LIBRARIES = libcodecsfuzz.a libcodecsfuzz_sse4.a libcodecsfuzz_avx2.a libcodecsfuzz_avx512.a
+libcodecsfuzz_a_SOURCES = $(libhtscodecs_base_src)
+libcodecsfuzz_a_CFLAGS = -fsanitize=fuzzer -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+libcodecsfuzz_a-htscodecs.$(OBJEXT): version.h
+libcodecsfuzz_sse4_a_SOURCES = rANS_static32x16pr_sse4.c
+libcodecsfuzz_sse4_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MSSE4_1@ @MSSSE3@ @MPOPCNT@
+libcodecsfuzz_avx2_a_SOURCES = rANS_static32x16pr_avx2.c
+libcodecsfuzz_avx2_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MAVX2@
+libcodecsfuzz_avx512_a_SOURCES = rANS_static32x16pr_avx512.c
+libcodecsfuzz_avx512_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MAVX512@
 
 version.h: force
 	@ if `git describe 2>/dev/null >/dev/null`; then \

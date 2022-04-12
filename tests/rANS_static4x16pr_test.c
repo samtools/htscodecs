@@ -44,8 +44,9 @@
 #include "htscodecs/rANS_static4x16.h"
 
 #ifndef BLK_SIZE
-// Divisible by 4 for X4
-#  define BLK_SIZE 1039*251*4
+// Divisible by 4 for X4.
+// Also works well for 32-way SIMD
+#  define BLK_SIZE 0x103810
 #endif
 
 // Room to allow for expanded BLK_SIZE on worst case compression.
@@ -93,16 +94,24 @@ int main(int argc, char **argv) {
 
     extern char *optarg;
     extern int optind;
+    extern void force_sw32_decoder(void);
+    extern void rans_disable_avx512(void);
+    extern void rans_disable_avx2(void);
 
-    while ((opt = getopt(argc, argv, "o:dtr")) != -1) {
+    while ((opt = getopt(argc, argv, "o:dtrc:")) != -1) {
 	switch (opt) {
 	case 'o': {
 	    char *optend;
 	    order = strtol(optarg, &optend, 0);
+	    // 8.2 means 2-way stripe
 	    if (*optend == '.')
 		order += atoi(optend+1)<<8;
 	    break;
 	}
+
+	case 'c':
+	    rans_set_cpu(strtol(optarg, NULL, 0));
+	    break;
 
 	case 'd':
 	    decode = 1;
@@ -151,6 +160,11 @@ int main(int argc, char **argv) {
 	    bu = malloc(sizeof(*bu));
 	    bc = malloc(sizeof(*bc));
 	    b[0].blk = load(infp, &blk_size);
+
+	    // Deliberately realloc down to in_size so we can use address
+	    // sanitizer to check for input buffer overruns.
+	    b[0].blk = realloc(b[0].blk, blk_size);
+
 	    b[0].sz = blk_size;
 	    bc[0].sz = rans_compress_bound_4x16(blk_size, order);
 	    bc[0].blk = malloc(bc[0].sz);
@@ -208,8 +222,13 @@ int main(int argc, char **argv) {
 	    gettimeofday(&tv4, NULL);
 
 	    for (i = 0; i < nb; i++) {
-		if (b[i].sz != bu[i].sz || memcmp(b[i].blk, bu[i].blk, b[i].sz))
-		    fprintf(stderr, "Mismatch in block %d, sz %d/%d\n", i, b[i].sz, bu[i].sz);
+		if (b[i].sz != bu[i].sz || memcmp(b[i].blk, bu[i].blk, b[i].sz)) {
+		    int z;
+		    for (z = 0; z < b[i].sz; z++)
+			if (b[i].blk[z] != bu[i].blk[z])
+			    break;
+		    fprintf(stderr, "Mismatch in block %d, sz %d/%d, pos %d, got %d wanted %d\n", i, b[i].sz, bu[i].sz, z, b[i].blk[z], bu[i].blk[z]);
+		}
 		//free(bc[i].blk);
 		//free(bu[i].blk);
 	    }
@@ -231,6 +250,10 @@ int main(int argc, char **argv) {
 	uint32_t in_size, out_size;
 	unsigned char *in = load(infp, &in_size), *out;
 	if (!in) exit(1);
+
+	// Deliberately realloc down to in_size so we can use address
+	// sanitizer to check for input buffer overruns.
+	in = realloc(in, in_size);
 
 	if (decode) {
 	    if (!(out = rans_uncompress_4x16(in, in_size, &out_size)))
