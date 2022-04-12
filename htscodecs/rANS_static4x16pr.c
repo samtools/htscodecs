@@ -836,7 +836,11 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
      unsigned int in_size,
      unsigned char *out,
      unsigned int *out_size) {
-    if (do_simd) {
+    if (!do_simd) { // SIMD disabled
+        return order & 1
+            ? rans_compress_O1_4x16
+            : rans_compress_O0_4x16;
+    }
 	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 	int have_ssse3   = 0;
 	int have_sse4_1  = 0;
@@ -875,28 +879,34 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 	if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_sse4_1 = 0;
 
 	if (order & 1) {
-	    return have_avx512f
-		? rans_compress_O1_32x16_avx512
-		: (have_avx2
-		   ? rans_compress_O1_32x16_avx2
-		   : (have_sse4_1
-		      ? rans_compress_O1_32x16
-		      : rans_compress_O1_32x16));
+#if defined(HAVE_AVX512)
+        if (have_avx512f)
+            return rans_compress_O1_32x16_avx512;
+#endif
+#if defined(HAVE_AVX2)
+        if (have_avx2)
+            return rans_compress_O1_32x16_avx2;
+#endif
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+        if (have_sse4_1) 
+            return rans_compress_O1_32x16;
+#endif
+        return rans_compress_O1_32x16;
 	} else {
-	    return have_avx512f
-		? rans_compress_O0_32x16_avx512
-		: (have_avx2
-		   ? rans_compress_O0_32x16_avx2
-		   : (have_sse4_1
-		      ? rans_compress_O0_32x16//_sse4
-		      : rans_compress_O0_32x16));
-	}
+#if defined(HAVE_AVX512)
+	    if (have_avx512f)
+            return rans_compress_O0_32x16_avx512;
+#endif
+#if defined(HAVE_AVX2)
+		if (have_avx2)
+            return rans_compress_O0_32x16_avx2;
+#endif
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+        if (have_sse4_1)
+            return rans_compress_O0_32x16;
+#endif
+        return rans_compress_O0_32x16;
     }
-
-    // Else all SIMD disabled
-    return order & 1
-	? rans_compress_O1_4x16
-	: rans_compress_O0_4x16;
 }
 
 static inline
@@ -906,7 +916,11 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
      unsigned char *out,
      unsigned int out_size) {
 
-    if (do_simd) {
+    if (!do_simd) { // SIMD disabled
+        return order & 1
+            ? rans_uncompress_O1_4x16
+            : rans_uncompress_O0_4x16;
+    }
 	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 	int have_ssse3   = 0;
 	int have_sse4_1  = 0;
@@ -948,28 +962,34 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 //		have_ssse3, have_sse4_1, have_popcnt, have_avx2, have_avx512f);
 
 	if (order & 1) {
-	    return have_avx512f
-		? rans_uncompress_O1_32x16_avx512
-		: (have_avx2
-		   ? rans_uncompress_O1_32x16_avx2
-		   : (have_sse4_1
-		      ? rans_uncompress_O1_32x16_sse4
-		      : rans_uncompress_O1_32x16));
+#if defined(HAVE_AVX512)
+	    if (have_avx512f)
+            return rans_uncompress_O1_32x16_avx512;
+#endif
+#if defined(HAVE_AVX2)
+		if (have_avx2)
+		   return rans_uncompress_O1_32x16_avx2;
+#endif
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+        if (have_sse4_1)
+            return rans_uncompress_O1_32x16_sse4;
+#endif
+        return rans_uncompress_O1_32x16;
 	} else {
-	    return have_avx512f
-		? rans_uncompress_O0_32x16_avx512
-		: (have_avx2
-		   ? rans_uncompress_O0_32x16_avx2
-		   : (have_sse4_1
-		      ? rans_uncompress_O0_32x16_sse4
-		      : rans_uncompress_O0_32x16));
+#if defined(HAVE_AVX512)
+	    if (have_avx512f)
+            return rans_uncompress_O0_32x16_avx512;
+#endif
+#if defined(HAVE_AVX2)
+		if (have_avx2)
+            return rans_uncompress_O0_32x16_avx2;
+#endif
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+        if (have_sse4_1)
+            return rans_uncompress_O0_32x16_sse4;
+#endif
+        return rans_uncompress_O0_32x16;
 	}
-    }
-
-    // Else all SIMD disabled
-    return order & 1
-	? rans_uncompress_O1_4x16
-	: rans_uncompress_O0_4x16;
 }
 
 #elif defined(__ARM_NEON)
