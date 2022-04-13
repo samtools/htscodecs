@@ -900,7 +900,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
         if (have_avx2)
             return rans_compress_O1_32x16_avx2;
 #endif
-#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
         if (have_sse4_1) 
             return rans_compress_O1_32x16;
 #endif
@@ -914,7 +914,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
         if (have_avx2)
             return rans_compress_O0_32x16_avx2;
 #endif
-#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
         if (have_sse4_1)
             return rans_compress_O0_32x16;
 #endif
@@ -984,7 +984,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
         if (have_avx2)
             return rans_uncompress_O1_32x16_avx2;
 #endif
-#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
         if (have_sse4_1)
             return rans_uncompress_O1_32x16_sse4;
 #endif
@@ -998,7 +998,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
         if (have_avx2)
             return rans_uncompress_O0_32x16_avx2;
 #endif
-#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
+#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
         if (have_sse4_1)
             return rans_uncompress_O0_32x16_sse4;
 #endif
