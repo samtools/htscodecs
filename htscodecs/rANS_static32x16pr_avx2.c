@@ -38,12 +38,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <assert.h>
 #include <string.h>
-#include <sys/time.h>
 #include <limits.h>
-#include <math.h>
 #include <x86intrin.h>
 
 #include "rANS_word.h"
@@ -51,8 +47,6 @@
 #define ROT32_SIMD
 #include "rANS_static16_int.h"
 #include "varint.h"
-#include "pack.h"
-#include "rle.h"
 #include "utils.h"
 #include "permute.h"
 

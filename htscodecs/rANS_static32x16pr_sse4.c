@@ -38,20 +38,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <assert.h>
 #include <string.h>
-#include <sys/time.h>
 #include <limits.h>
-#include <math.h>
 #include <x86intrin.h>
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #include "rANS_static16_int.h"
 #include "varint.h"
-#include "pack.h"
-#include "rle.h"
 #include "utils.h"
 
 /* Uses: SSE, SSE2, SSSE3, SSE4.1 and POPCNT

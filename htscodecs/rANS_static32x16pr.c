@@ -36,19 +36,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <assert.h>
 #include <string.h>
-#include <sys/time.h>
 #include <limits.h>
-#include <math.h>
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #include "rANS_static16_int.h"
 #include "varint.h"
-#include "pack.h"
-#include "rle.h"
+#include "utils.h"
 
 #define TF_SHIFT 12
 #define TOTFREQ (1<<TF_SHIFT)
