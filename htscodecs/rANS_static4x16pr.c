@@ -830,6 +830,18 @@ void rans_set_cpu(int opts) {
 // Icc and Clang both also set __GNUC__
 #include <cpuid.h>
 
+#if defined(__clang__) && defined(__has_attribute)
+#  if __has_attribute(unused)
+#    define UNUSED __attribute__((unused))
+#  else
+#    define UNUSED
+#  endif
+#elif defined(__GNUC__) && __GNUC__ >= 3
+#  define UNUSED __attribute__((unused))
+#else
+#  define UNUSED
+#endif
+
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
     (unsigned char *in,
@@ -842,11 +854,12 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
             : rans_compress_O0_4x16;
     }
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    int have_ssse3   = 0;
-    int have_sse4_1  = 0;
-    int have_popcnt  = 0;
-    int have_avx2    = 0;
-    int have_avx512f = 0;
+    // These may be unused, defending on HAVE_* config.h macros
+    int have_ssse3   UNUSED = 0;
+    int have_sse4_1  UNUSED = 0;
+    int have_popcnt  UNUSED = 0;
+    int have_avx2    UNUSED = 0;
+    int have_avx512f UNUSED = 0;
 
     int level = __get_cpuid_max(0, NULL);
     if (level >= 1) {
@@ -922,11 +935,12 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
             : rans_uncompress_O0_4x16;
     }
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    int have_ssse3   = 0;
-    int have_sse4_1  = 0;
-    int have_popcnt  = 0;
-    int have_avx2    = 0;
-    int have_avx512f = 0;
+    // These may be unused, defending on HAVE_* config.h macros
+    int have_ssse3   UNUSED = 0;
+    int have_sse4_1  UNUSED = 0;
+    int have_popcnt  UNUSED = 0;
+    int have_avx2    UNUSED = 0;
+    int have_avx512f UNUSED = 0;
 
     int level = __get_cpuid_max(0, NULL);
     if (level >= 1) {
