@@ -46,7 +46,7 @@ int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     unsigned int uncomp_size;
     unsigned char *uncomp = tok3_decode_names(in, in_size, &uncomp_size);
     if (uncomp)
-	free(uncomp);
+        free(uncomp);
     
     return 0;
 }
@@ -65,18 +65,18 @@ static unsigned char *load(char *fn, uint64_t *lenp) {
     int fd = open(fn, O_RDONLY);
 
     do {
-	if (dsize - dcurr < BS) {
-	    dsize = dsize ? dsize * 2 : BS;
-	    data = realloc(data, dsize);
-	}
+        if (dsize - dcurr < BS) {
+            dsize = dsize ? dsize * 2 : BS;
+            data = realloc(data, dsize);
+        }
 
-	len = read(fd, data + dcurr, BS);
-	if (len > 0)
-	    dcurr += len;
+        len = read(fd, data + dcurr, BS);
+        if (len > 0)
+            dcurr += len;
     } while (len > 0);
 
     if (len == -1) {
-	perror("read");
+        perror("read");
     }
 
     close(fd);

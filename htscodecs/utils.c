@@ -82,18 +82,18 @@ static pthread_key_t rans_key;
 static void htscodecs_tls_free_all(void *ptr) {
     tls_pool *tls = (tls_pool *)ptr;
     if (!tls)
-	return;
+        return;
 
     int i;
     for (i = 0; i < MAX_TLS_BUFS; i++) {
 #ifdef TLS_DEBUG
-	if (tls->bufs[i])
-	    fprintf(stderr, "Free %ld = %p\n", tls->sizes[i], tls->bufs[i]);
+        if (tls->bufs[i])
+            fprintf(stderr, "Free %ld = %p\n", tls->sizes[i], tls->bufs[i]);
 #endif
-	if (tls->used[i]) {
-	    fprintf(stderr, "Closing thread while TLS data is in use\n");
-	}
-	free(tls->bufs[i]);
+        if (tls->used[i]) {
+            fprintf(stderr, "Closing thread while TLS data is in use\n");
+        }
+        free(tls->bufs[i]);
     }
 
     free(tls);
@@ -123,38 +123,38 @@ void *htscodecs_tls_alloc(size_t size) {
     // Initialise tls_pool on first usage
     tls_pool *tls = pthread_getspecific(rans_key);
     if (!tls) {
-	if (!(tls = calloc(1, sizeof(*tls))))
-	    return NULL;
-	pthread_setspecific(rans_key, tls);
+        if (!(tls = calloc(1, sizeof(*tls))))
+            return NULL;
+        pthread_setspecific(rans_key, tls);
     }
 
     // Query pool for size
     int avail = -1;
     for (i = 0; i < MAX_TLS_BUFS; i++) {
-	if (!tls->used[i]) {
-	    if (size <= tls->sizes[i]) {
-		tls->used[i] = 1;
+        if (!tls->used[i]) {
+            if (size <= tls->sizes[i]) {
+                tls->used[i] = 1;
 #ifdef TLS_DEBUG
-		fprintf(stderr, "Reuse %d: %ld/%ld = %p\n",
-			i, size, tls->sizes[i], tls->bufs[i]);
+                fprintf(stderr, "Reuse %d: %ld/%ld = %p\n",
+                        i, size, tls->sizes[i], tls->bufs[i]);
 #endif
-		return tls->bufs[i];
-	    } else if (avail == -1) {
-		avail = i;
-	    }
-	}
+                return tls->bufs[i];
+            } else if (avail == -1) {
+                avail = i;
+            }
+        }
     }
 
     if (i == MAX_TLS_BUFS && avail == -1) {
-	// Shouldn't happen given our very limited use of this function
-	fprintf(stderr, "Error: out of rans_tls_alloc slots\n");
-	return NULL;
+        // Shouldn't happen given our very limited use of this function
+        fprintf(stderr, "Error: out of rans_tls_alloc slots\n");
+        return NULL;
     }
 
     if (tls->bufs[avail])
-	free(tls->bufs[avail]);
+        free(tls->bufs[avail]);
     if (!(tls->bufs[avail] = calloc(1, size)))
-	return NULL;
+        return NULL;
 #ifdef TLS_DEBUG
     fprintf(stderr, "Alloc %d: %ld = %p\n", avail, size, tls->bufs[avail]);
 #endif
@@ -176,27 +176,27 @@ void *htscodecs_tls_calloc(size_t nmemb, size_t size) {
 
 void htscodecs_tls_free(void *ptr) {
     if (!ptr)
-	return;
+        return;
 
     tls_pool *tls = pthread_getspecific(rans_key);
 
     int i;
     for (i = 0; i < MAX_TLS_BUFS; i++) {
-	if (tls->bufs[i] == ptr)
-	    break;
+        if (tls->bufs[i] == ptr)
+            break;
     }
 #ifdef TLS_DEBUG
     fprintf(stderr, "Fake free %d size %ld ptr %p\n",
-	    i, tls->sizes[i], tls->bufs[i]);
+            i, tls->sizes[i], tls->bufs[i]);
 #endif
     if (i == MAX_TLS_BUFS) {
-	fprintf(stderr, "Attempt to htscodecs_tls_free a buffer not allocated"
-		" with htscodecs_tls_alloc\n");
-	return;
+        fprintf(stderr, "Attempt to htscodecs_tls_free a buffer not allocated"
+                " with htscodecs_tls_alloc\n");
+        return;
     }
     if (!tls->used[i]) {
-	fprintf(stderr, "Attempt to htscodecs_tls_free a buffer twice\n");
-	return;
+        fprintf(stderr, "Attempt to htscodecs_tls_free a buffer twice\n");
+        return;
     }
     tls->used[i] = 0;
 }

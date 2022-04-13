@@ -58,114 +58,114 @@ extern "C" {
 //----------------------------------------------------------------------
 // Standard scalar versions
 unsigned char *rans_compress_O0_32x16(unsigned char *in,
-				      unsigned int in_size,
-				      unsigned char *out,
-				      unsigned int *out_size);
+                                      unsigned int in_size,
+                                      unsigned char *out,
+                                      unsigned int *out_size);
 
 unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
-					unsigned int in_size,
-					unsigned char *out,
-					unsigned int out_sz);
+                                        unsigned int in_size,
+                                        unsigned char *out,
+                                        unsigned int out_sz);
 
 unsigned char *rans_compress_O1_32x16(unsigned char *in,
-				      unsigned int in_size,
-				      unsigned char *out,
-				      unsigned int *out_size);
+                                      unsigned int in_size,
+                                      unsigned char *out,
+                                      unsigned int *out_size);
 
 unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
-					unsigned int in_size,
-					unsigned char *out,
-					unsigned int out_sz);
+                                        unsigned int in_size,
+                                        unsigned char *out,
+                                        unsigned int out_sz);
 
 //----------------------------------------------------------------------
 // Intel SSE4 implementation.  Only the O0 decoder for now
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
 unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
-					   unsigned int in_size,
-					   unsigned char *out,
-					   unsigned int *out_size);
+                                           unsigned int in_size,
+                                           unsigned char *out,
+                                           unsigned int *out_size);
 
 unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 
 unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 #endif
 
 //----------------------------------------------------------------------
 // Intel AVX2 implementation
 #ifdef HAVE_AVX2
 unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
-					   unsigned int in_size,
-					   unsigned char *out,
-					   unsigned int *out_size);
+                                           unsigned int in_size,
+                                           unsigned char *out,
+                                           unsigned int *out_size);
 
 unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 
 unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in,
-					   unsigned int in_size,
-					   unsigned char *out,
-					   unsigned int *out_size);
+                                           unsigned int in_size,
+                                           unsigned char *out,
+                                           unsigned int *out_size);
 
 unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 #endif // HAVE_AVX2
 
 //----------------------------------------------------------------------
 // Intel AVX512 implementation
 #ifdef HAVE_AVX512
 unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int *out_size);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int *out_size);
 
 unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
-					       unsigned int in_size,
-					       unsigned char *out,
-					       unsigned int out_sz);
+                                               unsigned int in_size,
+                                               unsigned char *out,
+                                               unsigned int out_sz);
 
 unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int *out_size);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int *out_size);
 
 unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
-					       unsigned int in_size,
-					       unsigned char *out,
-					       unsigned int out_sz);
+                                               unsigned int in_size,
+                                               unsigned char *out,
+                                               unsigned int out_sz);
 #endif // HAVE_AVX512
 
 //----------------------------------------------------------------------
 // Arm Neon implementation
 #ifdef __ARM_NEON
 unsigned char *rans_compress_O0_32x16_neon(unsigned char *in,
-					   unsigned int in_size,
-					   unsigned char *out,
-					   unsigned int *out_size);
+                                           unsigned int in_size,
+                                           unsigned char *out,
+                                           unsigned int *out_size);
 
 unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 
 unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
-					   unsigned int in_size,
-					   unsigned char *out,
-					   unsigned int *out_size);
+                                           unsigned int in_size,
+                                           unsigned char *out,
+                                           unsigned int *out_size);
 
 unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
-					     unsigned int in_size,
-					     unsigned char *out,
-					     unsigned int out_sz);
+                                             unsigned int in_size,
+                                             unsigned char *out,
+                                             unsigned int out_sz);
 #endif // ARM_NEON
 
 #ifdef __cplusplus

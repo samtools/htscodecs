@@ -13,7 +13,7 @@ int main(void) {
     FILE *fp = fopen(__FILE__, "r");
     char line[8192];
     while(fgets(line, 8192, fp)) {
-	printf("%s", line);
+        printf("%s", line);
     }
     close(fp);
     printf("\n");
@@ -22,42 +22,42 @@ int main(void) {
     printf("#define _ 9\n");
     printf("static uint32_t permute[256][8] = { // reverse binary bit order\n");
     for (i = 0; i < 256; i++) {
-	int b = 0;
-	int v[8] = {0};
-	for (j = 0; j < 8; j++) {
-	    if (i & (1<<j)) {
-		v[j] = ++b;
-	    }
-	}
-	printf("  { ");
-	for (j = 0; j < 8; j++) {
-	    if (v[j])
-		printf("%d,", v[j]-1);
-	    else
-		printf("_,");
-	}
-	printf("},\n");
+        int b = 0;
+        int v[8] = {0};
+        for (j = 0; j < 8; j++) {
+            if (i & (1<<j)) {
+                v[j] = ++b;
+            }
+        }
+        printf("  { ");
+        for (j = 0; j < 8; j++) {
+            if (v[j])
+                printf("%d,", v[j]-1);
+            else
+                printf("_,");
+        }
+        printf("},\n");
     }
     printf("};\n\n");
 
     // Encode table; collapses N values spread across lanes
     printf("static uint32_t permutec[256][8] = { // reverse binary bit order\n"); 
     for (i = 0; i < 256; i++) {
-	int b = 0;
-	int v[9] = {0};
-	for (j = 0; j < 8; j++) {
-	    if (i & (1<<j)) {
-		v[b++] = j+1;
-	    }
-	}
-	printf("  { ");
-	for (j = b-8; j < b; j++) {
-	    if (j >= 0 && v[j])
-		printf("%d,", v[j]-1);
-	    else
-		printf("_,");
-	}
-	printf("},\n");
+        int b = 0;
+        int v[9] = {0};
+        for (j = 0; j < 8; j++) {
+            if (i & (1<<j)) {
+                v[b++] = j+1;
+            }
+        }
+        printf("  { ");
+        for (j = b-8; j < b; j++) {
+            if (j >= 0 && v[j])
+                printf("%d,", v[j]-1);
+            else
+                printf("_,");
+        }
+        printf("},\n");
     }
     printf("};\n");
 
