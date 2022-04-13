@@ -854,7 +854,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
             : rans_compress_O0_4x16;
     }
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    // These may be unused, defending on HAVE_* config.h macros
+    // These may be unused, depending on HAVE_* config.h macros
     int have_ssse3   UNUSED = 0;
     int have_sse4_1  UNUSED = 0;
     int have_popcnt  UNUSED = 0;
@@ -935,7 +935,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
             : rans_uncompress_O0_4x16;
     }
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    // These may be unused, defending on HAVE_* config.h macros
+    // These may be unused, depending on HAVE_* config.h macros
     int have_ssse3   UNUSED = 0;
     int have_sse4_1  UNUSED = 0;
     int have_popcnt  UNUSED = 0;

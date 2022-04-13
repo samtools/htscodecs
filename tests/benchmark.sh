@@ -5,8 +5,9 @@
 
 file=$1
 file2=`echo $1 | sed 's#.*/##'`
-r4x8=./tests/rans4x8
-r4x16=./tests/rans4x16pr
+test_dir=${TEST_DIR:-./tests}
+r4x8=$test_dir/rans4x8
+r4x16=$test_dir/rans4x16pr
 ntrials=${ntrials:-5}
 
 awkscript='BEGIN {e1=99999;e2=0;d1=99999;d2=0} /bytes/ {if (e1 > $1) {e1 = $1} if (e2 < $1) {e2 = $1} if (d1 > $4) {d1 = $4} if (d2 < $4) {d2 = $4};s=$10} END {print e1,e2,d1,d2,s}'
@@ -30,7 +31,7 @@ do
     set -- $(for i in `seq 1 $ntrials`;do
              $r4x16 -t -o4 -c$c $file 2>&1
         done | awk "$awkscript")
-    printf "r4x16   -o4 -c %-4s %10d %6.1f %6.1f\n" $c $5 $2 $4
+    printf "r32x16  -o4 -c %-4s %10d %6.1f %6.1f\n" $c $5 $2 $4
 done
 
 echo
@@ -51,5 +52,5 @@ do
     set -- $(for i in `seq 1 $ntrials`;do
              $r4x16 -t -o5 -c$c $file 2>&1
         done | awk "$awkscript")
-    printf "r4x16   -o5 -c %-4s %10d %6.1f %6.1f\n" $c $5 $2 $4
+    printf "r32x16  -o5 -c %-4s %10d %6.1f %6.1f\n" $c $5 $2 $4
 done
