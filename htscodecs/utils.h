@@ -55,64 +55,64 @@ void  htscodecs_tls_free(void *ptr);
  * Tuned for specific common cases of N.
  */
 static inline void unstripe(unsigned char *out, unsigned char *outN,
-			    unsigned int ulen, unsigned int N,
-			    unsigned int idxN[256]) {
+                            unsigned int ulen, unsigned int N,
+                            unsigned int idxN[256]) {
     int j = 0, k;
 
     if (ulen >= N) {
-	switch (N) {
-	case 4:
+        switch (N) {
+        case 4:
 #define LLN 16
-	    if (ulen >= 4*LLN) {
-		while (j < ulen-4*LLN) {
-		    int l;
-		    for (l = 0; l < LLN; l++) {
-			for (k = 0; k < 4; k++)
-			    out[j+k+l*4] = outN[idxN[k]+l];
-		    }
-		    for (k = 0; k < 4; k++)
-			idxN[k] += LLN;
-		    j += 4*LLN;
-		}
-	    }
-	    while (j < ulen-4) {
-		for (k = 0; k < 4; k++)
-		    out[j++] = outN[idxN[k]++];
-	    }
+            if (ulen >= 4*LLN) {
+                while (j < ulen-4*LLN) {
+                    int l;
+                    for (l = 0; l < LLN; l++) {
+                        for (k = 0; k < 4; k++)
+                            out[j+k+l*4] = outN[idxN[k]+l];
+                    }
+                    for (k = 0; k < 4; k++)
+                        idxN[k] += LLN;
+                    j += 4*LLN;
+                }
+            }
+            while (j < ulen-4) {
+                for (k = 0; k < 4; k++)
+                    out[j++] = outN[idxN[k]++];
+            }
 #undef LLN
-	    break;
+            break;
 
-	case 2:
+        case 2:
 #define LLN 4
-	    if (ulen >= 2*LLN) {
-		while (j < ulen-2*LLN) {
-		    int l;
-		    for (l = 0; l < LLN; l++) {
-			for (k = 0; k < 2; k++)
-			    out[j++] = outN[idxN[k]+l];
-		    }
-		    for (k = 0; k < 2; k++)
-			idxN[k] += l;
-		}
-	    }
-	    while (j < ulen-2) {
-		for (k = 0; k < 2; k++)
-		    out[j++] = outN[idxN[k]++];
-	    }
+            if (ulen >= 2*LLN) {
+                while (j < ulen-2*LLN) {
+                    int l;
+                    for (l = 0; l < LLN; l++) {
+                        for (k = 0; k < 2; k++)
+                            out[j++] = outN[idxN[k]+l];
+                    }
+                    for (k = 0; k < 2; k++)
+                        idxN[k] += l;
+                }
+            }
+            while (j < ulen-2) {
+                for (k = 0; k < 2; k++)
+                    out[j++] = outN[idxN[k]++];
+            }
 #undef LLN
-	    break;
+            break;
 
-	default:
-	    // General case, around 25% slower overall decode
-	    while (j < ulen-N) {
-		for (k = 0; k < N; k++)
-		    out[j++] = outN[idxN[k]++];
-	    }
-	    break;
-	}
+        default:
+            // General case, around 25% slower overall decode
+            while (j < ulen-N) {
+                for (k = 0; k < N; k++)
+                    out[j++] = outN[idxN[k]++];
+            }
+            break;
+        }
     }
     for (k = 0; j < ulen; k++)
-	out[j++] = outN[idxN[k]++];
+        out[j++] = outN[idxN[k]++];
 }
 
 #define MAGIC 8
@@ -123,55 +123,55 @@ static inline void unstripe(unsigned char *out, unsigned char *outN,
 static inline
 void hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
     if (in_size > 500000) {
-	uint32_t *f0 = htscodecs_tls_calloc((65536+37)*3, sizeof(*f0));
-	uint32_t *f1 = f0 + 65536+37;
-	uint32_t *f2 = f1 + 65536+37;
+        uint32_t *f0 = htscodecs_tls_calloc((65536+37)*3, sizeof(*f0));
+        uint32_t *f1 = f0 + 65536+37;
+        uint32_t *f2 = f1 + 65536+37;
 
-	uint32_t i, i8 = in_size & ~15;
+        uint32_t i, i8 = in_size & ~15;
 
-	for (i = 0; i < i8; i+=16) {
-	    uint16_t i16a[4], i16b[4];
-	    memcpy(i16a, in+i, 8);
-	    f0[i16a[0]]++;
-	    f1[i16a[1]]++;
-	    f2[i16a[2]]++;
-	    f0[i16a[3]]++;
+        for (i = 0; i < i8; i+=16) {
+            uint16_t i16a[4], i16b[4];
+            memcpy(i16a, in+i, 8);
+            f0[i16a[0]]++;
+            f1[i16a[1]]++;
+            f2[i16a[2]]++;
+            f0[i16a[3]]++;
 
-	    memcpy(i16b, in+i+8, 8);
-	    f1[i16b[0]]++;
-	    f0[i16b[1]]++;
-	    f1[i16b[2]]++;
-	    f2[i16b[3]]++;
-	}
+            memcpy(i16b, in+i+8, 8);
+            f1[i16b[0]]++;
+            f0[i16b[1]]++;
+            f1[i16b[2]]++;
+            f2[i16b[3]]++;
+        }
 
-	while (i < in_size)
-	    F0[in[i++]]++;
+        while (i < in_size)
+            F0[in[i++]]++;
 
-	for (i = 0; i < 65536; i++) {
-	    F0[i & 0xff] += f0[i] + f1[i] + f2[i];
-	    F0[i >> 8  ] += f0[i] + f1[i] + f2[i];
-	}
-	htscodecs_tls_free(f0);
+        for (i = 0; i < 65536; i++) {
+            F0[i & 0xff] += f0[i] + f1[i] + f2[i];
+            F0[i >> 8  ] += f0[i] + f1[i] + f2[i];
+        }
+        htscodecs_tls_free(f0);
     } else {
-	uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
-	uint32_t i, i8 = in_size & ~7;
+        uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
+        uint32_t i, i8 = in_size & ~7;
 
-	for (i = 0; i < i8; i+=8) {
-	    F0[in[i+0]]++;
-	    F1[in[i+1]]++;
-	    F2[in[i+2]]++;
-	    F3[in[i+3]]++;
-	    F0[in[i+4]]++;
-	    F1[in[i+5]]++;
-	    F2[in[i+6]]++;
-	    F3[in[i+7]]++;
-	}
+        for (i = 0; i < i8; i+=8) {
+            F0[in[i+0]]++;
+            F1[in[i+1]]++;
+            F2[in[i+2]]++;
+            F3[in[i+3]]++;
+            F0[in[i+4]]++;
+            F1[in[i+5]]++;
+            F2[in[i+6]]++;
+            F3[in[i+7]]++;
+        }
 
-	while (i < in_size)
-	    F0[in[i++]]++;
+        while (i < in_size)
+            F0[in[i++]]++;
 
-	for (i = 0; i < 256; i++)
-	    F0[i] += F1[i] + F2[i] + F3[i];
+        for (i = 0; i < 256; i++)
+            F0[i] += F1[i] + F2[i] + F3[i];
     }
 }
 
@@ -190,25 +190,25 @@ double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
 
     unsigned int i, i8 = in_size & ~7;
     for (i = 0; i < i8; i+=8) {
-	F0[in[i+0]]++;
-	F1[in[i+1]]++;
-	F2[in[i+2]]++;
-	F3[in[i+3]]++;
-	F4[in[i+4]]++;
-	F5[in[i+5]]++;
-	F6[in[i+6]]++;
-	F7[in[i+7]]++;
+        F0[in[i+0]]++;
+        F1[in[i+1]]++;
+        F2[in[i+2]]++;
+        F3[in[i+3]]++;
+        F4[in[i+4]]++;
+        F5[in[i+5]]++;
+        F6[in[i+6]]++;
+        F7[in[i+7]]++;
     }
     while (i < in_size)
-	F0[in[i++]]++;
+        F0[in[i++]]++;
 
     for (i = 0; i < 256; i++) {
-	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
+        F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
 #ifdef __GNUC__
-	e -= F0[i] * (32 - __builtin_clz(F0[i]|1) + in_size_r2);
+        e -= F0[i] * (32 - __builtin_clz(F0[i]|1) + in_size_r2);
 #else
-	extern double fast_log(double);
-	e -= F0[i] * (fast_log(F0[i]) + in_size_r2);
+        extern double fast_log(double);
+        e -= F0[i] * (fast_log(F0[i]) + in_size_r2);
 #endif
     }
 
@@ -224,27 +224,27 @@ double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
  */
 static inline
 void present8(unsigned char *in, unsigned int in_size,
-	      uint32_t F0[256]) {
+              uint32_t F0[256]) {
     uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
     uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
     uint32_t F7[256+MAGIC] = {0};
 
     unsigned int i, i8 = in_size & ~7;
     for (i = 0; i < i8; i+=8) {
-	F0[in[i+0]]=1;
-	F1[in[i+1]]=1;
-	F2[in[i+2]]=1;
-	F3[in[i+3]]=1;
-	F4[in[i+4]]=1;
-	F5[in[i+5]]=1;
-	F6[in[i+6]]=1;
-	F7[in[i+7]]=1;
+        F0[in[i+0]]=1;
+        F1[in[i+1]]=1;
+        F2[in[i+2]]=1;
+        F3[in[i+3]]=1;
+        F4[in[i+4]]=1;
+        F5[in[i+5]]=1;
+        F6[in[i+6]]=1;
+        F7[in[i+7]]=1;
     }
     while (i < in_size)
-	F0[in[i++]]=1;
+        F0[in[i++]]=1;
 
     for (i = 0; i < 256; i++)
-	F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
+        F0[i] += F1[i] + F2[i] + F3[i] + F4[i] + F5[i] + F6[i] + F7[i];
 }
 
 /*
@@ -253,77 +253,77 @@ void present8(unsigned char *in, unsigned int in_size,
 #if 1
 static inline
 void hist1_4(unsigned char *in, unsigned int in_size,
-	     uint32_t F0[256][256], uint32_t *T0) {
+             uint32_t F0[256][256], uint32_t *T0) {
     unsigned char l = 0, c;
     unsigned char *in_end = in + in_size;
 
     unsigned char cc[5] = {0};
     if (in_size > 500000) {
-	uint32_t (*F1)[259] = htscodecs_tls_calloc(256, sizeof(*F1));
-	while (in < in_end-8) {
-	    memcpy(cc, in, 4); in += 4;
-	    F0[cc[4]][cc[0]]++;
-	    F1[cc[0]][cc[1]]++;
-	    F0[cc[1]][cc[2]]++;
-	    F1[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
+        uint32_t (*F1)[259] = htscodecs_tls_calloc(256, sizeof(*F1));
+        while (in < in_end-8) {
+            memcpy(cc, in, 4); in += 4;
+            F0[cc[4]][cc[0]]++;
+            F1[cc[0]][cc[1]]++;
+            F0[cc[1]][cc[2]]++;
+            F1[cc[2]][cc[3]]++;
+            cc[4] = cc[3];
 
-	    memcpy(cc, in, 4); in += 4;
-	    F0[cc[4]][cc[0]]++;
-	    F1[cc[0]][cc[1]]++;
-	    F0[cc[1]][cc[2]]++;
-	    F1[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-	}
-	l = cc[3];
+            memcpy(cc, in, 4); in += 4;
+            F0[cc[4]][cc[0]]++;
+            F1[cc[0]][cc[1]]++;
+            F0[cc[1]][cc[2]]++;
+            F1[cc[2]][cc[3]]++;
+            cc[4] = cc[3];
+        }
+        l = cc[3];
 
-	while (in < in_end) {
-	    F0[l][c = *in++]++;
-	    l = c;
-	}
-	T0[l]++;
+        while (in < in_end) {
+            F0[l][c = *in++]++;
+            l = c;
+        }
+        T0[l]++;
 
-	int i, j;
-	for (i = 0; i < 256; i++) {
-	    int tt = 0;
-	    for (j = 0; j < 256; j++) {
-		F0[i][j] += F1[i][j];
-		tt += F0[i][j];
-	    }
-	    T0[i]+=tt;
-	}
-	htscodecs_tls_free(F1);
+        int i, j;
+        for (i = 0; i < 256; i++) {
+            int tt = 0;
+            for (j = 0; j < 256; j++) {
+                F0[i][j] += F1[i][j];
+                tt += F0[i][j];
+            }
+            T0[i]+=tt;
+        }
+        htscodecs_tls_free(F1);
     } else {
-	while (in < in_end-8) {
-	    memcpy(cc, in, 4); in += 4;
-	    F0[cc[4]][cc[0]]++;
-	    F0[cc[0]][cc[1]]++;
-	    F0[cc[1]][cc[2]]++;
-	    F0[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
+        while (in < in_end-8) {
+            memcpy(cc, in, 4); in += 4;
+            F0[cc[4]][cc[0]]++;
+            F0[cc[0]][cc[1]]++;
+            F0[cc[1]][cc[2]]++;
+            F0[cc[2]][cc[3]]++;
+            cc[4] = cc[3];
 
-	    memcpy(cc, in, 4); in += 4;
-	    F0[cc[4]][cc[0]]++;
-	    F0[cc[0]][cc[1]]++;
-	    F0[cc[1]][cc[2]]++;
-	    F0[cc[2]][cc[3]]++;
-	    cc[4] = cc[3];
-	}
-	l = cc[3];
+            memcpy(cc, in, 4); in += 4;
+            F0[cc[4]][cc[0]]++;
+            F0[cc[0]][cc[1]]++;
+            F0[cc[1]][cc[2]]++;
+            F0[cc[2]][cc[3]]++;
+            cc[4] = cc[3];
+        }
+        l = cc[3];
 
-	while (in < in_end) {
-	    F0[l][c = *in++]++;
-	    l = c;
-	}
-	T0[l]++;
+        while (in < in_end) {
+            F0[l][c = *in++]++;
+            l = c;
+        }
+        T0[l]++;
 
-	int i, j;
-	for (i = 0; i < 256; i++) {
-	    int tt = 0;
-	    for (j = 0; j < 256; j++)
-		tt += F0[i][j];
-	    T0[i]+=tt;
-	}
+        int i, j;
+        for (i = 0; i < 256; i++) {
+            int tt = 0;
+            for (j = 0; j < 256; j++)
+                tt += F0[i][j];
+            T0[i]+=tt;
+        }
     }
 }
 
@@ -335,7 +335,7 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 // Kept here for posterity incase we need it again, as it's quick tricky.
 static inline
 void hist1_4(unsigned char *in, unsigned int in_size,
-	     uint32_t F0[256][256], uint32_t *T0) {
+             uint32_t F0[256][256], uint32_t *T0) {
     uint32_t f0[65536+MAGIC] = {0};
     uint32_t f1[65536+MAGIC] = {0};
 
@@ -343,9 +343,9 @@ void hist1_4(unsigned char *in, unsigned int in_size,
 
     T0[0]++; f0[in[0]<<8]++;
     for (i = 0; i < i8; i+=16) {
-	uint16_t i16a[16];
+        uint16_t i16a[16];
         memcpy(i16a,   in+i,   16); // faster in 2 as gcc recognises this
-	memcpy(i16a+8, in+i+1, 16); // faster in 2 as gcc recognises this
+        memcpy(i16a+8, in+i+1, 16); // faster in 2 as gcc recognises this
 
         f0[i16a[0]]++;
         f1[i16a[1]]++;
@@ -366,14 +366,14 @@ void hist1_4(unsigned char *in, unsigned int in_size,
     }
 
     while (i < in_size-1) {
-	F0[in[i]][in[i+1]]++;
-	T0[in[i+1]]++;
-	i++;
+        F0[in[i]][in[i+1]]++;
+        T0[in[i+1]]++;
+        i++;
     }
 
     for (i = 0; i < 65536; i++) {
         F0[i&0xff][i>>8] += f0[i] + f1[i];
-	T0[i>>8]         += f0[i] + f1[i];
+        T0[i>>8]         += f0[i] + f1[i];
     }
 }
 #endif

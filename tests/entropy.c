@@ -68,18 +68,18 @@ static unsigned char *load(FILE *infp, uint32_t *lenp) {
     signed int len;
 
     do {
-	if (dsize - dcurr < BLK_SIZE) {
-	    dsize = dsize ? dsize * 2 : BLK_SIZE;
-	    data = realloc(data, dsize);
-	}
+        if (dsize - dcurr < BLK_SIZE) {
+            dsize = dsize ? dsize * 2 : BLK_SIZE;
+            data = realloc(data, dsize);
+        }
 
-	len = fread(data + dcurr, 1, BLK_SIZE, infp);
-	if (len > 0)
-	    dcurr += len;
+        len = fread(data + dcurr, 1, BLK_SIZE, infp);
+        if (len > 0)
+            dcurr += len;
     } while (len > 0);
 
     if (len == -1) {
-	perror("fread");
+        perror("fread");
     }
 
     *lenp = dcurr;
@@ -99,10 +99,10 @@ int main(int argc, char **argv) {
     extern void rans_disable_avx2(void);
 
     if (argc > 1) {
-	if (!(infp = fopen(argv[1], "rb"))) {
-	    perror(argv[1]);
-	    return 1;
-	}
+        if (!(infp = fopen(argv[1], "rb"))) {
+            perror(argv[1]);
+            return 1;
+        }
     }
 
 #ifndef _WIN32
@@ -115,52 +115,52 @@ int main(int argc, char **argv) {
     uint32_t in_size, csize, usize;
     unsigned char *in = load(infp, &in_size);
     int order_a[] = {0,1,                            // r4x8
-		     64,65, 128,129, 192,193,        // r4x16, arith
-		     4,5, 68,69, 132,133, 194,197,   // r4x16 SIMD
-		     };
+                     64,65, 128,129, 192,193,        // r4x16, arith
+                     4,5, 68,69, 132,133, 194,197,   // r4x16 SIMD
+                     };
     char *codec[] = {"r4x8", "r4x16", "r32x16", "arith"};
     int i, j;
     for (i = 0; i < sizeof(order_a) / sizeof(*order_a); i++) {
-	int order = order_a[i];
-	uint8_t *comp, *uncomp;
-	for (j = 0; j < 4; j++) {
-	    int chigh = 4, clow = 0, c;
+        int order = order_a[i];
+        uint8_t *comp, *uncomp;
+        for (j = 0; j < 4; j++) {
+            int chigh = 4, clow = 0, c;
             uint8_t *comp0 = NULL;
             uint32_t csize0 = 0;
-	    for (c = 0; c < 4; c+=(j==2)?1:4) {
-		// Test combinations of SIMD implementations
-		uint32_t chex = (clow<<8) | chigh;
-		clow  = 1<<c;
-		chigh >>= 1;
-		rans_set_cpu(chex);
+            for (c = 0; c < 4; c+=(j==2)?1:4) {
+                // Test combinations of SIMD implementations
+                uint32_t chex = (clow<<8) | chigh;
+                clow  = 1<<c;
+                chigh >>= 1;
+                rans_set_cpu(chex);
 
-		// encode
-		switch (j) {
-		case 0: // r4x8
-		    if (i >= 2) continue;
-		    comp = rans_compress(in, in_size, &csize, order);
-		    break;
+                // encode
+                switch (j) {
+                case 0: // r4x8
+                    if (i >= 2) continue;
+                    comp = rans_compress(in, in_size, &csize, order);
+                    break;
 
-		case 1: // r4x16
-		    if (i >= 8) continue;
-		    comp = rans_compress_4x16(in, in_size, &csize, order);
-		    break;
+                case 1: // r4x16
+                    if (i >= 8) continue;
+                    comp = rans_compress_4x16(in, in_size, &csize, order);
+                    break;
 
-		case 2: // r32x16
-		    if (i < 8) continue;
-		    comp = rans_compress_4x16(in, in_size, &csize, order);
-		    break;
+                case 2: // r32x16
+                    if (i < 8) continue;
+                    comp = rans_compress_4x16(in, in_size, &csize, order);
+                    break;
 
-		case 3: // arith
-		    if (i >= 8) continue;
-		    comp = arith_compress(in, in_size, &csize, order);
-		    break;
-		}
-		if (j == 2)
-		    printf("%10s-o%d-c%04x\t", codec[j], order, chex);
-		else
-		    printf("%10s-o%d      \t", codec[j], order);
-		printf("%10d uncomp, %10d comp", in_size, csize);
+                case 3: // arith
+                    if (i >= 8) continue;
+                    comp = arith_compress(in, in_size, &csize, order);
+                    break;
+                }
+                if (j == 2)
+                    printf("%10s-o%d-c%04x\t", codec[j], order, chex);
+                else
+                    printf("%10s-o%d      \t", codec[j], order);
+                printf("%10d uncomp, %10d comp", in_size, csize);
 
                 if (comp0) {
                     if (csize != csize0 || memcmp(comp, comp0, csize) != 0) {
@@ -172,43 +172,43 @@ int main(int argc, char **argv) {
                     comp0 = comp;
                 }
 
-		// decode
-		switch (j) {
-		case 0: // r4x8
-		    if (i >= 2) continue;
-		    uncomp = rans_uncompress(comp, csize, &usize);
-		    break;
+                // decode
+                switch (j) {
+                case 0: // r4x8
+                    if (i >= 2) continue;
+                    uncomp = rans_uncompress(comp, csize, &usize);
+                    break;
 
-		case 1: // r4x16
-		    if (i >= 8) continue;
-		    uncomp = rans_uncompress_4x16(comp, csize, &usize);
-		    break;
+                case 1: // r4x16
+                    if (i >= 8) continue;
+                    uncomp = rans_uncompress_4x16(comp, csize, &usize);
+                    break;
 
-		case 2: // r32x16
-		    if (i < 8) continue;
-		    uncomp = rans_uncompress_4x16(comp, csize, &usize);
-		    break;
+                case 2: // r32x16
+                    if (i < 8) continue;
+                    uncomp = rans_uncompress_4x16(comp, csize, &usize);
+                    break;
 
-		case 3: // arith
-		    if (i >= 8) continue;
-		    uncomp = arith_uncompress(comp, csize, &usize);
-		    break;
-		}
-
-		if (usize != in_size || memcmp(in, uncomp, usize) != 0) {
-		    printf("\tFAIL\n");
-                    result = EXIT_FAILURE;
-		} else {
-		    printf("\tpass\n");
+                case 3: // arith
+                    if (i >= 8) continue;
+                    uncomp = arith_uncompress(comp, csize, &usize);
+                    break;
                 }
 
-		if (comp != comp0)
+                if (usize != in_size || memcmp(in, uncomp, usize) != 0) {
+                    printf("\tFAIL\n");
+                    result = EXIT_FAILURE;
+                } else {
+                    printf("\tpass\n");
+                }
+
+                if (comp != comp0)
                     free(comp);
-		free(uncomp);
-	    }
+                free(uncomp);
+            }
             free(comp0);
-	}
-	printf("\n");
+        }
+        printf("\n");
     }
 
     free(in);

@@ -441,8 +441,8 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
     uint8_t  *ptr = *pptr;
 
     __asm__ ("movzbl (%0), %%eax\n\t"
-	     "mov    %1, %%edx\n\t"
-	     "shl    $0x8,%%edx\n\t"
+             "mov    %1, %%edx\n\t"
+             "shl    $0x8,%%edx\n\t"
              "or     %%eax,%%edx\n\t"
              "cmp    $0x800000,%1\n\t"
              "cmovb  %%edx,%1\n\t"
@@ -545,7 +545,7 @@ static inline void RansDecRenormSafe(RansState* r, uint8_t** pptr, uint8_t *ptr_
     if (x >= RANS_BYTE_L || ptr >= ptr_end) return;
     x = (x << 8) | *ptr++;
     if (x < RANS_BYTE_L && ptr < ptr_end)
-	x = (x << 8) | *ptr++;
+        x = (x << 8) | *ptr++;
     *pptr = ptr;
     *r = x;
 }

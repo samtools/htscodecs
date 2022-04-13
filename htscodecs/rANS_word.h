@@ -308,12 +308,12 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     *pptr = (uint8_t *)(ptr-c);
 #else
     if (x > x_max) {
-	uint8_t* ptr = *pptr;
+        uint8_t* ptr = *pptr;
         ptr -= 2;
-	ptr[0] = x & 0xff;
-	ptr[1] = (x >> 8) & 0xff;
-	x >>= 16;
-	*pptr = ptr;
+        ptr[0] = x & 0xff;
+        ptr[1] = (x >> 8) & 0xff;
+        x >>= 16;
+        *pptr = ptr;
     }
 #endif
 
@@ -345,18 +345,18 @@ static inline void RansEncPutSymbol_branched(RansState* r, uint8_t** pptr, RansE
 #ifdef HTSCODECS_LITTLE_ENDIAN
     // The old non-branchless method
     if (x > x_max) {
-	(*pptr) -= 2;
+        (*pptr) -= 2;
         **(uint16_t **)pptr = x;
-	x >>= 16;
+        x >>= 16;
     }
 #else
     if (x > x_max) {
-	uint8_t* ptr = *pptr;
+        uint8_t* ptr = *pptr;
         ptr -= 2;
-	ptr[0] = x & 0xff;
-	ptr[1] = (x >> 8) & 0xff;
-	x >>= 16;
-	*pptr = ptr;
+        ptr[0] = x & 0xff;
+        ptr[1] = (x >> 8) & 0xff;
+        x >>= 16;
+        *pptr = ptr;
     }
 #endif
 
@@ -417,14 +417,14 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
     uint32_t  x   = *r;
     uint16_t  *ptr = *(uint16_t **)pptr;
     __asm__ ("movzwl (%0),  %%eax\n\t"
-	     "mov    %1,    %%edx\n\t"
-	     "shl    $0x10, %%edx\n\t"
+             "mov    %1,    %%edx\n\t"
+             "shl    $0x10, %%edx\n\t"
              "or     %%eax, %%edx\n\t"
-	     "xor    %%eax, %%eax\n\t"
+             "xor    %%eax, %%eax\n\t"
              "cmp    $0x8000,%1\n\t"
              "cmovb  %%edx, %1\n\t"
-	     "lea    2(%0), %%rax\n\t"
-	     "cmovb  %%rax, %0\n\t"
+             "lea    2(%0), %%rax\n\t"
+             "cmovb  %%rax, %0\n\t"
              : "=r" (ptr), "=r" (x)
              : "0"  (ptr), "1"  (x)
              : "eax", "edx"
@@ -452,9 +452,9 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 //    uint32_t y = (*pptr)[0] | ((*pptr)[1]<<8);
 //
 //    if (x < RANS_BYTE_L)
-//	(*pptr)+=2;
+//      (*pptr)+=2;
 //    if (x < RANS_BYTE_L)
-//	x = (x << 16) | y;
+//      x = (x << 16) | y;
 //
 //    *r = x;
 }

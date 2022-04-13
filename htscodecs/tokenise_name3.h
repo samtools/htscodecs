@@ -48,7 +48,7 @@ extern "C" {
  *         or NULL on failure
  */
 uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
-			   int *out_len, int *last_start_p);
+                           int *out_len, int *last_start_p);
 
 /*
  * Decodes a compressed block of read names into \0 separated names.
