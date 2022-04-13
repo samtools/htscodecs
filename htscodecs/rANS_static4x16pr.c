@@ -841,44 +841,44 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
             ? rans_compress_O1_4x16
             : rans_compress_O0_4x16;
     }
-	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-	int have_ssse3   = 0;
-	int have_sse4_1  = 0;
-	int have_popcnt  = 0;
-	int have_avx2    = 0;
-	int have_avx512f = 0;
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    int have_ssse3   = 0;
+    int have_sse4_1  = 0;
+    int have_popcnt  = 0;
+    int have_avx2    = 0;
+    int have_avx512f = 0;
 
-	int level = __get_cpuid_max(0, NULL);
-	if (level >= 1) {
-	    __cpuid_count(1, 0, eax, ebx, ecx, edx);
+    int level = __get_cpuid_max(0, NULL);
+    if (level >= 1) {
+	__cpuid_count(1, 0, eax, ebx, ecx, edx);
 #if defined(bit_SSSE3)
-	    have_ssse3 = ecx & bit_SSSE3;
+	have_ssse3 = ecx & bit_SSSE3;
 #endif
 #if defined(bit_POPCNT)
-	    have_popcnt = ecx & bit_POPCNT;
+	have_popcnt = ecx & bit_POPCNT;
 #endif
 #if defined(bit_SSE4_1)
-	    have_sse4_1 = ecx & bit_SSE4_1;
+	have_sse4_1 = ecx & bit_SSE4_1;
 #endif
-	}
-	if (level >= 7) {
-	    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+    }
+    if (level >= 7) {
+	__cpuid_count(7, 0, eax, ebx, ecx, edx);
 #if defined(bit_AVX2)
-	    have_avx2 = ebx & bit_AVX2;
+	have_avx2 = ebx & bit_AVX2;
 #endif
 #if defined(bit_AVX512F)
-	    have_avx512f = ebx & bit_AVX512F;
+	have_avx512f = ebx & bit_AVX512F;
 #endif
-	}
+    }
 
-	if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
-	if (!have_ssse3)  have_sse4_1 = 0;
+    if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
+    if (!have_ssse3)  have_sse4_1 = 0;
 
-	if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_avx512f = 0;
-	if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_avx2 = 0;
-	if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_sse4_1 = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_avx2 = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_sse4_1 = 0;
 
-	if (order & 1) {
+    if (order & 1) {
 #if defined(HAVE_AVX512)
         if (have_avx512f)
             return rans_compress_O1_32x16_avx512;
@@ -892,20 +892,20 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
             return rans_compress_O1_32x16;
 #endif
         return rans_compress_O1_32x16;
-	} else {
+    } else {
 #if defined(HAVE_AVX512)
-	    if (have_avx512f)
-            return rans_compress_O0_32x16_avx512;
+	if (have_avx512f)
+	    return rans_compress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-		if (have_avx2)
-            return rans_compress_O0_32x16_avx2;
+	if (have_avx2)
+	    return rans_compress_O0_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
-        if (have_sse4_1)
-            return rans_compress_O0_32x16;
+	if (have_sse4_1)
+	    return rans_compress_O0_32x16;
 #endif
-        return rans_compress_O0_32x16;
+	return rans_compress_O0_32x16;
     }
 }
 
@@ -921,75 +921,75 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
             ? rans_uncompress_O1_4x16
             : rans_uncompress_O0_4x16;
     }
-	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-	int have_ssse3   = 0;
-	int have_sse4_1  = 0;
-	int have_popcnt  = 0;
-	int have_avx2    = 0;
-	int have_avx512f = 0;
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    int have_ssse3   = 0;
+    int have_sse4_1  = 0;
+    int have_popcnt  = 0;
+    int have_avx2    = 0;
+    int have_avx512f = 0;
 
-	int level = __get_cpuid_max(0, NULL);
-	if (level >= 1) {
-	    __cpuid_count(1, 0, eax, ebx, ecx, edx);
+    int level = __get_cpuid_max(0, NULL);
+    if (level >= 1) {
+	__cpuid_count(1, 0, eax, ebx, ecx, edx);
 #if defined(bit_SSSE3)
-	    have_ssse3 = ecx & bit_SSSE3;
+	have_ssse3 = ecx & bit_SSSE3;
 #endif
 #if defined(bit_POPCNT)
-	    have_popcnt = ecx & bit_POPCNT;
+	have_popcnt = ecx & bit_POPCNT;
 #endif
 #if defined(bit_SSE4_1)
-	    have_sse4_1 = ecx & bit_SSE4_1;
+	have_sse4_1 = ecx & bit_SSE4_1;
 #endif
-	}
-	if (level >= 7) {
-	    __cpuid_count(7, 0, eax, ebx, ecx, edx);
+    }
+    if (level >= 7) {
+	__cpuid_count(7, 0, eax, ebx, ecx, edx);
 #if defined(bit_AVX2)
-	    have_avx2 = ebx & bit_AVX2;
+	have_avx2 = ebx & bit_AVX2;
 #endif
 #if defined(bit_AVX512F)
-	    have_avx512f = ebx & bit_AVX512F;
+	have_avx512f = ebx & bit_AVX512F;
 #endif
-	}
+    }
 
-	if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
-	if (!have_ssse3)  have_sse4_1 = 0;
+    if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
+    if (!have_ssse3)  have_sse4_1 = 0;
 
-	if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_avx512f = 0;
-	if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_avx2 = 0;
-	if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_sse4_1 = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_avx2 = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_sse4_1 = 0;
 
-//	fprintf(stderr, "SSSE3 %d, SSE4.1 %d, POPCNT %d, AVX2 %d, AVX512F %d\n",
-//		have_ssse3, have_sse4_1, have_popcnt, have_avx2, have_avx512f);
+    //	fprintf(stderr, "SSSE3 %d, SSE4.1 %d, POPCNT %d, AVX2 %d, AVX512F %d\n",
+    //		have_ssse3, have_sse4_1, have_popcnt, have_avx2, have_avx512f);
 
-	if (order & 1) {
+    if (order & 1) {
 #if defined(HAVE_AVX512)
-	    if (have_avx512f)
-            return rans_uncompress_O1_32x16_avx512;
+	if (have_avx512f)
+	    return rans_uncompress_O1_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-		if (have_avx2)
-		   return rans_uncompress_O1_32x16_avx2;
+	if (have_avx2)
+	    return rans_uncompress_O1_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
         if (have_sse4_1)
             return rans_uncompress_O1_32x16_sse4;
 #endif
         return rans_uncompress_O1_32x16;
-	} else {
+    } else {
 #if defined(HAVE_AVX512)
-	    if (have_avx512f)
-            return rans_uncompress_O0_32x16_avx512;
+	if (have_avx512f)
+	    return rans_uncompress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-		if (have_avx2)
-            return rans_uncompress_O0_32x16_avx2;
+	if (have_avx2)
+	    return rans_uncompress_O0_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3)
-        if (have_sse4_1)
-            return rans_uncompress_O0_32x16_sse4;
+	if (have_sse4_1)
+	    return rans_uncompress_O0_32x16_sse4;
 #endif
-        return rans_uncompress_O0_32x16;
-	}
+	return rans_uncompress_O0_32x16;
+    }
 }
 
 #elif defined(__ARM_NEON)
