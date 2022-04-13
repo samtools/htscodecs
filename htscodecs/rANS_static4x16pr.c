@@ -1039,19 +1039,8 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
     }
 }
 
-#else // defined(__GNUC__) && defined(__x86_64__)
+#else // !(defined(__GNUC__) && defined(__x86_64__)) && !defined(__ARM_NEON)
 
-// We may well be able to write generate AVX2 code, but if we can't auto-detect
-// it then it's pointless.  We can however still use the 32-way codec as
-// we may be decoding on a machine with AVX2 support and the CPU hit isn't
-// vast.
-#ifdef HAVE_AVX2
-#  undef HAVE_AVX2
-#endif
-
-#ifdef HAVE_AVX2
-#  undef HAVE_AVX512
-#endif
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
     (unsigned char *in,
