@@ -36,13 +36,12 @@
 #include <arm_neon.h>
 
 #include <limits.h>
+#include <assert.h>
 
 #include "rANS_word.h"
 #include "rANS_static4x16.h"
 #include "rANS_static16_int.h"
 #include "varint.h"
-#include "pack.h"
-#include "rle.h"
 #include "utils.h"
 
 #define NX 32
