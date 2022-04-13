@@ -214,7 +214,7 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
     RansState ransN[NX];
     uint8_t* ptr;
     uint32_t F[256+MAGIC] = {0};
-    int i, j, tab_size = 0, rle, x, z;
+    int i, j, tab_size = 0, x, z;
     int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
 
     if (!out) {
@@ -256,7 +256,7 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
         return NULL;
 
     // Encode statistics.
-    for (x = rle = j = 0; j < 256; j++) {
+    for (x = j = 0; j < 256; j++) {
         if (F[j]) {
             RansEncSymbolInit(&syms[j], x, F[j], TF_SHIFT);
             x += F[j];
