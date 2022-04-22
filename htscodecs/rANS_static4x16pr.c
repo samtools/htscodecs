@@ -340,11 +340,6 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 
 //-----------------------------------------------------------------------------
 
-static double fast_log(double a) {
-  union { double d; long long x; } u = { a };
-  return (u.x - 4606921278410026770) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
-}
-
 // Compute the entropy of 12-bit vs 10-bit frequency tables.
 // 10 bit means smaller memory footprint when decoding and
 // more speed due to cache hits, but it *may* be a poor

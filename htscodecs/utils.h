@@ -49,6 +49,13 @@ void *htscodecs_tls_alloc(size_t size);
 void *htscodecs_tls_calloc(size_t nmemb, size_t size);
 void  htscodecs_tls_free(void *ptr);
 
+
+/* Fast approximate log base 2 */
+static inline double fast_log(double a) {
+  union { double d; long long x; } u = { a };
+  return (u.x - 4606921278410026770) * 1.539095918623324e-16; /* 1 / 6497320848556798.0; */
+}
+
 /*
  * Data transpose by N.  Common to rANS4x16 and arith_dynamic decoders.
  *
@@ -207,7 +214,6 @@ double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
 #ifdef __GNUC__
         e -= F0[i] * (32 - __builtin_clz(F0[i]|1) + in_size_r2);
 #else
-        extern double fast_log(double);
         e -= F0[i] * (fast_log(F0[i]) + in_size_r2);
 #endif
     }
