@@ -821,8 +821,8 @@ void rans_set_cpu(int opts) {
     rans_cpu = opts;
 }
 
-#if defined(__GNUC__) && defined(__x86_64__)
-// Icc and Clang both also set __GNUC__
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__x86_64__)
+// Icc and Clang both also set __GNUC__ on linux, but not on Windows.
 #include <cpuid.h>
 
 #if defined(__clang__) && defined(__has_attribute)
