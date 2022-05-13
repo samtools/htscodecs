@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <assert.h>
 #include "htscodecs_endian.h"
 
@@ -302,10 +303,19 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     // TODO: maybe have two different variants, and a detection mechanism
     // based on freq table to work out which method would be most efficient?
     int c = x > x_max;
-    uint16_t* ptr = *(uint16_t **)pptr;
-    ptr[-1] = x & 0xffff;
+
+    // This can sometimes be better, eg with clang 7.x
+    // uint16_t* ptr = (uint16_t *)*pptr;
+    // ptr[-1] = x & 0xffff;
+    // x >>= c*16;
+    // *pptr = (uint8_t *)(ptr-c);
+
+    // But overall this seems to be the faster code.
+    // Neither have the aliasing issues of earlier versions
+    memcpy(*pptr-2, &x, 2);
     x >>= c*16;
-    *pptr = (uint8_t *)(ptr-c);
+    *pptr = *pptr - (c<<1);
+
 #else
     if (x > x_max) {
         uint8_t* ptr = *pptr;
