@@ -234,10 +234,11 @@ unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
 #define m128_to_256 _mm256_castsi128_si256
             __m256i t0, t1, t2, t3;
             __m128i *s0, *s1, *s2, *s3;
-            s0 = (__m128i *)((int *)syms + 4*in[Z+0]);
-            s1 = (__m128i *)((int *)syms + 4*in[Z+4]);
-            s2 = (__m128i *)((int *)syms + 4*in[Z+1]);
-            s3 = (__m128i *)((int *)syms + 4*in[Z+5]);
+            s0 = (__m128i *)(&syms[in[Z+0]]);
+            s1 = (__m128i *)(&syms[in[Z+4]]);
+            s2 = (__m128i *)(&syms[in[Z+1]]);
+            s3 = (__m128i *)(&syms[in[Z+5]]);
+
             // FIXME: try load instead of loadu, as 128-bit aligned.
             t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0xE4);
             t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0xE4);
@@ -247,10 +248,11 @@ unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
             sh[z+0] = _mm256_permute2x128_si256(t0, t1, 0x20);
             sh[z+1] = _mm256_permute2x128_si256(t2, t3, 0x20);
 
-            s0 = (__m128i *)((int *)syms + 4*in[Z+2]);
-            s1 = (__m128i *)((int *)syms + 4*in[Z+6]);
-            s2 = (__m128i *)((int *)syms + 4*in[Z+3]);
-            s3 = (__m128i *)((int *)syms + 4*in[Z+7]);
+            s0 = (__m128i *)(&syms[in[Z+2]]);
+            s1 = (__m128i *)(&syms[in[Z+6]]);
+            s2 = (__m128i *)(&syms[in[Z+3]]);
+            s3 = (__m128i *)(&syms[in[Z+7]]);
+
             t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0x4E);
             t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0x4E);
             t2 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s2)), 0x39);
@@ -787,10 +789,11 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
 #define m128_to_256 _mm256_castsi128_si256
             __m256i t0, t1, t2, t3;
             __m128i *s0, *s1, *s2, *s3;
-            s0 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+0]] + lN[Z+0]));
-            s1 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+4]] + lN[Z+4]));
-            s2 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+1]] + lN[Z+1]));
-            s3 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+5]] + lN[Z+5]));
+            s0 = (__m128i *)(&syms[in[iN[Z+0]]][lN[Z+0]]);
+            s1 = (__m128i *)(&syms[in[iN[Z+4]]][lN[Z+4]]);
+            s2 = (__m128i *)(&syms[in[iN[Z+1]]][lN[Z+1]]);
+            s3 = (__m128i *)(&syms[in[iN[Z+5]]][lN[Z+5]]);
+
             t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0xE4);
             t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0xE4);
             t2 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s2)), 0x93);
@@ -804,10 +807,11 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
             sh[z+0] = _mm256_permute2x128_si256(t0, t1, 0x20);
             sh[z+1] = _mm256_permute2x128_si256(t2, t3, 0x20);
 
-            s0 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+2]] + lN[Z+2]));
-            s1 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+6]] + lN[Z+6]));
-            s2 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+3]] + lN[Z+3]));
-            s3 = (__m128i *)((int *)syms + 4*(256*in[iN[Z+7]] + lN[Z+7]));
+            s0 = (__m128i *)(&syms[in[iN[Z+2]]][lN[Z+2]]);
+            s1 = (__m128i *)(&syms[in[iN[Z+6]]][lN[Z+6]]);
+            s2 = (__m128i *)(&syms[in[iN[Z+3]]][lN[Z+3]]);
+            s3 = (__m128i *)(&syms[in[iN[Z+7]]][lN[Z+7]]);
+
             t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0x4E);
             t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0x4E);
             t2 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s2)), 0x39);

@@ -356,7 +356,7 @@ static inline void RansEncPutSymbol_branched(RansState* r, uint8_t** pptr, RansE
     // The old non-branchless method
     if (x > x_max) {
         (*pptr) -= 2;
-        **(uint16_t **)pptr = x;
+        memcpy(*pptr, &x, 2);
         x >>= 16;
     }
 #else
@@ -425,7 +425,7 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
     // clang 730/608   717/467
     // gcc8  733/588   737/458
     uint32_t  x   = *r;
-    uint16_t  *ptr = *(uint16_t **)pptr;
+    uint8_t  *ptr = *pptr;
     __asm__ ("movzwl (%0),  %%eax\n\t"
              "mov    %1,    %%edx\n\t"
              "shl    $0x10, %%edx\n\t"
