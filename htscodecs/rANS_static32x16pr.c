@@ -139,7 +139,7 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
         // orig
         // gcc   446
         // clang 427
-        for (i=(in_size &~(NX-1)); i>0; i-=NX) {
+        for (i=(in_size &~(NX-1)); likely(i>0); i-=NX) {
             for (z = NX-1; z >= 0; z-=4) {
                 RansEncSymbol *s0 = &syms[in[i-(NX-z+0)]];
                 RansEncSymbol *s1 = &syms[in[i-(NX-z+1)]];
@@ -167,7 +167,7 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
         // Branchless version optimises poorly with gcc unless we have
         // AVX2 capability, so have a custom rewrite of it.
         uint16_t* ptr16 = (uint16_t *)ptr;
-        for (i=(in_size &~(NX-1)); i>0; i-=NX) {
+        for (i=(in_size &~(NX-1)); likely(i>0); i-=NX) {
             // Unrolled copy of below, because gcc doesn't optimise this
             // well in the original form.
             //
@@ -209,8 +209,8 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
                 ptr16 -= c1;
 #endif
 
-                rp[3-0] >>= c0<<4;
-                rp[3-1] >>= c1<<4;
+                rp[3-0] = c0 ? rp[3-0]>>16 : rp[3-0];
+                rp[3-1] = c1 ? rp[3-1]>>16 : rp[3-1];
 
                 sy[2] = &syms[C[1]];
                 sy[3] = &syms[C[0]];
@@ -228,8 +228,8 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
                 ((uint8_t *)&ptr16[-1])[1] = rp[3-1]>>8;
                 ptr16 -= c3;
 #endif
-                rp[3-2] >>= c2<<4;
-                rp[3-3] >>= c3<<4;
+                rp[3-2] = c2 ? rp[3-2]>>16 : rp[3-2];
+                rp[3-3] = c3 ? rp[3-3]>>16 : rp[3-3];
 
                 int k;
                 for (k = 0; k < 4; k++) {
@@ -310,7 +310,9 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 
     // assume NX is divisible by 4
     assert(NX%4==0);
-    for (i=0; i < out_end; i+=NX) {
+
+    // Unsafe loop with no ptr overflow checking within loop itself
+    for (i=0; likely(i < out_end && cp < cp_end); i+=NX) {
         for (z = 0; z < NX; z+=4) {
             uint32_t S[4];
             S[0] = s3[R[z+0] & mask];
@@ -332,19 +334,11 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
             out[i+z+2] = S[2];
             out[i+z+3] = S[3];
 
-            if (cp < cp_end) {
-                // 6.8% (clang 13) performance hit, but safe.
-                // Plus we don't expect scalar version to be used much.
-                RansDecRenorm(&R[z+0], &cp);
-                RansDecRenorm(&R[z+1], &cp);
-                RansDecRenorm(&R[z+2], &cp);
-                RansDecRenorm(&R[z+3], &cp);
-            } else {
-                RansDecRenormSafe(&R[z+0], &cp, cp_end+NX*2);
-                RansDecRenormSafe(&R[z+1], &cp, cp_end+NX*2);
-                RansDecRenormSafe(&R[z+2], &cp, cp_end+NX*2);
-                RansDecRenormSafe(&R[z+3], &cp, cp_end+NX*2);
-            }
+            RansDecRenorm(&R[z+0], &cp);
+            RansDecRenorm(&R[z+1], &cp);
+            RansDecRenorm(&R[z+2], &cp);
+            RansDecRenorm(&R[z+3], &cp);
+
             if (NX%8==0) {
                 z += 4;
                 S[0] = s3[R[z+0] & mask];
@@ -366,18 +360,41 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
                 out[i+z+2] = S[2];
                 out[i+z+3] = S[3];
 
-                if (cp < cp_end) {
-                    RansDecRenorm(&R[z+0], &cp);
-                    RansDecRenorm(&R[z+1], &cp);
-                    RansDecRenorm(&R[z+2], &cp);
-                    RansDecRenorm(&R[z+3], &cp);
-                } else {
-                    RansDecRenormSafe(&R[z+0], &cp, cp_end+NX*2);
-                    RansDecRenormSafe(&R[z+1], &cp, cp_end+NX*2);
-                    RansDecRenormSafe(&R[z+2], &cp, cp_end+NX*2);
-                    RansDecRenormSafe(&R[z+3], &cp, cp_end+NX*2);
-                }
+                RansDecRenorm(&R[z+0], &cp);
+                RansDecRenorm(&R[z+1], &cp);
+                RansDecRenorm(&R[z+2], &cp);
+                RansDecRenorm(&R[z+3], &cp);
             }
+        }
+    }
+
+    // Safe loop
+    for (; i < likely(out_end); i+=NX) {
+        for (z = 0; z < NX; z+=4) {
+            uint32_t S[4];
+            S[0] = s3[R[z+0] & mask];
+            S[1] = s3[R[z+1] & mask];
+            S[2] = s3[R[z+2] & mask];
+            S[3] = s3[R[z+3] & mask];
+
+            R[z+0] = (S[0]>>(TF_SHIFT+8)) * (R[z+0] >> TF_SHIFT)
+                + ((S[0]>>8) & mask);
+            R[z+1] = (S[1]>>(TF_SHIFT+8)) * (R[z+1] >> TF_SHIFT)
+                + ((S[1]>>8) & mask);
+            R[z+2] = (S[2]>>(TF_SHIFT+8)) * (R[z+2] >> TF_SHIFT)
+                + ((S[2]>>8) & mask);
+            R[z+3] = (S[3]>>(TF_SHIFT+8)) * (R[z+3] >> TF_SHIFT)
+                + ((S[3]>>8) & mask);
+
+            out[i+z+0] = S[0];
+            out[i+z+1] = S[1];
+            out[i+z+2] = S[2];
+            out[i+z+3] = S[3];
+
+            RansDecRenormSafe(&R[z+0], &cp, cp_end+NX*2);
+            RansDecRenormSafe(&R[z+1], &cp, cp_end+NX*2);
+            RansDecRenormSafe(&R[z+2], &cp, cp_end+NX*2);
+            RansDecRenormSafe(&R[z+3], &cp, cp_end+NX*2);
         }
     }
 
@@ -459,7 +476,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
     for (i = 0; i < NX; i++)
         i32[i] = &in[iN[i]];
 
-    for (; i32[0] >= in; ) {
+    for (; likely(i32[0] >= in); ) {
         uint16_t *ptr16 = (uint16_t *)ptr;
         for (z = NX-1; z >= 0; z-=4) {
             RansEncSymbol *sy[4];
@@ -480,7 +497,8 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
                 ((uint8_t *)&ptr16[-1])[1] = ransN[z-k]>>8;
 #endif
                 ptr16 -= c;
-                ransN[z-k] >>= c<<4;
+                //ransN[z-k] >>= c<<4;
+                ransN[z-k] = c ? ransN[z-k]>>16 : ransN[z-k];
             }
 
             for (k = 0; k < 4; k++) {
@@ -600,12 +618,14 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     for (z = 0; z < NX; z++)
         i4[z] = z*isz4;
 
+    const int low_ent = in_size < 0.2 * out_sz;
+
     // Around 15% faster to specialise for 10/12 than to have one
     // loop with shift as a variable.
     if (shift == TF_SHIFT_O1) {
         // TF_SHIFT_O1 = 12
         const uint32_t mask = ((1u << TF_SHIFT_O1)-1);
-        for (; i4[0] < isz4;) {
+        for (; likely(i4[0] < isz4);) {
             for (z = 0; z < NX; z+=4) {
                 uint16_t m[4], c[4];
 
@@ -631,7 +651,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
                 out[i4[z+2]++] = l[z+2] = c[2];
                 out[i4[z+3]++] = l[z+3] = c[3];
 
-                if (ptr < ptr_end) {
+                if (!low_ent && likely(ptr < ptr_end)) {
                     RansDecRenorm(&R[z+0], &ptr);
                     RansDecRenorm(&R[z+1], &ptr);
                     RansDecRenorm(&R[z+2], &ptr);
@@ -658,7 +678,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     } else {
         // TF_SHIFT_O1 = 10
         const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
-        for (; i4[0] < isz4;) {
+        for (; likely(i4[0] < isz4);) {
             for (z = 0; z < NX; z+=4) {
                 // Merged sfb and fb into single s3 lookup.
                 // The m[4] array completely vanishes in this method.
@@ -692,12 +712,14 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
                 R[z+2] = F[2] * (R[z+2]>>TF_SHIFT_O1_FAST) + B[2];
                 R[z+3] = F[3] * (R[z+3]>>TF_SHIFT_O1_FAST) + B[3];
 
-                if (ptr < ptr_end) {
+                if (!low_ent && (ptr < ptr_end)) {
+                    // branchless & asm
                     RansDecRenorm(&R[z+0], &ptr);
                     RansDecRenorm(&R[z+1], &ptr);
                     RansDecRenorm(&R[z+2], &ptr);
                     RansDecRenorm(&R[z+3], &ptr);
                 } else {
+                    // branched, but better when predictable
                     RansDecRenormSafe(&R[z+0], &ptr, ptr_end+2*NX);
                     RansDecRenormSafe(&R[z+1], &ptr, ptr_end+2*NX);
                     RansDecRenormSafe(&R[z+2], &ptr, ptr_end+2*NX);

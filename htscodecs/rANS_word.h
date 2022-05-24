@@ -449,10 +449,11 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 {
     // renormalize, branchless
     uint32_t x = *r;
-    int cmp = (x < RANS_BYTE_L);
+    int cmp = (x < RANS_BYTE_L)*2;
     uint32_t y = (*pptr)[0] + ((*pptr)[1]<<8);
-    x = cmp ? (x << 16) | y : x;
-    (*pptr) += 2*cmp;
+    uint32_t x2 = (x << 16) | y;
+    x = cmp ? x2 : x;
+    (*pptr) += cmp;
     *r = x;
 
 //    // renormalize, branched.  Faster on low-complexity data, but generally

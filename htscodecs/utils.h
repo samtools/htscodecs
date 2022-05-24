@@ -38,6 +38,21 @@
 #include <stdlib.h>
 #include <math.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#  if !defined(__clang__) && __GNUC__ >= 100
+     // better still on gcc10 for O1 decode of old rans 4x8
+     // gcc 10=246/205 11=243/205 12=230/197
+#    define likely(x)      __builtin_expect_with_probability((x), 1, 0.99)
+#  else
+     // gcc 10=193/168 11=195/161 12=199/176
+#    define likely(x)      __builtin_expect((x), 1)
+#  endif
+#  define unlikely(x)     __builtin_expect((x), 0)
+#else
+#  define likely(x)   (x)
+#  define unlikely(x) (x)
+#endif
+
 /*
  * Allocates size bytes from the global Thread Local Storage pool.
  * This is shared by all subsequent calls within this thread.

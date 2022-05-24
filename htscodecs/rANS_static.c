@@ -169,7 +169,7 @@ unsigned char *rans_compress_O0(unsigned char *in, unsigned int in_size,
     case 0:
         break;
     }
-    for (i=(in_size &~3); i>0; i-=4) {
+    for (i=(in_size &~3); likely(i>0); i-=4) {
         RansEncSymbol *s3 = &syms[in[i-1]];
         RansEncSymbol *s2 = &syms[in[i-2]];
         RansEncSymbol *s1 = &syms[in[i-3]];
@@ -312,24 +312,33 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
 
     int out_end = (out_sz&~3);
     cp_end -= 8; // within 8 for simplicity of loop below
-    for (i=0; i < out_end; i+=4) {
+    // 2 x likely() here harms gcc 7.5 by about 8% rate drop, but only in O2
+    for (i=0; likely(i < out_end); i+=4) {
+        //                              /curr code
+        // gcc7  O2 513/497   562/556++ 556/547 ok
+        // gcc7  O3 566/552   569/553   581/563+
+        // gcc10 O2 544/538   563/547   541/537-?
+        // gcc10 O3 531/519   546/530   575/546+
+        // gcc11 O2 512/490   588/540   540/535 mid
+        // gcc11 O3 482/471   553/541   549/535
+        // gcc12 O2 533/526   544/534   539/535
+        // gcc12 O3 548/533   502/497-- 553/527 ok
+        // clang10  555/542   564/549   560/541
+        // clang13  560/553   572/559   556/559
         m[0] = R[0] & mask;
-        out_buf[i+0] = ssym[m[0]];
         R[0] = sfreq[m[0]] * (R[0] >> TF_SHIFT) + sbase[m[0]];
 
         m[1] = R[1] & mask;
-        out_buf[i+1] = ssym[m[1]];
         R[1] = sfreq[m[1]] * (R[1] >> TF_SHIFT) + sbase[m[1]];
 
         m[2] = R[2] & mask;
-        out_buf[i+2] = ssym[m[2]];
         R[2] = sfreq[m[2]] * (R[2] >> TF_SHIFT) + sbase[m[2]];
 
         m[3] = R[3] & mask;
-        out_buf[i+3] = ssym[m[3]];
         R[3] = sfreq[m[3]] * (R[3] >> TF_SHIFT) + sbase[m[3]];
 
-        if (cp < cp_end) {
+        // likely() here harms gcc12 -O3
+        if (cp<cp_end) {
             RansDecRenorm2(&R[0], &R[1], &cp);
             RansDecRenorm2(&R[2], &R[3], &cp);
         } else {
@@ -338,7 +347,13 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
             RansDecRenormSafe(&R[2], &cp, cp_end+8);
             RansDecRenormSafe(&R[3], &cp, cp_end+8);
         }
+
+        out_buf[i+0] = ssym[m[0]];
+        out_buf[i+1] = ssym[m[1]];
+        out_buf[i+2] = ssym[m[2]];
+        out_buf[i+3] = ssym[m[3]];
     }
+
 
     switch(out_sz&3) {
     case 3:
@@ -514,7 +529,7 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
         l3 = c3;
     }
 
-    for (; i0 >= 0; i0--, i1--, i2--, i3--) {
+    for (; likely(i0 >= 0); i0--, i1--, i2--, i3--) {
         unsigned char c3 = in[i3];
         unsigned char c2 = in[i2];
         unsigned char c1 = in[i1];
@@ -649,7 +664,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 
             //fprintf(stderr, "i=%d j=%d F=%d C=%d\n", i, j, F, C);
 
-            if (!F)
+            if (unlikely(!F))
                 F = TOTFREQ;
 
             RansDecSymbolInit32(&syms[m_i][j], C, F);
@@ -728,41 +743,34 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
     uint8_t cc3 = D[map[l3]].R[R[3] & ((1u << TF_SHIFT)-1)];
 
     ptr_end -= 8;
-    for (; i4[0] < isz4; i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
+    for (; likely(i4[0] < isz4); i4[0]++, i4[1]++, i4[2]++, i4[3]++) {
+        // seq4-head2: file q40b
+        //          O3      O2
+        // gcc7     296/291 290/260
+        // gcc10    292/292 290/261
+        // gcc11    293/293 290/265
+        // gcc12    293/290 291/266
+        // clang10  293/290 296/272
+        // clang13  300/290 290/266
         out_buf[i4[0]] = cc0;
         out_buf[i4[1]] = cc1;
         out_buf[i4[2]] = cc2;
         out_buf[i4[3]] = cc3;
 
-        //RansDecAdvanceStep(&R[0], syms[l0][cc0].start, syms[l0][cc0].freq, TF_SHIFT);
-        //RansDecAdvanceStep(&R[1], syms[l1][cc1].start, syms[l1][cc1].freq, TF_SHIFT);
-        //RansDecAdvanceStep(&R[2], syms[l2][cc2].start, syms[l2][cc2].freq, TF_vSHIFT);
-        //RansDecAdvanceStep(&R[3], syms[l3][cc3].start, syms[l3][cc3].freq, TF_SHIFT);
+        RansDecSymbol32 s[4] = {
+            syms[l0][cc0],
+            syms[l1][cc1],
+            syms[l2][cc2],
+            syms[l3][cc3],
+        };
+        RansDecAdvanceStep(&R[0], s[0].start, s[0].freq, TF_SHIFT);
+        RansDecAdvanceStep(&R[1], s[1].start, s[1].freq, TF_SHIFT);
+        RansDecAdvanceStep(&R[2], s[2].start, s[2].freq, TF_SHIFT);
+        RansDecAdvanceStep(&R[3], s[3].start, s[3].freq, TF_SHIFT);
 
-        {
-            uint32_t m[4];
-
-            // Ordering to try and improve OoO cpu instructions
-            m[0] = R[0] & ((1u << TF_SHIFT)-1);
-            R[0] = syms[l0][cc0].freq * (R[0]>>TF_SHIFT);
-            m[1] = R[1] & ((1u << TF_SHIFT)-1);
-            R[0] += m[0] - syms[l0][cc0].start;
-            R[1] = syms[l1][cc1].freq * (R[1]>>TF_SHIFT);
-            m[2] = R[2] & ((1u << TF_SHIFT)-1);
-            R[1] += m[1] - syms[l1][cc1].start;
-            R[2] = syms[l2][cc2].freq * (R[2]>>TF_SHIFT);
-            m[3] = R[3] & ((1u << TF_SHIFT)-1);
-            R[3] = syms[l3][cc3].freq * (R[3]>>TF_SHIFT);
-            R[2] += m[2] - syms[l2][cc2].start;
-            R[3] += m[3] - syms[l3][cc3].start;
-        }
-
-        l0 = map[cc0];
-        l1 = map[cc1];
-        l2 = map[cc2];
-        l3 = map[cc3];
-
-        if (ptr < ptr_end) {
+        // Likely here helps speed of high-entropy data by 10-11%,
+        // but harms low entropy-data speed by 3-4%.
+        if ((ptr < ptr_end)) {
             RansDecRenorm2(&R[0], &R[1], &ptr);
             RansDecRenorm2(&R[2], &R[3], &ptr);
         } else {
@@ -771,6 +779,11 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
             RansDecRenormSafe(&R[2], &ptr, ptr_end+8);
             RansDecRenormSafe(&R[3], &ptr, ptr_end+8);
         }
+
+        l0 = map[cc0];
+        l1 = map[cc1];
+        l2 = map[cc2];
+        l3 = map[cc3];
 
         cc0 = D[l0].R[R[0] & ((1u << TF_SHIFT)-1)];
         cc1 = D[l1].R[R[1] & ((1u << TF_SHIFT)-1)];
