@@ -62,12 +62,21 @@ libhtscodecs_base_src = \
 	utils.c \
 	utils.h
 
-libhtscodecs_simd_src = rANS_static32x16pr_sse4.c \
-	rANS_static32x16pr_avx2.c \
-	rANS_static32x16pr_avx512.c \
-	rANS_static32x16pr_neon.c
+libhtscodecs_la_SOURCES = $(libhtscodecs_base_src)
 
-libhtscodecs_la_SOURCES = $(libhtscodecs_base_src) $(libhtscodecs_simd_src)
+# SIMD optional extras
+if RANS_32x16_SSE4
+libhtscodecs_la_SOURCES += rANS_static32x16pr_sse4.c
+endif
+if RANS_32x16_AVX2
+libhtscodecs_la_SOURCES += rANS_static32x16pr_avx2.c
+endif
+if RANS_32x16_AVX512
+libhtscodecs_la_SOURCES += rANS_static32x16pr_avx512.c
+endif
+if RANS_32x16_NEON
+libhtscodecs_la_SOURCES += rANS_static32x16pr_neon.c
+endif
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
 libhtscodecs_la_LIBADD = @LIBZ@ -lm

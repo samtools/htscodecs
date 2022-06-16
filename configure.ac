@@ -105,10 +105,14 @@ dnl AC_CHECK_LIB([bsc], [bsc_compress], [
 dnl 	LIBS="-lbsc $LIBS"
 dnl 	AC_DEFINE([HAVE_LIBBSC],1,[Define to 1 if you have the libbsc library.])])
 
+dnl Count parts needed to build rANS_static32x16pr_sse4.c
+sse4_prerequisites=""
+
 dnl Check if we can use our SSSE3 implementations of rANS 32x16 codec.
 AX_CHECK_COMPILE_FLAG([-mssse3], [
         MSSSE3=-mssse3
-	AC_SUBST(MSSSE3)
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MSSSE3])
         AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if the compiler can issue SSSE3 instructions.])
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
@@ -122,7 +126,8 @@ AX_CHECK_COMPILE_FLAG([-mssse3], [
 dnl Check if we can use popcnt instructions
 AX_CHECK_COMPILE_FLAG([-mpopcnt], [
         MPOPCNT=-mpopcnt
-	AC_SUBST(MPOPCNT)
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MPOPCNT])
         AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if the compiler can issue popcnt instructions.])
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
@@ -137,7 +142,8 @@ dnl It may be easier just to target an old era of cpu than -mssse3 -msse4.1
 dnl -mpopcnt.  Eg -march=nehalem.  I don't know how wide spread that is.
 AX_CHECK_COMPILE_FLAG([-msse4.1], [
         MSSE4_1=-msse4.1
-	AC_SUBST(MSSE4_1)
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MSSE4_1])
         AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if the compiler can issue SSE4.1 instructions.])
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
@@ -147,11 +153,12 @@ AX_CHECK_COMPILE_FLAG([-msse4.1], [
 	  return *((char *) &c);
 	]])
 ])
+AM_CONDITIONAL([RANS_32x16_SSE4],[test "x$sse4_prerequisites" = "xooo"])
 
 dnl Check if we can use our AVX2 implementations.
 AX_CHECK_COMPILE_FLAG([-mavx2], [
         MAVX2=-mavx2
-	AC_SUBST(MAVX2)
+	AC_SUBST([MAVX2])
         AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if the compiler can issue AVX2 instructions.])
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
@@ -161,11 +168,12 @@ AX_CHECK_COMPILE_FLAG([-mavx2], [
 	  return *((char *) &b);
 	]])
 ])
+AM_CONDITIONAL([RANS_32x16_AVX2],[test "x$MAVX2" != "x"])
 
 dnl Check also if we have AVX512.  If so this overrides AVX2
 AX_CHECK_COMPILE_FLAG([-mavx512f], [
         MAVX512=-mavx512f
-	AC_SUBST(MAVX512)
+	AC_SUBST([MAVX512])
         AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if the compiler can issue AVX512F instructions.])
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
@@ -175,6 +183,21 @@ AX_CHECK_COMPILE_FLAG([-mavx512f], [
 	  return *((char *) &b);
 	]])
 ])
+AM_CONDITIONAL([RANS_32x16_AVX512],[test "x$MAVX512" != "x"])
+
+dnl Detect ARM Neon availability
+AC_CACHE_CHECK([whether C compiler supports ARM Neon], [htscodecs_cv_have_neon], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([[
+      #include "arm_neon.h"
+    ]], [[
+      int32x4_t a = vdupq_n_s32(1);
+      int32x4_t b = vaddq_s32(a, a);
+      return *((char *) &b);
+    ]])], [htscodecs_cv_have_neon=yes], [htscodecs_cv_have_neon=no])])
+AM_CONDITIONAL([RANS_32x16_NEON],[test "$htscodecs_cv_have_neon" = yes])
+
+AC_SUBST([HTSCODECS_SIMD_SRC])
 
 AX_LIBDEFLATE
 
