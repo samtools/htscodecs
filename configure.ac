@@ -106,36 +106,75 @@ dnl 	LIBS="-lbsc $LIBS"
 dnl 	AC_DEFINE([HAVE_LIBBSC],1,[Define to 1 if you have the libbsc library.])])
 
 dnl Check if we can use our SSSE3 implementations of rANS 32x16 codec.
-AX_CHECK_COMPILE_FLAG([-Werror -mssse3], [
+AX_CHECK_COMPILE_FLAG([-mssse3], [
         MSSSE3=-mssse3
 	AC_SUBST(MSSSE3)
-        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if the compiler can issue SSSE3 instructions.])])
+        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if the compiler can issue SSSE3 instructions.])
+], [], [], [AC_LANG_PROGRAM([[
+	  #include "x86intrin.h"
+	]],[[
+	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
+	  __m128i c = _mm_shuffle_epi8(a, b);
+	  return *((char *) &c);
+	]])
+])
 
 dnl Check if we can use popcnt instructions
-AX_CHECK_COMPILE_FLAG([-Werror -mpopcnt], [
+AX_CHECK_COMPILE_FLAG([-mpopcnt], [
         MPOPCNT=-mpopcnt
 	AC_SUBST(MPOPCNT)
-        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if the compiler can issue popcnt instructions.])])
+        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if the compiler can issue popcnt instructions.])
+], [], [], [AC_LANG_PROGRAM([[
+	  #include "x86intrin.h"
+	]],[[
+	  unsigned int i = _mm_popcnt_u32(1);
+	  return i != 1;
+	]])
+])
 
 dnl Check if we can use our SSE4.1 too.  This *may* always imply SSSE3?
 dnl It may be easier just to target an old era of cpu than -mssse3 -msse4.1
 dnl -mpopcnt.  Eg -march=nehalem.  I don't know how wide spread that is.
-AX_CHECK_COMPILE_FLAG([-Werror -msse4.1], [
-        MSSSE3=-msse4.1
+AX_CHECK_COMPILE_FLAG([-msse4.1], [
+        MSSE4_1=-msse4.1
 	AC_SUBST(MSSE4_1)
-        AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if the compiler can issue SSE4.1 instructions.])])
+        AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if the compiler can issue SSE4.1 instructions.])
+], [], [], [AC_LANG_PROGRAM([[
+	  #include "x86intrin.h"
+	]],[[
+	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
+	  __m128i c = _mm_max_epu32(a, b);
+	  return *((char *) &c);
+	]])
+])
 
 dnl Check if we can use our AVX2 implementations.
-AX_CHECK_COMPILE_FLAG([-Werror -mavx2], [
+AX_CHECK_COMPILE_FLAG([-mavx2], [
         MAVX2=-mavx2
 	AC_SUBST(MAVX2)
-        AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if the compiler can issue AVX2 instructions.])])
+        AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if the compiler can issue AVX2 instructions.])
+], [], [], [AC_LANG_PROGRAM([[
+	  #include "x86intrin.h"
+	]],[[
+	  __m256i a = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
+	  __m256i b = _mm256_add_epi32(a, a);
+	  return *((char *) &b);
+	]])
+])
 
 dnl Check also if we have AVX512.  If so this overrides AVX2
-AX_CHECK_COMPILE_FLAG([-Werror -mavx512f], [
+AX_CHECK_COMPILE_FLAG([-mavx512f], [
         MAVX512=-mavx512f
 	AC_SUBST(MAVX512)
-        AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if the compiler can issue AVX512F instructions.])])
+        AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if the compiler can issue AVX512F instructions.])
+], [], [], [AC_LANG_PROGRAM([[
+	  #include "x86intrin.h"
+	]],[[
+	  __m512i a = _mm512_set1_epi32(1);
+	  __m512i b = _mm512_add_epi32(a, a);
+	  return *((char *) &b);
+	]])
+])
 
 AX_LIBDEFLATE
 
