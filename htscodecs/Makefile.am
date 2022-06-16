@@ -63,31 +63,34 @@ libhtscodecs_base_src = \
 	utils.h
 
 libhtscodecs_la_SOURCES = $(libhtscodecs_base_src)
+libhtscodecs_la_LIBADD =
+noinst_LTLIBRARIES =
 
 # SIMD optional extras
 if RANS_32x16_SSE4
-libhtscodecs_la_SOURCES += rANS_static32x16pr_sse4.c
+noinst_LTLIBRARIES += librANS_static32x16pr_sse4.la
+librANS_static32x16pr_sse4_la_SOURCES = rANS_static32x16pr_sse4.c
+librANS_static32x16pr_sse4_la_CFLAGS = @MSSE4_1@ @MSSSE3@ @MPOPCNT@
+libhtscodecs_la_LIBADD += librANS_static32x16pr_sse4.la
 endif
 if RANS_32x16_AVX2
-libhtscodecs_la_SOURCES += rANS_static32x16pr_avx2.c
+noinst_LTLIBRARIES += librANS_static32x16pr_avx2.la
+librANS_static32x16pr_avx2_la_SOURCES = rANS_static32x16pr_avx2.c
+librANS_static32x16pr_avx2_la_CFLAGS = @MAVX2@
+libhtscodecs_la_LIBADD += librANS_static32x16pr_avx2.la
 endif
 if RANS_32x16_AVX512
-libhtscodecs_la_SOURCES += rANS_static32x16pr_avx512.c
+noinst_LTLIBRARIES += librANS_static32x16pr_avx512.la
+librANS_static32x16pr_avx512_la_SOURCES = rANS_static32x16pr_avx512.c
+librANS_static32x16pr_avx512_la_CFLAGS = @MAVX512@
+libhtscodecs_la_LIBADD += librANS_static32x16pr_avx512.la
 endif
 if RANS_32x16_NEON
 libhtscodecs_la_SOURCES += rANS_static32x16pr_neon.c
 endif
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
-libhtscodecs_la_LIBADD = @LIBZ@ -lm
-
-# AM_CFLAGS so users can override CFLAGS without breaking the build.
-rANS_static32x16pr_sse4.o:     AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
-rANS_static32x16pr_sse4.lo:    AM_CFLAGS+=@MSSE4_1@ @MSSSE3@ @MPOPCNT@
-rANS_static32x16pr_avx2.o:     AM_CFLAGS+=@MAVX2@
-rANS_static32x16pr_avx2.lo:    AM_CFLAGS+=@MAVX2@
-rANS_static32x16pr_avx512.o:   AM_CFLAGS+=@MAVX512@
-rANS_static32x16pr_avx512.lo:  AM_CFLAGS+=@MAVX512@
+libhtscodecs_la_LIBADD += @LIBZ@ -lm
 
 # Fuzz testing version of the library.  This is build using -fsanitize=fuzzer
 # and defines FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION to prevent things like
