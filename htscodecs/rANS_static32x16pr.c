@@ -369,7 +369,7 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
     }
 
     // Safe loop
-    for (; i < likely(out_end); i+=NX) {
+    for (; i < out_end; i+=NX) {
         for (z = 0; z < NX; z+=4) {
             uint32_t S[4];
             S[0] = s3[R[z+0] & mask];
