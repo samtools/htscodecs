@@ -150,6 +150,7 @@ int main(int argc, char **argv) {
         typedef struct {
             unsigned char *blk;
             uint32_t sz;
+            uint32_t csz;
         } blocks;
         blocks *b = NULL, *bc = NULL, *bu = NULL;
         int nb = 0, i;
@@ -192,7 +193,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Testing %d blocks\n", nb);
 
 #ifndef NTRIALS
-#define NTRIALS 10
+#define NTRIALS 5
 #endif
         int trials = NTRIALS;
         while (trials--) {
@@ -206,6 +207,7 @@ int main(int argc, char **argv) {
                 unsigned int csz = bc[i].sz;
                 bc[i].blk = rans_compress_to_4x16(b[i].blk, b[i].sz, bc[i].blk, &csz, order);
                 assert(csz <= bc[i].sz);
+                bc[i].csz = csz;
                 out_sz += 5 + csz;
             }
 
@@ -217,7 +219,7 @@ int main(int argc, char **argv) {
             gettimeofday(&tv3, NULL);
 
             for (i = 0; i < nb; i++)
-                bu[i].blk = rans_uncompress_to_4x16(bc[i].blk, bc[i].sz, bu[i].blk, &bu[i].sz);
+                bu[i].blk = rans_uncompress_to_4x16(bc[i].blk, bc[i].csz, bu[i].blk, &bu[i].sz);
 
             gettimeofday(&tv4, NULL);
 

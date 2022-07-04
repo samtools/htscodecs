@@ -20,6 +20,8 @@
 #include <stdint.h>
 #include <assert.h>
 
+#include "utils.h"
+
 #ifdef assert
 #define RansAssert assert
 #else
@@ -294,7 +296,8 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     ptr[-1] = x & 0xff;
     ptr -= o;
     x >>= o*8;
-    if (x >= x_max) {
+
+    if (unlikely(x >= x_max)) {
         *--ptr = (uint8_t) (x & 0xff);
         x >>= 8;
     }

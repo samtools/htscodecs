@@ -299,6 +299,9 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
         for (j = 0; j < 8; j+=4) {
             RansState m0 = RansDecGet(&R[0], TF_SHIFT);
             RansState m1 = RansDecGet(&R[1], TF_SHIFT);
+            out[i+j+0] = ssym[m0];
+            out[i+j+1] = ssym[m1];
+
             R[0] = sfreq[m0] * (R[0] >> TF_SHIFT) + sbase[m0];
             R[1] = sfreq[m1] * (R[1] >> TF_SHIFT) + sbase[m1];
 
@@ -311,13 +314,11 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
             R[2] = sfreq[m2] * (R[2] >> TF_SHIFT) + sbase[m2];
             R[3] = sfreq[m3] * (R[3] >> TF_SHIFT) + sbase[m3];
 
-            out[i+j+0] = ssym[m0];
-            out[i+j+1] = ssym[m1];
-            out[i+j+2] = ssym[m2];
-            out[i+j+3] = ssym[m3];
-
             RansDecRenorm(&R[2], &cp);
             RansDecRenorm(&R[3], &cp);
+
+            out[i+j+2] = ssym[m2];
+            out[i+j+3] = ssym[m3];
         }
     }
 

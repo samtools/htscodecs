@@ -299,23 +299,14 @@ static inline void RansEncPutSymbol(RansState* r, uint8_t** pptr, RansEncSymbol 
     // is poor.
     //
     // Note the bit-packing and RLE modes are more likely to be used on
-    // low entropy data, making this assertion generally true.
-    // TODO: maybe have two different variants, and a detection mechanism
-    // based on freq table to work out which method would be most efficient?
-    int c = x > x_max;
+    // low entropy data, making this assertion generally true.  See
+    // RansEncPutSymbol_branched for a low-entropy optimised function.
 
-    // This can sometimes be better, eg with clang 7.x
-    // uint16_t* ptr = (uint16_t *)*pptr;
-    // ptr[-1] = x & 0xffff;
-    // x >>= c*16;
-    // *pptr = (uint8_t *)(ptr-c);
-
-    // But overall this seems to be the faster code.
-    // Neither have the aliasing issues of earlier versions
+    // NB: "(x > x_max)*2" turns back into branched code with gcc.
+    int c = (x > x_max); c*=2;
     memcpy(*pptr-2, &x, 2);
-    x >>= c*16;
-    *pptr = *pptr - (c<<1);
-
+    x >>= c*8;
+    *pptr = *pptr - c;
 #else
     if (x > x_max) {
         uint8_t* ptr = *pptr;
@@ -449,10 +440,11 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 {
     // renormalize, branchless
     uint32_t x = *r;
-    int cmp = (x < RANS_BYTE_L);
+    int cmp = (x < RANS_BYTE_L)*2;
     uint32_t y = (*pptr)[0] + ((*pptr)[1]<<8);
-    x = cmp ? (x << 16) | y : x;
-    (*pptr) += 2*cmp;
+    uint32_t x2 = (x << 16) | y;
+    x = cmp ? x2 : x;
+    (*pptr) += cmp;
     *r = x;
 
 //    // renormalize, branched.  Faster on low-complexity data, but generally
