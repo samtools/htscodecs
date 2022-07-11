@@ -58,7 +58,9 @@
 #include "htscodecs/rANS_static.h"
 #include "htscodecs/rANS_static4x16.h"
 
-#define BLK_SIZE 1024*1024
+#ifndef BLK_SIZE
+#   define BLK_SIZE 1024*1024
+#endif
 
 // Max 4GB
 static unsigned char *load(FILE *infp, uint32_t *lenp) {

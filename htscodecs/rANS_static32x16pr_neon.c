@@ -84,7 +84,8 @@ unsigned char *rans_compress_O0_32x16_neon(unsigned char *in,
     uint8_t* ptr;
     uint32_t F[256+MAGIC] = {0};
     int i, j, tab_size = 0, x, z;
-    int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
+    // -20 for order/size/meta
+    uint32_t bound = rans_compress_bound_4x16(in_size,0)-20;
 
     if (!out) {
         *out_size = bound;
@@ -912,7 +913,8 @@ unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
                                            unsigned int *out_size) {
     unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-    int bound = rans_compress_bound_4x16(in_size,1)-20, z;
+    uint32_t bound = rans_compress_bound_4x16(in_size,1)-20;
+    int z;
     RansState ransN[NX];
 
     if (in_size < NX) // force O0 instead

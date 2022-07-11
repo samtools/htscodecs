@@ -257,8 +257,9 @@ static unsigned char *load(char *fn, size_t *lenp) {
     return data;
 }
 
-#define BLK_SIZE 300*1000000
-//#define BLK_SIZE 100*100000
+#ifndef BLK_SIZE
+#    define BLK_SIZE 300*1000000
+#endif
 
 int count_lines(unsigned char *in, size_t len) {
     size_t i;
@@ -320,7 +321,7 @@ int main(int argc, char **argv) {
     int decomp = 0, vers = 4;  // CRAM version 4.0 (4) or 3.1 (3)
     int strat = 0, raw = 0;
     fqz_gparams *gp = NULL, gp_local;
-    int blk_size = BLK_SIZE; // MAX
+    uint32_t blk_size = BLK_SIZE; // MAX
 
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);

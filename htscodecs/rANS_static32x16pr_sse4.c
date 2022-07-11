@@ -215,7 +215,8 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
     uint8_t* ptr;
     uint32_t F[256+MAGIC] = {0};
     int i, j, tab_size = 0, x, z;
-    int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
+    // -20 for order/size/meta
+    uint32_t bound = rans_compress_bound_4x16(in_size,0)-20;
 
     if (!out) {
         *out_size = bound;

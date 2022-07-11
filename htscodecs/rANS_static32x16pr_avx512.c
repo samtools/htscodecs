@@ -66,7 +66,7 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
     uint32_t F[256+MAGIC] = {0};
     int i, j, tab_size = 0, x, z;
     // -20 for order/size/meta
-    int bound = rans_compress_bound_4x16(in_size,0)-20;
+    uint32_t bound = rans_compress_bound_4x16(in_size,0)-20;
 
     if (!out) {
         *out_size = bound;
@@ -444,7 +444,8 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
                                              unsigned int *out_size) {
     unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-    int bound = rans_compress_bound_4x16(in_size,1)-20, z;
+    uint32_t bound = rans_compress_bound_4x16(in_size,1)-20;
+    int z;
     RansState ransN[32] __attribute__((aligned(64)));
 
     if (in_size < 32) // force O0 instead
