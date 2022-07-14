@@ -1097,9 +1097,14 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
  *
  * Smallest is method, <in_size> <input>, so worst case 2 bytes longer.
  */
-unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
-                                     unsigned char *out, unsigned int *out_size,
+unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
+                                     unsigned char *out,unsigned int *out_size,
                                      int order) {
+    if (in_size > INT_MAX) {
+        *out_size = 0;
+        return NULL;
+    }
+
     unsigned int c_meta_len;
     uint8_t *meta = NULL, *rle = NULL, *packed = NULL;
     uint8_t *out_free = NULL;

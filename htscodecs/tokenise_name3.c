@@ -1333,6 +1333,11 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
                            int *out_len, int *last_start_p) {
     int last_start = 0, i, j, nreads;
 
+    if (len < 0) {
+        *out_len = 0;
+        return NULL;
+    }
+
     // Count lines
     for (nreads = i = 0; i < len; i++)
         if (blk[i] <= '\n') // \n or \0 separated entries

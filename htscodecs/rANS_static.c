@@ -815,6 +815,11 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
  */
 unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
                              unsigned int *out_size, int order) {
+    if (in_size > INT_MAX) {
+        *out_size = 0;
+        return NULL;
+    }
+
     return order
         ? rans_compress_O1(in, in_size, out_size)
         : rans_compress_O0(in, in_size, out_size);
