@@ -89,7 +89,7 @@ unsigned char *rans_compress_O0(unsigned char *in, unsigned int in_size,
     if (!out_buf)
         return NULL;
 
-    ptr = out_end = out_buf + (int)(1.05*in_size) + 257*257*3 + 9;
+    ptr = out_end = out_buf + (uint32_t)(1.05*in_size) + 257*257*3 + 9;
 
     // Compute statistics
     hist8(in, in_size, (uint32_t *)F);
@@ -401,7 +401,7 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
     out_buf = malloc(1.05*in_size + 257*257*3 + 9);
     if (!out_buf) goto cleanup;
 
-    out_end = out_buf + (int)(1.05*in_size) + 257*257*3 + 9;
+    out_end = out_buf + (uint32_t)(1.05*in_size) + 257*257*3 + 9;
     cp = out_buf+9;
 
     hist1_4(in, in_size, (uint32_t (*)[256])F, (uint32_t *)T);
@@ -815,6 +815,11 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
  */
 unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
                              unsigned int *out_size, int order) {
+    if (in_size > INT_MAX) {
+        *out_size = 0;
+        return NULL;
+    }
+
     return order
         ? rans_compress_O1(in, in_size, out_size)
         : rans_compress_O0(in, in_size, out_size);

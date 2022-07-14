@@ -678,6 +678,11 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
     unsigned int c_meta_len;
     uint8_t *rle = NULL, *packed = NULL;
 
+    if (in_size > INT_MAX) {
+        *out_size = 0;
+        return NULL;
+    }
+
     if (!out) {
         *out_size = arith_compress_bound(in_size, order);
         if (!(out = malloc(*out_size)))

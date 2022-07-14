@@ -55,7 +55,7 @@
 #ifndef BLK_SIZE
 #define BLK_SIZE 1*1024*1024
 #endif
-static char blk[BLK_SIZE*2]; // temporary fix for decoder, which needs more space
+static char *blk;
 
 // Max 4GB
 static unsigned char *load(FILE *infp, uint32_t *lenp) {
@@ -218,8 +218,16 @@ int main(int argc, char **argv) {
         _setmode(_fileno(stdout), _O_BINARY);
 #endif
 
+    // temporary fix for decoder, which needs more space
+    blk = malloc(BLK_SIZE*2);
+
+    int ret;
+
     if (argc > 1 && strcmp(argv[1], "-d") == 0)
-        return decode(argc-1, argv+1);
+        ret = decode(argc-1, argv+1);
     else
-        return encode(argc, argv);
+        ret = encode(argc, argv);
+
+    free(blk);
+    return ret;
 }

@@ -116,7 +116,8 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     uint8_t* ptr;
     uint32_t F[256+MAGIC] = {0};
     int i, j, tab_size = 0, rle, x;
-    int bound = rans_compress_bound_4x16(in_size,0)-20; // -20 for order/size/meta
+    // -20 for order/size/meta
+    uint32_t bound = rans_compress_bound_4x16(in_size,0)-20;
 
     if (!out) {
         *out_size = bound;
@@ -345,7 +346,8 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 // 10 bit means smaller memory footprint when decoding and
 // more speed due to cache hits, but it *may* be a poor
 // compression fit.
-int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
+int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
+                       uint32_t *S) {
     int i, j;
 
     double e10 = 0, e12 = 0;
@@ -353,7 +355,7 @@ int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T, int *S) {
     for (i = 0; i < 256; i++) {
         if (F0[i] == 0)
             continue;
-        int max_val = round2(T[i]);
+        unsigned int max_val = round2(T[i]);
         int ns = 0;
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
@@ -414,8 +416,9 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
-
-    int bound = rans_compress_bound_4x16(in_size,1)-20; // -20 for order/size/meta
+    
+    // -20 for order/size/meta
+    uint32_t bound = rans_compress_bound_4x16(in_size,1)-20;
 
     if (!out) {
         *out_size = bound;
@@ -1094,9 +1097,14 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
  *
  * Smallest is method, <in_size> <input>, so worst case 2 bytes longer.
  */
-unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
-                                     unsigned char *out, unsigned int *out_size,
+unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
+                                     unsigned char *out,unsigned int *out_size,
                                      int order) {
+    if (in_size > INT_MAX) {
+        *out_size = 0;
+        return NULL;
+    }
+
     unsigned int c_meta_len;
     uint8_t *meta = NULL, *rle = NULL, *packed = NULL;
     uint8_t *out_free = NULL;

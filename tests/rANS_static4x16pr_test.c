@@ -52,7 +52,7 @@
 // Room to allow for expanded BLK_SIZE on worst case compression.
 #define BLK_SIZE2 ((105LL*BLK_SIZE)/100)
 
-static unsigned char in_buf[BLK_SIZE2+257*257*3];
+unsigned char *in_buf;
 
 // Max 4GB
 static unsigned char *load(FILE *infp, uint32_t *lenp) {
@@ -86,6 +86,8 @@ int main(int argc, char **argv) {
     FILE *infp = stdin, *outfp = stdout;
     struct timeval tv1, tv2, tv3, tv4;
     size_t bytes = 0, raw = 0;
+
+    in_buf = malloc(BLK_SIZE2+257*257*3);
 
 #ifdef _WIN32
         _setmode(_fileno(stdin),  _O_BINARY);
@@ -332,5 +334,7 @@ int main(int argc, char **argv) {
             tv2.tv_usec - tv1.tv_usec,
             (double)bytes / ((long)(tv2.tv_sec - tv1.tv_sec)*1000000 +
                              tv2.tv_usec - tv1.tv_usec));
+
+    free(in_buf);
     return 0;
 }
