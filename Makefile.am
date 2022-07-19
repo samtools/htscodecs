@@ -45,4 +45,4 @@ nobase_include_HEADERS = \
 	htscodecs/varint.h \
 	htscodecs/htscodecs.h
 
-EXTRA_DIST = README.md LICENSE.md NEWS
+EXTRA_DIST = README.md LICENSE.md NEWS.md
