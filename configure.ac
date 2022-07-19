@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(htscodecs, 1.2.2)
+AC_INIT(htscodecs, 1.3.0)
 
 # Some functions benefit from -O3 optimisation, so if the user didn't
 # explicitly set any compiler flags, we'll plump for O3.
@@ -60,9 +60,9 @@ AM_EXTRA_RECURSIVE_TARGETS([fuzz])
 #       libhtscodecs.so.1 -> libhtscodecs.so.1.1.0
 #       libhtscodecs.so.1.1.0
 
-VERS_CURRENT=2
-VERS_REVISION=6
-VERS_AGE=0
+VERS_CURRENT=3
+VERS_REVISION=0
+VERS_AGE=1
 AC_SUBST(VERS_CURRENT)
 AC_SUBST(VERS_REVISION)
 AC_SUBST(VERS_AGE)
