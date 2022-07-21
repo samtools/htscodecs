@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
                     break;
                 }
 
-                if (usize != in_size || memcmp(in, uncomp, usize) != 0) {
+                if (usize != in_size || uncomp == NULL || memcmp(in, uncomp, usize) != 0) {
                     printf("\tFAIL\n");
                     result = EXIT_FAILURE;
                 } else {
