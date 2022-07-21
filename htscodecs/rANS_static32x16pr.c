@@ -221,11 +221,11 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
                 ptr16[-1] = rp[3-2]; ptr16 -= c2;
                 ptr16[-1] = rp[3-3]; ptr16 -= c3;
 #else
-                ((uint8_t *)&ptr16[-1])[0] = rp[3-0];
-                ((uint8_t *)&ptr16[-1])[1] = rp[3-0]>>8;
+                ((uint8_t *)&ptr16[-1])[0] = rp[3-2];
+                ((uint8_t *)&ptr16[-1])[1] = rp[3-2]>>8;
                 ptr16 -= c2;
-                ((uint8_t *)&ptr16[-1])[0] = rp[3-1];
-                ((uint8_t *)&ptr16[-1])[1] = rp[3-1]>>8;
+                ((uint8_t *)&ptr16[-1])[0] = rp[3-3];
+                ((uint8_t *)&ptr16[-1])[1] = rp[3-3]>>8;
                 ptr16 -= c3;
 #endif
                 rp[3-2] = c2 ? rp[3-2]>>16 : rp[3-2];
