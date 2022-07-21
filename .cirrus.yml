@@ -72,7 +72,7 @@ rocky_task:
   << : *ENVIRONMENT
   name: rockylinux-gcc
   container:
-    image: rockylinux:latest
+    image: rockylinux:9
     cpu: 2
     memory: 1G
 
