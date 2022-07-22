@@ -549,24 +549,32 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     unsigned char *c_freq = NULL;
     int i;
 
+    /*
+     * Somewhat complex memory layout.
+     * With shift==12 (TF_SHIFT_O1) we fill out use both sfb and fb.
+     * With shift==10 (...O1_FAST)  we fill out and use s3 only.
+     *
+     * sfb+fb is larger, therefore we allocate this much memory.
+     */
     uint8_t *sfb_ = htscodecs_tls_alloc(256*
-                                        ((TOTFREQ_O1+256)*sizeof(*sfb_)
-                                         +TOTFREQ_O1_FAST * sizeof(uint32_t)
+                                        ((TOTFREQ_O1+MAGIC2)*sizeof(*sfb_)
                                          +256 * sizeof(fb_t)));
     if (!sfb_)
         return NULL;
-    uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])
-        (sfb_+(TOTFREQ_O1+256)*sizeof(*sfb_));
-    fb_t (*fb)[256] = (fb_t (*)[256])
-        ((uint8_t *)s3 + 256*TOTFREQ_O1_FAST*sizeof(uint32_t));
-    uint8_t *sfb[256];
+
+    // sfb and fb are consecutive
+    uint8_t *sfb[257];
     if ((*cp >> 4) == TF_SHIFT_O1) {
-        for (i = 0; i < 256; i++)
+        for (i = 0; i <= 256; i++)
             sfb[i]=  sfb_ + i*(TOTFREQ_O1+MAGIC2);
     } else {
-        for (i = 0; i < 256; i++)
+        for (i = 0; i <= 256; i++)
             sfb[i]=  sfb_ + i*(TOTFREQ_O1_FAST+MAGIC2);
     }
+    fb_t (*fb)[256] = (fb_t (*)[256]) sfb[256];
+
+    // NOTE: s3 overlaps sfb/fb
+    uint32_t (*s3)[TOTFREQ_O1_FAST] = (uint32_t (*)[TOTFREQ_O1_FAST])sfb_;
 
     if (!out)
         out_free = out = malloc(out_sz);
