@@ -100,6 +100,13 @@ int main(int argc, char **argv) {
     extern void rans_disable_avx512(void);
     extern void rans_disable_avx2(void);
 
+    int benchmark = 0;
+    while (argc > 1 && strcmp(argv[1], "-b") == 0) {
+        benchmark++;
+        argc--;
+        argv++;
+    }
+
     if (argc > 1) {
         if (!(infp = fopen(argv[1], "rb"))) {
             perror(argv[1]);
@@ -130,13 +137,20 @@ int main(int argc, char **argv) {
             uint8_t *comp0 = NULL;
             uint32_t csize0 = 0;
             for (c = 0; c < 4; c+=(j==2)?1:4) {
+                struct timeval tv1, tv2, tv3, tv4;
+
                 // Test combinations of SIMD implementations
-                uint32_t chex = (clow<<8) | chigh;
+                uint32_t chex = benchmark
+                    ? (clow<<8) | clow
+                    : (clow<<8) | chigh;
                 clow  = 1<<c;
                 chigh >>= 1;
                 rans_set_cpu(chex);
 
+                int bloop = benchmark;
+            bloop:
                 // encode
+                gettimeofday(&tv1, NULL);
                 switch (j) {
                 case 0: // r4x8
                     if (i >= 2) continue;
@@ -158,6 +172,8 @@ int main(int argc, char **argv) {
                     comp = arith_compress(in, in_size, &csize, order);
                     break;
                 }
+                gettimeofday(&tv2, NULL);
+
                 if (j == 2)
                     printf("%10s-o%d-c%04x\t", codec[j], order, chex);
                 else
@@ -175,6 +191,7 @@ int main(int argc, char **argv) {
                 }
 
                 // decode
+                gettimeofday(&tv3, NULL);
                 switch (j) {
                 case 0: // r4x8
                     if (i >= 2) continue;
@@ -196,10 +213,19 @@ int main(int argc, char **argv) {
                     uncomp = arith_uncompress(comp, csize, &usize);
                     break;
                 }
+                gettimeofday(&tv4, NULL);
 
                 if (usize != in_size || uncomp == NULL || memcmp(in, uncomp, usize) != 0) {
                     printf("\tFAIL\n");
                     result = EXIT_FAILURE;
+                } else if (benchmark) {
+                    printf(" %6.1f enc MB/s %6.1f dec MB/s\n",
+                           (double)usize /
+                             ((long)(tv2.tv_sec - tv1.tv_sec)*1000000 +
+                              tv2.tv_usec - tv1.tv_usec),
+                           (double)usize /
+                             ((long)(tv4.tv_sec - tv3.tv_sec)*1000000 +
+                              tv4.tv_usec - tv3.tv_usec));
                 } else {
                     printf("\tpass\n");
                 }
@@ -207,6 +233,7 @@ int main(int argc, char **argv) {
                 if (comp != comp0)
                     free(comp);
                 free(uncomp);
+                if (--bloop > 0) goto bloop;
             }
             free(comp0);
         }
