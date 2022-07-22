@@ -98,13 +98,23 @@ unsigned char *rans_uncompress(unsigned char *in, unsigned int in_size,
                                unsigned int *out_size);
 ```
 
+This is the earlier rANS entropy encoder using 4 rANS states and 8-bit
+renormalisation, with Order-0 and Order-1 entropy models.
+
 No (un)compress_to functions exist for this older codec.
 
 
-### Static rANS 4x16 with bit-pack/RLE (CRAM v3.1):
+### Static rANS 4x16 and 32x16 with bit-pack/RLE (CRAM v3.1):
 
 ```
 #include "htscodecs/rANS_static4x16.h"
+
+#define RANS_ORDER_X32    0x04  // 32-way unrolling instead of 4-way
+#define RANS_ORDER_STRIPE 0x08  // N streams for every Nth byte (N==order>>8)
+#define RANS_ORDER_NOSZ   0x10  // Don't store the original size
+#define RANS_ORDER_CAT    0x20  // Nop; for tiny data segments
+#define RANS_ORDER_RLE    0x40  // Run length encoding
+#define RANS_ORDER_PACK   0x80  // Pack 2,4,8 or infinite symbols into a byte.
 
 unsigned int rans_compress_bound_4x16(unsigned int size, int order);
 unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
@@ -117,6 +127,13 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
 unsigned char *rans_uncompress_4x16(unsigned char *in, unsigned int in_size,
                                     unsigned int *out_size);
 ```
+
+This is a faster version with 16-bit renormalisation and optional
+transforms (RLE, small alphabet bit-packing, and interleaving of N
+streams for e.g. 32-bit integer compression).  Additionally the
+`order` field may include bit `RANS_ORDER_X32` in which case a 32-way
+unrolled version will be used instead, with automatic CPU detection
+and dispatching to an appropriate SIMD implementation if available.
 
 ### Adaptive arithmetic coding (CRAM v3.1):
 
@@ -138,6 +155,9 @@ unsigned char *arith_uncompress_to(unsigned char *in, unsigned int in_size,
 
 unsigned int arith_compress_bound(unsigned int size, int order);
 ```
+
+These reuse the same `RANS_ORDER` bit fields and abilities above with
+the exception of X32 as there is currently no unrolling of this code.
 
 ### Name tokeniser (CRAM v3.1):
 
