@@ -97,7 +97,7 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
         ((order & RANS_ORDER_PACK) ? 1 : 0) +
         ((order & RANS_ORDER_RLE) ? 1 + 257*3+4: 0) + 20 +
         ((order & RANS_ORDER_X32) ? (32-4)*4 : 0) +
-        ((order & RANS_ORDER_STRIPE) ? 1 + 5*N: 0);
+        ((order & RANS_ORDER_STRIPE) ? 7 + 5*N: 0);
     return sz + (sz&1) + 2; // make this even so buffers are word aligned
 }
 
@@ -1181,7 +1181,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         unsigned char *out_best = NULL;
         unsigned int out_best_len = 0;
 
-        out2_start = out2 = out+2+5*N; // shares a buffer with c_meta
+        out2_start = out2 = out+7+5*N; // shares a buffer with c_meta
         for (i = 0; i < N; i++) {
             // Brute force try all methods.
             int j, m[] = {1,64,128,0}, best_j = 0, best_sz = in_size+10;

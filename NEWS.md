@@ -1,5 +1,5 @@
-Release 1.3.0: 19th July 2022
------------------------------
+Release 1.3.0: 9th August 2022
+------------------------------
 
 The primary change in this release is a new SIMD enabled rANS codec.
 
@@ -48,6 +48,8 @@ Bug fixes
 - Fixed an issue with encoding data blocks close to 2GB in size.
   (Additionally blocks above 2GB now error, rather than crashing or
   returning incorrect results.)
+
+- Fix encode error with large blocks using RANS_ORDER_STRIPE.
 
 
 Release 1.2.2: 1st April 2022

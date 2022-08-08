@@ -75,11 +75,14 @@
 #define MAGIC 8
 
 unsigned int arith_compress_bound(unsigned int size, int order) {
+    int N = (order>>8) & 0xff;
+    if (!N) N=4;
     return (order == 0
         ? 1.05*size + 257*3 + 4
-        : 1.05*size + 257*257*3 + 4 + 257*3+4) +
+        : 1.05*size + 257*257*3 + 4 + 257*3+4) + 5 +
         ((order & X_PACK) ? 1 : 0) +
-        ((order & X_RLE) ? 1 + 257*3+4: 0) + 5;
+        ((order & X_RLE) ? 1 + 257*3+4: 0) +
+        ((order & X_STRIPE) ? 7 + 5*N: 0);
 }
 
 #ifndef MODEL_256 // see fqzcomp_qual_fuzz.c
@@ -735,7 +738,7 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
         c_meta_len += var_put_u32(out+c_meta_len, out_end, in_size);
         out[c_meta_len++] = N;
 
-        out2_start = out2 = out+2+5*N; // shares a buffer with c_meta
+        out2_start = out2 = out+7+5*N; // shares a buffer with c_meta
         for (i = 0; i < N; i++) {
             // Brute force try all methods.
             // FIXME: optimise this bit.  Maybe learn over time?
