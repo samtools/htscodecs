@@ -1433,11 +1433,8 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
 
     // Serialise descriptors
     uint32_t tot_size = 9;
-    int ndesc = 0;
     for (i = 0; i < ctx->max_tok*16; i++) {
         if (!ctx->desc[i].buf_l) continue;
-
-        ndesc++;
 
         int tnum = i>>4;
         int ttype = i&15;
