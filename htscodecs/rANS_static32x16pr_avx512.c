@@ -735,7 +735,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
     union {
         unsigned char tbuf[32][32];
         uint64_t tbuf64[32][4];
-    } u;
+    } u __attribute__((aligned(32)));
 #else
     uint32_t tbuf[32][32];
 #endif
