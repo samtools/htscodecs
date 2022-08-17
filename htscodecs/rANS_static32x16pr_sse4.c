@@ -1423,7 +1423,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
         uint16_t *sp = (uint16_t *)ptr;
         const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
         __m128i maskv  = _mm_set1_epi32(mask); // set mask in all lanes
-        uint8_t tbuf[32][32];
+        uint8_t tbuf[32][32] __attribute__((aligned(32)));
         int tidx = 0;
         LOAD128(Rv, R);
         LOAD128(Lv, l);

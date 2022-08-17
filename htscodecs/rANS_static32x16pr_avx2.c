@@ -1123,7 +1123,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
     union {
         unsigned char tbuf[32][32];
         uint64_t tbuf64[32][4];
-    } u;
+    } u  __attribute__((aligned(32)));
     unsigned int tidx = 0;
 
     if (0) {
