@@ -1007,6 +1007,35 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 }
 
 #elif defined(__ARM_NEON)
+
+#if defined(__linux__) || defined(__FreeBSD__)
+#include <sys/auxv.h>
+#elif defined(_WIN32)
+#include <processthreadsapi.h>
+#endif
+
+static inline int have_neon() {
+#if defined(__linux__) && defined(__arm__)
+    return (getauxval(AT_HWCAP) & HWCAP_NEON) != 0;
+#elif defined(__linux__) && defined(__aarch64__)
+    return (getauxval(AT_HWCAP) & HWCAP_ASIMD) != 0;
+#elif defined(__APPLE__)
+    return 1;
+#elif defined(__FreeBSD__) && defined(__arm__)
+    u_long cap;
+    if (elf_aux_info(AT_HWCAP, &cap, sizeof cap) != 0) return 0;
+    return (cap & HWCAP_NEON) != 0;
+#elif defined(__FreeBSD__) && defined(__aarch64__)
+    u_long cap;
+    if (elf_aux_info(AT_HWCAP, &cap, sizeof cap) != 0) return 0;
+    return (cap & HWCAP_ASIMD) != 0;
+#elif defined(_WIN32)
+    return IsProcessorFeaturePresent(PF_ARM_V8_INSTRUCTIONS_AVAILABLE) != 0;
+#else
+    return 0;
+#endif
+}
+
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
     (unsigned char *in,
@@ -1015,7 +1044,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
      unsigned int *out_size) {
 
     if (do_simd) {
-        if (rans_cpu & RANS_CPU_ENC_NEON)
+        if ((rans_cpu & RANS_CPU_ENC_NEON) && have_neon())
             return order & 1
                 ? rans_compress_O1_32x16_neon
                 : rans_compress_O0_32x16_neon;
@@ -1038,7 +1067,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
      unsigned int out_size) {
 
     if (do_simd) {
-        if (rans_cpu & RANS_CPU_DEC_NEON)
+        if ((rans_cpu & RANS_CPU_DEC_NEON) && have_neon())
             return order & 1
                 ? rans_uncompress_O1_32x16_neon
                 : rans_uncompress_O0_32x16_neon;
