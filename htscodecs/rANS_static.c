@@ -420,6 +420,12 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
         if (T[i] == 0)
             continue;
 
+        if (T[i] == 1 && in[in_size-1] == i) {
+            // last symbol can be ignored as it doesn't have following
+            // contexts.
+            continue;
+        }
+
         //uint64_t p = (TOTFREQ * TOTFREQ) / t;
         double p = ((double)TOTFREQ)/T[i];
     normalise_harder:
