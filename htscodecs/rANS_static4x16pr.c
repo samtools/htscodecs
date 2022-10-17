@@ -1294,7 +1294,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         int pmeta_len;
         uint64_t packed_len;
         packed = hts_pack(in, in_size, out+c_meta_len, &pmeta_len, &packed_len);
-        if (!packed || (pmeta_len == 1 && out[c_meta_len] > 16)) {
+        if (!packed) {
             out[0] &= ~RANS_ORDER_PACK;
             do_pack = 0;
             free(packed);
