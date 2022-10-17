@@ -96,7 +96,6 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
     // Compute statistics
     double e = hist8e(in, in_size, F);
     int low_ent = e < 2;
-    //hist8(in, in_size, F); int low_ent = 0;
 
     // Normalise so frequences sum to power of 2
     uint32_t fsum = in_size;
