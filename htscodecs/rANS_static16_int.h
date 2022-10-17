@@ -322,7 +322,8 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
         return -1;
     uint32_t T[256+MAGIC] = {0};
     int isz4 = in_size/Nway;
-    hist1_4(in, in_size, F, T);
+    if (hist1_4(in, in_size, F, T) < 0)
+        goto err;
     for (z = 1; z < Nway; z++)
         F[0][in[z*isz4]]++;
     T[0]+=Nway-1;

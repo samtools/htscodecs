@@ -85,7 +85,8 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
         goto empty;
 
     // Compute statistics
-    hist8(in, in_size, F);
+    if (hist8(in, in_size, F) < 0)
+        return NULL;
 
     // Normalise so frequences sum to power of 2
     uint32_t fsum = in_size;
