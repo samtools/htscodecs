@@ -180,9 +180,15 @@ int main(int argc, char **argv) {
                     printf("%10s-o%d      \t", codec[j], order);
                 printf("%10d uncomp, %10d comp", in_size, csize);
 
+                if (comp == NULL) {
+                    printf("\tFAIL (comp)\n");
+                    result = EXIT_FAILURE;
+                    continue;
+                }
+
                 if (comp0) {
                     if (csize != csize0 || memcmp(comp, comp0, csize) != 0) {
-                        printf("\tFAIL (comp)\n");
+                        printf("\tFAIL (comp cmp)\n");
                         result = EXIT_FAILURE;
                     }
                 } else {
