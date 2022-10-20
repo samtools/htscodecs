@@ -208,7 +208,7 @@ AC_CHECK_HEADERS(fcntl.h limits.h unistd.h malloc.h)
 AC_CHECK_HEADER(zlib.h)
 
 dnl Checks for library functions.
-AC_SEARCH_LIBS([pthread_join], [pthread])
+AX_SEARCH_LIBS_REV([pthread_join], [thr pthread])
 
 AC_CONFIG_FILES([Makefile htscodecs/Makefile tests/Makefile])
 AC_OUTPUT
