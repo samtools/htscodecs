@@ -98,8 +98,8 @@ rocky_task:
 task:
   << : *ENVIRONMENT
   name: macosx
-  osx_instance:
-    image: catalina-base
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-ventura-base:latest
 
   package_install_script:
     - brew install autoconf automake libtool
