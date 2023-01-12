@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022 Genome Research Ltd.
+ * Copyright (c) 2019-2023 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
@@ -407,6 +407,152 @@ int hist1_4(unsigned char *in, unsigned int in_size,
 
     return 0;
 }
+#endif
+
+/*------
+ * Detection of byte stream formats and associated meta-data and/or
+ * internal specialisations
+ */
+
+// Also see htslib/cram.h definition of cram_block_method, which we
+// maintain compatability with, for ease of use.
+// Both this and that use the CRAM specification for their numeric
+// values.  It's duplicated here for independence from htslib.
+enum hts_comp_method {
+    HTS_COMP_UNKNOWN = -1,
+
+    // CRAM 2.x and 3.0
+    HTS_COMP_RAW      = 0,
+    HTS_COMP_GZIP     = 1,
+    HTS_COMP_BZIP2    = 2,
+
+    // CRAM 3.0
+    HTS_COMP_LZMA     = 3,
+    HTS_COMP_RANS4x8  = 4, // 4-way interleaving, 8-bit renormalisation
+
+    // CRAM 3.1
+    HTS_COMP_RANSNx16 = 5, // both 4x16 and 32x16 variants, plus transforms
+    HTS_COMP_ARITH    = 6, // aka Range coding
+    HTS_COMP_FQZ      = 7, // FQZComp
+    HTS_COMP_TOK3     = 8, // Name tokeniser
+
+#if 0
+    //--------------------------------------------------------
+    // Derived versions of above, for use by hts_expand_method
+
+    // Gzip
+    HTS_COMP_GZIP_1 = 100,
+    HTS_COMP_GZIP_9,
+
+    // Bzip2
+    HTS_COMP_BZIP2_1, // min and max
+    HTS_COMP_BZIP2_9,
+
+    // rans 4x8
+    HTS_COMP_RANS4x8_O0,
+    HTS_COMP_RANS4x8_O1,
+
+    // rans Nx16
+    HTS_COMP_RANS4x16_O0,
+    HTS_COMP_RANS4x16_O1,
+    HTS_COMP_RANS4x16_O0R,   // +RLE
+    HTS_COMP_RANS4x16_O1R,
+    HTS_COMP_RANS4x16_O0P,   // +PACK
+    HTS_COMP_RANS4x16_O1P,
+    HTS_COMP_RANS4x16_O0PR,  // +PACK+RLE
+    HTS_COMP_RANS4x16_O1PR,
+    HTS_COMP_RANS32x16_O0,   // SIMD variants
+    HTS_COMP_RANS32x16_O1,
+    HTS_COMP_RANS32x16_O0R,  // +RLE
+    HTS_COMP_RANS32x16_O1R,
+    HTS_COMP_RANS32x16_O0P,  // +PACK
+    HTS_COMP_RANS32x16_O1P,
+    HTS_COMP_RANS32x16_O0PR, // +PACK+RLE
+    HTS_COMP_RANS32x16_O1PR,
+    HTS_COMP_RANSNx16_STRIPE,
+    HTS_COMP_RANSNx16_CAT,
+
+    // Arith
+    HTS_COMP_ARITH_O0,
+    HTS_COMP_ARITH_O1,
+    HTS_COMP_ARITH_O0R,   // +RLE
+    HTS_COMP_ARITH_O1R,
+    HTS_COMP_ARITH_O0P,   // +PACK
+    HTS_COMP_ARITH_O1P,
+    HTS_COMP_ARITH_O0PR,  // +PACK+RLE
+    HTS_COMP_ARITH_O1PR,
+    HTS_COMP_ARITH_STRIPE,
+    HTS_COMP_ARITH_CAT,   // no entropy encoder
+    HTS_COMP_ARITH_EXT,   // external entropy encode
+
+    // Nake tokeniser
+    HTS_COMP_TOK3_RANS,
+    HTS_COMP_TOK3_ARITH,
+#endif
+
+    // To mark maximum size
+    HTS_COMP_MAX,
+};
+
+/*
+ * An expanded version of the hts_codec_method enum, with additional
+ * meta-data describing parameterisations of the codecs.
+ *
+ * These may be compression levels, the entropy encoder used, or
+ * information about the internal transforms used.
+ */
+typedef struct {
+    enum hts_comp_method method;
+
+    // Generic compression level if known (0 if not).
+    // 1 or 9 for gzip min/max flag (else 5).  1-9 for bzip2
+    // 1 or 11 for for tok3 (rans/arith encoder).
+    int level;
+
+    // For rans* and arith codecs
+    int order;
+
+    // ransNx16/arith specific
+    int rle;
+    int pack;
+    int stripe;
+    int cat;
+    int nosz;
+    int Nway;
+
+    // Arithmetic coder only
+    int ext; // external: use gz, xz or bzip2
+} hts_comp_method_t;
+
+/*
+ * Given a compressed block of data in a specified compression method,
+ * fill out the 'cm' field with meta-data gleaned from the compressed
+ * block.
+ *
+ * If comp is HTS_COMP_UNKNOWN, we attempt to auto-detect the compression
+ * format, but this doesn't work for all methods.
+ *
+ * Retuns the detected or specified comp method, and fills out *cm
+ * if non-NULL.
+ */
+enum hts_comp_method hts_expand_method(uint8_t *data, int32_t size,
+                                       enum hts_comp_method comp,
+                                       hts_comp_method_t *cm);
+
+#if 0
+/*
+ * A short single-letter code associated with the expanded compression
+ * method cm.
+ */
+char hts_comp_method_short(hts_comp_method_t *cm);
+
+/*
+ * Fills out a string associated with the expanded compression
+ * method cm.  The string should be at least HTS_COMP_METHOD_STR_SIZE
+ * bytes long.
+ */
+#define HTS_COMP_METHOD_STR_SIZE 20
+void hts_comp_method_long(hts_comp_method_t *cm, char *str);
 #endif
 
 #endif /* RANS_UTILS_H */

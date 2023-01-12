@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Genome Research Ltd.
+ * Copyright (c) 2023 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,8 +37,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <string.h>
 
 #include "utils.h"
+#include "rANS_static4x16.h"
 
 #ifndef NO_THREADS
 #include <pthread.h>
@@ -232,3 +234,238 @@ void htscodecs_tls_free(void *ptr) {
     free(ptr);
 }
 #endif
+
+/*
+ * Given a compressed block of data in a specified compression method,
+ * fill out the 'cm' field with meta-data gleaned from the compressed
+ * block.
+ *
+ * If comp is HTS_COMP_UNKNOWN, we attempt to auto-detect the compression
+ * format, but this doesn't work for all methods.
+ *
+ * Retuns the detected or specified comp method, and fills out *cm
+ * if non-NULL.
+ */
+enum hts_comp_method hts_expand_method(uint8_t *data, int32_t size,
+                                       enum hts_comp_method comp,
+                                       hts_comp_method_t *cm) {
+    if (cm) {
+        memset(cm, 0, sizeof(*cm));
+        cm->method = comp;
+    }
+
+    const char *xz_header = "\xFD""7zXZ"; // including nul
+
+    if (comp == HTS_COMP_UNKNOWN) {
+        // Auto-detect
+        if (size >= 2 && data[0] == 0x1f && data[1] == 0x8b)
+            comp = HTS_COMP_GZIP;
+        else if (size >= 3 && data[1] == 'B' && data[2] == 'Z'
+                 && data[3] == 'h')
+            comp = HTS_COMP_BZIP2;
+        else if (size >= 6 && memcmp(xz_header, data, 6) == 0)
+            comp = HTS_COMP_LZMA;
+        else
+            return HTS_COMP_UNKNOWN;
+    }
+
+    if (!cm)
+        return comp;
+
+    // Interrogate the compressed data stream to fill out additional fields.
+    switch (comp) {
+    case HTS_COMP_GZIP:
+        if (size > 8) {
+            if (data[8] == 4)
+                cm->level = 1;
+            else if (data[8] == 2)
+                cm->level = 9;
+            else
+                cm->level = 5;
+        }
+        break;
+
+    case HTS_COMP_BZIP2:
+        if (size > 3 && data[3] >= '1' && data[3] <= '9')
+            cm->level = data[3]-'0';
+        break;
+
+    case HTS_COMP_RANS4x8:
+        cm->Nway = 4;
+        if (size > 0 && data[0] == 1)
+            cm->order = 1;
+        else
+            cm->order = 0;
+        break;
+
+    case HTS_COMP_RANSNx16:
+        if (size > 0) {
+            cm->order  = data[0] & 1;
+            cm->Nway   = data[0] & RANS_ORDER_X32    ? 32 : 4;
+            cm->rle    = data[0] & RANS_ORDER_RLE    ?  1 : 0;
+            cm->pack   = data[0] & RANS_ORDER_PACK   ?  1 : 0;
+            cm->cat    = data[0] & RANS_ORDER_CAT    ?  1 : 0;
+            cm->stripe = data[0] & RANS_ORDER_STRIPE ?  1 : 0;
+            cm->nosz   = data[0] & RANS_ORDER_NOSZ   ?  1 : 0;
+        }
+        break;
+
+    case HTS_COMP_ARITH:
+        if (size > 0) {
+            // Not in a public header, but the same transforms as rANSNx16
+            cm->order  = data[0] & 3;
+            cm->rle    = data[0] & RANS_ORDER_RLE    ?  1 : 0;
+            cm->pack   = data[0] & RANS_ORDER_PACK   ?  1 : 0;
+            cm->cat    = data[0] & RANS_ORDER_CAT    ?  1 : 0;
+            cm->stripe = data[0] & RANS_ORDER_STRIPE ?  1 : 0;
+            cm->nosz   = data[0] & RANS_ORDER_NOSZ   ?  1 : 0;
+            cm->ext    = data[0] & 4 /*external*/    ?  1 : 0;
+        }
+        break;
+
+    case HTS_COMP_TOK3:
+        if (size > 8) {
+            if (data[8] == 1)
+                cm->level = 11;
+            else if (data[8] == 0)
+                cm->level = 1;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return comp;
+}
+
+/*
+ * A short single-letter code associated with the expanded compression
+ * method cm.
+ */
+char hts_comp_method_short(hts_comp_method_t *cm) {
+    switch (cm->method) {
+    case HTS_COMP_RAW:
+        return '.';
+
+    case HTS_COMP_GZIP:
+        switch (cm->level) {
+        case 1:  return '_';
+        case 9:  return 'G';
+        }
+        return 'g';
+
+    case HTS_COMP_BZIP2:
+        return cm->level >= 9 ? 'B' : 'b';
+
+    case HTS_COMP_LZMA:
+        return 'l';
+
+    case HTS_COMP_RANS4x8:
+        return cm->order ? 'R' : 'r';
+
+    case HTS_COMP_RANSNx16: {
+        char c = cm->order ? '1' : '0';
+        c += (cm->Nway == 32)*4;
+        if (cm->stripe) c = '8';
+        if (cm->cat) c = '2';
+        return c;
+    }
+
+    case HTS_COMP_ARITH:
+        return cm->order ? 'A' : 'a';
+
+    case HTS_COMP_FQZ:
+        return 'f';
+
+    case HTS_COMP_TOK3:
+        return cm->level >= 10 ? 'N' : 'n';
+
+    default:
+        break;
+    }
+
+    return '?';
+}
+
+/*
+ * Fills out a string associated with the expanded compression
+ * method cm.  The string should be at least HTS_COMP_METHOD_STR_SIZE
+ * bytes long.
+ */
+void hts_comp_method_long(hts_comp_method_t *cm, char *str) {
+    switch (cm->method) {
+    case HTS_COMP_RAW:
+        strcpy(str, "raw");
+        break;
+
+    case HTS_COMP_GZIP:
+        strcpy(str, "gzip");
+        if (cm->level == 1)
+            strcat(str, "-min");
+        else if (cm->level >= 9)
+            strcat(str, "-max");
+        break;
+
+    case HTS_COMP_BZIP2:
+        sprintf(str, "bzip2-%d", cm->level);
+        break;
+
+    case HTS_COMP_LZMA:
+        strcpy(str, "lzma");
+        break;
+
+    case HTS_COMP_RANS4x8:
+        sprintf(str, "rans4x8-o%d", cm->order);
+        break;
+
+    case HTS_COMP_RANSNx16: {
+        if (cm->cat) {
+            strcpy(str, "ransNx16-cat");
+            break;
+        }
+        if (cm->stripe) {
+            strcpy(str, "ransNx16-stripe");
+            break;
+        }
+
+        if (cm->Nway == 32)
+            sprintf(str, "rans32x16-o%d", cm->order);
+        else
+            sprintf(str, "rans4x16-o%d", cm->order);
+        break;
+    }
+
+    case HTS_COMP_ARITH:
+        if (cm->cat) {
+            strcpy(str, "arith-cat");
+            break;
+        }
+        if (cm->stripe) {
+            strcpy(str, "arith-stripe");
+            break;
+        }
+        if (cm->ext) {
+            strcpy(str, "arith-ext");
+            break;
+        }
+
+        sprintf(str, "arith-o%d", cm->order);
+        break;
+
+    case HTS_COMP_FQZ:
+        strcpy(str, "fqzcomp");
+        break;
+
+    case HTS_COMP_TOK3:
+        if (cm->level >= 10)
+            strcpy(str, "tok3-arith");
+        else
+            strcpy(str, "tok3-rans");
+        break;
+
+    default:
+        strcpy(str, "?");
+        break;
+    }
+}
