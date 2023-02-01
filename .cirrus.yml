@@ -56,7 +56,8 @@ task:
   install_script: |
     apt-get update
     apt-get install -y --no-install-suggests --no-install-recommends     \
-        ca-certificates clang libc-dev make git autoconf automake libtool
+        ca-certificates clang libc-dev make git autoconf automake libtool \
+        libbz2-dev
 
   compile_script:
     - autoreconf -i
