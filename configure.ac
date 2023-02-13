@@ -90,11 +90,24 @@ dnl Turn on C compiler warnings.
 VL_PROG_CC_WARNINGS
 
 dnl Check for libraries
-ZLIB_CHECK_CONFIG(,,[have_zlib=yes], [have_zlib=no])
+AC_ARG_ENABLE([bz2],
+  [AS_HELP_STRING([--disable-bz2],
+                  [omit support for BZ2 within Arith streams])],
+  [], [enable_bz2=yes])
 
-AC_CHECK_LIB([bz2], [BZ2_bzBuffToBuffCompress], [
+if test "$enable_bz2" != no; then
+  bz2_devel=ok
+  AC_CHECK_LIB([bz2], [BZ2_bzBuffToBuffCompress], [
 	LIBS="-lbz2 $LIBS"
-	AC_DEFINE([HAVE_LIBBZ2],1,[Define to 1 if you have the libbz2 library.])])
+	AC_DEFINE([HAVE_LIBBZ2],1,[Define to 1 if you have the libbz2 library.])], [bz2_devel=missing])
+  if test "$bz2_devel" != "ok"; then
+    AC_MSG_ERROR([libbzip2 development files not found.
+
+This is needed for some options of the arithmetic coder.  It can be disabled
+with configure --disable-bz2, but be aware some data streams will become
+unable to be decompressed and arith tests will fail.])
+  fi
+fi
 
 dnl AC_CHECK_LIB([lzma], [lzma_easy_buffer_encode], [
 dnl 	LIBS="-llzma $LIBS"

@@ -90,7 +90,7 @@ libhtscodecs_la_SOURCES += rANS_static32x16pr_neon.c
 endif
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
-libhtscodecs_la_LIBADD += @LIBZ@ -lm
+libhtscodecs_la_LIBADD += -lm
 
 # Fuzz testing version of the library.  This is build using -fsanitize=fuzzer
 # and defines FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION to prevent things like
