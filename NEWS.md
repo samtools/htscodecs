@@ -1,3 +1,46 @@
+Release 1.4.0: Februrary 2023
+-----------------------------
+
+This is almost entirely minor bug fixing with a few small updates.
+
+Changes
+
+- Optimise compression / speed of the name tokeniser.
+  - In arithmetic coding mode, it can now utilise bzip2 at higher levels.
+  - For both rans / arith entropy encoders, the choice of method / order
+    is now optimised per token type, giving faster compression.
+  - Culled a pointless zlib check in the configure script.
+  - Made lack of bzip2 a hard failure in configure, unless an explicit
+    --disable-bz2 option is given.
+  (#72, #73)
+
+- Switch CI to use ARM for MacOS builds
+  (#69, thanks to Rob Davies)
+
+
+Bug fixes
+
+- Remove some newer compiler warnings (#61)
+
+- Improvements for Intel -m32 builds, including better AVX2 validation
+  (m32 misses _mm256_extract_epi64) and improved data alignment.
+  (#62. See also samtools/htslib#1500)
+
+- Detect Neon capability at runtime via operating system APIs.
+  (#63, thanks to John Marshall)
+
+- Improve FreeBSD diagnostics when neglecting to use -lpthread / -lthr. 
+  Plus additional extra error checking too.
+  (#68, #64, thanks to John Marshall)
+
+- Update hts_pack to operate in line with CRAMcodecs spec, where the
+  number of symbols > 16.
+  (#65/#66, reported by Michael Macias)
+
+- Fixed too-stringent buffer overflow checking in O1 rans decoder.
+  (#71, reported by Divon Lan)
+
+
 Release 1.3.0: 9th August 2022
 ------------------------------
 
