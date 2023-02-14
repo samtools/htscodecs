@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 Genome Research Ltd.
+ * Copyright (c) 2014-2022 Genome Research Ltd.
  * Author(s): James Bonfield
  *
  * Redistribution and use in source and binary forms, with or without
