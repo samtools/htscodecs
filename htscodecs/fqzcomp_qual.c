@@ -1514,11 +1514,6 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
             last = state.ctx;
         }
 
-        //        orig   new1
-        // q40    6.03   5.72
-        // q4     5.02   4.53
-        // _Q     0.92   0.83
-
         // Decode and update context
         do {
             unsigned char Q = SIMPLE_MODEL(QMAX,_decodeSymbol)
