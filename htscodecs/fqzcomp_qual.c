@@ -204,14 +204,19 @@ static int nstrats = sizeof(strat_opts) / sizeof(*strat_opts);
 
 #ifdef __SSE__
 #   include <xmmintrin.h>
+#   define _mm_prefetch2 _mm_prefetch
 #else
-#   define _mm_prefetch(a,b)
+#ifndef _MM_HINT_T0
+#define _MM_HINT_T0 0
+#endif
+static inline int _mm_prefetch2(void *x, int y) {
+    return *(volatile int *)x;
+}
 #endif
 
 typedef struct {
     unsigned int qctx;  // quality sub-context
     unsigned int p;     // pos (bytes remaining)
-    unsigned int add_d; // whether to update delta (skip first cycle)
     unsigned int delta; // delta running total
     unsigned int prevq; // previous quality
     unsigned int s;     // selector
@@ -370,8 +375,6 @@ static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q
     //}
 
     // Only update delta after 1st base.
-    //state->delta += state->add_d * (state->prevq != q);
-    //state->add_d = 1;
     state->delta += (state->prevq != q);
     state->prevq = q;
 
@@ -379,7 +382,6 @@ static inline unsigned int fqz_update_ctx(fqz_param *pm, fqz_state *state, int q
 
     return last & (CTX_SIZE-1);
 }
-
 
 // Build quality stats for qhist and set nsym, do_dedup and do_sel params.
 // One_param is -1 to gather stats on all data, or >= 0 to gather data
@@ -923,6 +925,79 @@ static void fqz_free_parameters(fqz_gparams *gp) {
     if (gp && gp->p) free(gp->p);
 }
 
+static int compress_new_read(fqz_slice *s,
+                             fqz_state *state,
+                             fqz_gparams *gp,
+                             fqz_param *pm,
+                             fqz_model *model,
+                             RangeCoder *rc,
+                             unsigned char *in,
+                             size_t *in_i, // in[in_i],
+                             ssize_t *rec,
+                             unsigned int *last,
+                             int *last_len) {
+    size_t i = *in_i;
+    if (pm->do_sel || (gp->gflags & GFLAG_MULTI_PARAM)) {
+        state->s = *rec < s->num_records
+            ? s->flags[*rec] >> 16 // reuse spare bits
+            : 0;
+        SIMPLE_MODEL(256,_encodeSymbol)(&model->sel, rc, state->s);
+    } else {
+        state->s = 0;
+    }
+    int x = (gp->gflags & GFLAG_HAVE_STAB) ? gp->stab[state->s] : state->s;
+    pm = &gp->p[x];
+
+    int len = s->len[*rec];
+    if (!pm->fixed_len || state->first_len) {
+        SIMPLE_MODEL(256,_encodeSymbol)(&model->len[0], rc, (len>> 0) & 0xff);
+        SIMPLE_MODEL(256,_encodeSymbol)(&model->len[1], rc, (len>> 8) & 0xff);
+        SIMPLE_MODEL(256,_encodeSymbol)(&model->len[2], rc, (len>>16) & 0xff);
+        SIMPLE_MODEL(256,_encodeSymbol)(&model->len[3], rc, (len>>24) & 0xff);
+        state->first_len = 0;
+    }
+
+    if (gp->gflags & GFLAG_DO_REV) {
+        // no need to reverse complement for V4.0 as the core format
+        // already has this feature.
+        if (s->flags[*rec] & FQZ_FREVERSE)
+            SIMPLE_MODEL(2,_encodeSymbol)(&model->revcomp, rc, 1);
+        else
+            SIMPLE_MODEL(2,_encodeSymbol)(&model->revcomp, rc, 0);
+    }
+
+    (*rec)++;
+
+    state->qtot = 0;
+    state->qlen = 0;
+
+    state->p = len;
+    state->delta = 0;
+    state->qctx = 0;
+    state->prevq = 0;
+
+    *last = pm->context;
+
+    if (pm->do_dedup) {
+        // Possible dup of previous read?
+        if (i && len == *last_len && !memcmp(in+i-*last_len, in+i, len)) {
+            SIMPLE_MODEL(2,_encodeSymbol)(&model->dup, rc, 1);
+            i += len-1;
+            state->p = 0;
+            *in_i = i;
+            return 1; // is a dup
+        } else {
+            SIMPLE_MODEL(2,_encodeSymbol)(&model->dup, rc, 0);
+        }
+
+        *last_len = len;
+    }
+
+    *in_i = i;
+
+    return 0; // not dup
+}
+
 static
 unsigned char *compress_block_fqz2f(int vers,
                                     int strat,
@@ -1010,81 +1085,67 @@ unsigned char *compress_block_fqz2f(int vers,
     pm = &gp->p[0];
     state.p = 0;
     state.first_len = 1;
-    int x;
 
     for (i = 0; i < in_size; i++) {
         if (state.p == 0) {
-            if (pm->do_sel || (gp->gflags & GFLAG_MULTI_PARAM)) {
-                state.s = rec < s->num_records
-                    ? s->flags[rec] >> 16 // reuse spare bits
-                    : 0;
-                SIMPLE_MODEL(256,_encodeSymbol)(&model.sel, &rc, state.s);
-                //fprintf(stderr, "State %d\n", state.s);
-            } else {
-                state.s = 0;
-            }
-            x = (gp->gflags & GFLAG_HAVE_STAB) ? gp->stab[state.s] : state.s;
-            pm = &gp->p[x];
-
-            //fprintf(stderr, "sel %d param %d\n", state.s, x);
-
-            int len = s->len[rec];
-            if (!pm->fixed_len || state.first_len) {
-                SIMPLE_MODEL(256,_encodeSymbol)(&model.len[0], &rc, (len>> 0) & 0xff);
-                SIMPLE_MODEL(256,_encodeSymbol)(&model.len[1], &rc, (len>> 8) & 0xff);
-                SIMPLE_MODEL(256,_encodeSymbol)(&model.len[2], &rc, (len>>16) & 0xff);
-                SIMPLE_MODEL(256,_encodeSymbol)(&model.len[3], &rc, (len>>24) & 0xff);
-                //fprintf(stderr, "Len %d\n", len);
-                state.first_len = 0;
-            }
-
-            if (gp->gflags & GFLAG_DO_REV) {
-                // no need to reverse complement for V4.0 as the core format
-                // already has this feature.
-                if (s->flags[rec] & FQZ_FREVERSE)
-                    SIMPLE_MODEL(2,_encodeSymbol)(&model.revcomp, &rc, 1);
-                else
-                    SIMPLE_MODEL(2,_encodeSymbol)(&model.revcomp, &rc, 0);
-                //fprintf(stderr, "Rev %d\n", (s->flags[rec] & FQZ_FREVERSE) ? 1 : 0);
-            }
-
-            rec++;
-
-            state.qtot = 0;
-            state.qlen = 0;
-
-            state.p = len;
-            state.add_d = 0;
-            state.delta = 0;
-            state.qctx = 0;
-            state.prevq = 0;
-
-            last = pm->context;
-
-            if (pm->do_dedup) {
-                // Possible dup of previous read?
-                if (i && len == last_len && !memcmp(in+i-last_len, in+i, len)) {
-                    SIMPLE_MODEL(2,_encodeSymbol)(&model.dup, &rc, 1);
-                    i += len-1;
-                    state.p = 0;
-                    //fprintf(stderr, "Dup 1\n");
-                    continue;
-                } else {
-                    SIMPLE_MODEL(2,_encodeSymbol)(&model.dup, &rc, 0);
-                    //fprintf(stderr, "Dup 0\n");
-                }
-
-                last_len = len;
-            }
+            if (compress_new_read(s, &state, gp, pm, &model, &rc,
+                                  in, &i, &rec, &last, &last_len))
+                continue;
         }
 
+#if 0
+        //                        fqz_qual_stats imp.
+        // q40 6.876  6.852       5.96
+        // q4  6.566              5.07
+        // _Q  1.383              1.11
         unsigned char q = in[i];
         unsigned char qm = pm->qmap[q];
 
         SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[last], &rc, qm);
-        //fprintf(stderr, "Sym %d with ctx %04x delta %d prevq %d q %d\n", qm, last, state.delta, state.prevq, qm);
-        //fprintf(stderr, "pos=%d, delta=%d\n", state.p, state.delta);
         last = fqz_update_ctx(pm, &state, qm);
+#else
+        //     gcc    clang            gcc+fqz_qual_stats imp.
+        // q40 5.033  5.026     -27%   4.137 -38%
+        // q4  5.595            -15%   4.011 -36%
+        // _Q  1.225            -11%   0.956
+        int j = -1;
+
+        while (state.p >= 4 && i+j+4 < in_size) {
+            int l1 = last, l2, l3, l4;
+            // Model has symbols sorted by frequency, so most common are at
+            // start.  So while model is approx 1Kb, the first cache line is
+            // a big win.
+            _mm_prefetch2(&model.qual[l1], _MM_HINT_T0);
+            unsigned char qm1 = pm->qmap[in[i + ++j]];
+            last = fqz_update_ctx(pm, &state, qm1); l2 = last;
+
+            _mm_prefetch2(&model.qual[l2], _MM_HINT_T0);
+            unsigned char qm2 = pm->qmap[in[i + ++j]];
+            last = fqz_update_ctx(pm, &state, qm2); l3 = last;
+
+            _mm_prefetch2(&model.qual[l3], _MM_HINT_T0);
+            unsigned char qm3 = pm->qmap[in[i + ++j]];
+            last = fqz_update_ctx(pm, &state, qm3); l4 = last;
+
+            _mm_prefetch2(&model.qual[l4], _MM_HINT_T0);
+            unsigned char qm4 = pm->qmap[in[i + ++j]];
+            last = fqz_update_ctx(pm, &state, qm4);
+
+            SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l1], &rc, qm1);
+            SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l2], &rc, qm2);
+            SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l3], &rc, qm3);
+            SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l4], &rc, qm4);
+        }
+
+        while (state.p > 0) {
+            int l2 = last;
+            _mm_prefetch2(&model.qual[last], _MM_HINT_T0);
+            unsigned char qm = pm->qmap[in[i + ++j]];
+            last = fqz_update_ctx(pm, &state, qm);
+            SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l2], &rc, qm);
+        }
+        i += j;
+#endif
     }
 
     RC_FinishEncode(&rc);
@@ -1414,7 +1475,6 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
             rec++;
 
             state.p = len;
-            state.add_d = 0;
             state.delta = 0;
             state.prevq = 0;
             state.qctx = 0;
