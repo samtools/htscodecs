@@ -390,7 +390,7 @@ void fqz_qual_stats(fqz_slice *s,
                     fqz_param *pm,
                     uint32_t qhist[256],
                     int one_param) {
-#define NP 128
+#define NP 32
     uint32_t qhistb[NP][256] = {{0}};  // both
     uint32_t qhist1[NP][256] = {{0}};  // READ1 only
     uint32_t qhist2[NP][256] = {{0}};  // READ2 only
@@ -530,6 +530,11 @@ void fqz_qual_stats(fqz_slice *s,
                 i += s->len[rec++];
                 continue;
             }
+            if ((rec & 7) && rec < s->num_records) {
+                // subsample for speed
+                i += s->len[rec++];
+                continue;
+            }
             if (rec < s->num_records)
                 j = s->len[rec];
             else
@@ -552,19 +557,19 @@ void fqz_qual_stats(fqz_slice *s,
         double e1 = 0, e2 = 0, e4 = 0;
         for (j = 0; j < NP; j++) {
             for (i = 0; i < 256; i++) {
-                if (qbin1   [j][i]) e1 += qbin1   [j][i] * log(qbin1   [j][i] / (double)qcnt1   [j]);
-                if (qbin2[0][j][i]) e2 += qbin2[0][j][i] * log(qbin2[0][j][i] / (double)qcnt2[0][j]);
-                if (qbin2[1][j][i]) e2 += qbin2[1][j][i] * log(qbin2[1][j][i] / (double)qcnt2[1][j]);
-                if (qbin4[0][j][i]) e4 += qbin4[0][j][i] * log(qbin4[0][j][i] / (double)qcnt4[0][j]);
-                if (qbin4[1][j][i]) e4 += qbin4[1][j][i] * log(qbin4[1][j][i] / (double)qcnt4[1][j]);
-                if (qbin4[2][j][i]) e4 += qbin4[2][j][i] * log(qbin4[2][j][i] / (double)qcnt4[2][j]);
-                if (qbin4[3][j][i]) e4 += qbin4[3][j][i] * log(qbin4[3][j][i] / (double)qcnt4[3][j]);
+                if (qbin1   [j][i]) e1 += qbin1   [j][i] * fast_log(qbin1   [j][i] / (double)qcnt1   [j]);
+                if (qbin2[0][j][i]) e2 += qbin2[0][j][i] * fast_log(qbin2[0][j][i] / (double)qcnt2[0][j]);
+                if (qbin2[1][j][i]) e2 += qbin2[1][j][i] * fast_log(qbin2[1][j][i] / (double)qcnt2[1][j]);
+                if (qbin4[0][j][i]) e4 += qbin4[0][j][i] * fast_log(qbin4[0][j][i] / (double)qcnt4[0][j]);
+                if (qbin4[1][j][i]) e4 += qbin4[1][j][i] * fast_log(qbin4[1][j][i] / (double)qcnt4[1][j]);
+                if (qbin4[2][j][i]) e4 += qbin4[2][j][i] * fast_log(qbin4[2][j][i] / (double)qcnt4[2][j]);
+                if (qbin4[3][j][i]) e4 += qbin4[3][j][i] * fast_log(qbin4[3][j][i] / (double)qcnt4[3][j]);
             }
         }
         e1 /= -log(2)/8;
         e2 /= -log(2)/8;
         e4 /= -log(2)/8;
-        //fprintf(stderr, "E1=%f E2=%f E4=%f\n", e1, e2+s->num_records/8, e4+s->num_records/4);
+        //fprintf(stderr, "E1=%f E2=%f E4=%f %f\n", e1, e2+s->num_records/8, e4+s->num_records/4, (e4+s->num_records/4)/(e2+s->num_records/8));
 
         // Note by using the selector we're robbing bits from elsewhere in
         // the context, which may reduce compression better.
