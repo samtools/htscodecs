@@ -202,15 +202,14 @@ static int strat_opts[][12] = {
 };
 static int nstrats = sizeof(strat_opts) / sizeof(*strat_opts);
 
-#ifdef __SSE__
-#   include <xmmintrin.h>
-#   define _mm_prefetch2 _mm_prefetch
+#ifdef HAVE_BUILTIN_PREFETCH
+static inline void mm_prefetch(void *x) {
+    __builtin_prefetch(x);
+}
 #else
-#ifndef _MM_HINT_T0
-#define _MM_HINT_T0 0
-#endif
-static inline int _mm_prefetch2(void *x, int y) {
-    return *(volatile int *)x;
+static inline void mm_prefetch(void *x) {
+    // Fetch and discard is quite close to a genuine prefetch
+    *(volatile int *)x;
 }
 #endif
 
@@ -1119,19 +1118,19 @@ unsigned char *compress_block_fqz2f(int vers,
             // Model has symbols sorted by frequency, so most common are at
             // start.  So while model is approx 1Kb, the first cache line is
             // a big win.
-            _mm_prefetch2(&model.qual[l1], _MM_HINT_T0);
+            mm_prefetch(&model.qual[l1]);
             unsigned char qm1 = pm->qmap[in[i + ++j]];
             last = fqz_update_ctx(pm, &state, qm1); l2 = last;
 
-            _mm_prefetch2(&model.qual[l2], _MM_HINT_T0);
+            mm_prefetch(&model.qual[l2]);
             unsigned char qm2 = pm->qmap[in[i + ++j]];
             last = fqz_update_ctx(pm, &state, qm2); l3 = last;
 
-            _mm_prefetch2(&model.qual[l3], _MM_HINT_T0);
+            mm_prefetch(&model.qual[l3]);
             unsigned char qm3 = pm->qmap[in[i + ++j]];
             last = fqz_update_ctx(pm, &state, qm3); l4 = last;
 
-            _mm_prefetch2(&model.qual[l4], _MM_HINT_T0);
+            mm_prefetch(&model.qual[l4]);
             unsigned char qm4 = pm->qmap[in[i + ++j]];
             last = fqz_update_ctx(pm, &state, qm4);
 
@@ -1143,7 +1142,7 @@ unsigned char *compress_block_fqz2f(int vers,
 
         while (state.p > 0) {
             int l2 = last;
-            _mm_prefetch2(&model.qual[last], _MM_HINT_T0);
+            mm_prefetch(&model.qual[last]);
             unsigned char qm = pm->qmap[in[i + ++j]];
             last = fqz_update_ctx(pm, &state, qm);
             SIMPLE_MODEL(QMAX,_encodeSymbol)(&model.qual[l2], &rc, qm);
