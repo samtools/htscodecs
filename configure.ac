@@ -109,6 +109,17 @@ unable to be decompressed and arith tests will fail.])
   fi
 fi
 
+dnl Check if __builtin_prefetch exists.
+AC_CACHE_CHECK([for __builtin_prefetch], [ax_cv_builtin_prefetch],[
+AC_LINK_IFELSE([AC_LANG_PROGRAM([], [__builtin_prefetch("")])],
+     [ax_cv_builtin_prefetch=yes],
+     [ax_cv_builtin_prefetch=no])
+])
+AS_IF([test "$ax_cv_builtin_prefetch" = "yes"],
+        [AC_DEFINE(HAVE_BUILTIN_PREFETCH, 1,
+           [Define to 1 if you have a __builtin_prefetch])],
+	[])
+
 dnl AC_CHECK_LIB([lzma], [lzma_easy_buffer_encode], [
 dnl 	LIBS="-llzma $LIBS"
 dnl 	AC_DEFINE([HAVE_LIBLZMA],1,[Define to 1 if you have the liblzma library.])])
@@ -212,8 +223,6 @@ AC_CACHE_CHECK([whether C compiler supports ARM Neon], [htscodecs_cv_have_neon],
 AM_CONDITIONAL([RANS_32x16_NEON],[test "$htscodecs_cv_have_neon" = yes])
 
 AC_SUBST([HTSCODECS_SIMD_SRC])
-
-AX_LIBDEFLATE
 
 dnl Checks for header files.
 AC_HEADER_SYS_WAIT
