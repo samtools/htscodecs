@@ -105,8 +105,14 @@ task:
   package_install_script:
     - brew install autoconf automake libtool
 
-  << : *COMPILE
+  # Try building and testing a multiarch library
+  compile_script:
+    - autoreconf -i
+    - ./configure CFLAGS="-g -O3 -Wall -Werror -arch arm64 -arch x86_64"
+    - make -j4
 
+  test_script:
+    - make check
 
 # # ----------
 # # Windows MINGW.
