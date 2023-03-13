@@ -39,7 +39,7 @@
 
 #include "config.h"
 
-#ifdef HAVE_AVX512
+#if defined(__x86_64__) && defined(HAVE_AVX512)
 
 #include <stdint.h>
 #include <stdlib.h>

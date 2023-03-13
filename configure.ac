@@ -130,9 +130,11 @@ AX_CHECK_COMPILE_FLAG([-mssse3], [
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
 	]],[[
+	  #if defined(__x86_64__)
 	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
 	  __m128i c = _mm_shuffle_epi8(a, b);
 	  return *((char *) &c);
+	  #endif
 	]])
 ])
 
@@ -145,8 +147,10 @@ AX_CHECK_COMPILE_FLAG([-mpopcnt], [
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
 	]],[[
+	  #if defined(__x86_64__)
 	  unsigned int i = _mm_popcnt_u32(1);
 	  return i != 1;
+	  #endif
 	]])
 ])
 
@@ -161,9 +165,11 @@ AX_CHECK_COMPILE_FLAG([-msse4.1], [
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
 	]],[[
+	  #if defined(__x86_64__)
 	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
 	  __m128i c = _mm_max_epu32(a, b);
 	  return *((char *) &c);
+	  #endif
 	]])
 ])
 AM_CONDITIONAL([RANS_32x16_SSE4],[test "x$sse4_prerequisites" = "xooo"])
@@ -176,10 +182,12 @@ AX_CHECK_COMPILE_FLAG([-mavx2], [
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
 	]],[[
+	  #if defined(__x86_64__)
 	  __m256i a = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
 	  __m256i b = _mm256_add_epi32(a, a);
 	  long long c = _mm256_extract_epi64(b, 0);
 	  return (int) c;
+	  #endif
 	]])
 ])
 AM_CONDITIONAL([RANS_32x16_AVX2],[test "x$MAVX2" != "x"])
@@ -192,9 +200,11 @@ AX_CHECK_COMPILE_FLAG([-mavx512f], [
 ], [], [], [AC_LANG_PROGRAM([[
 	  #include "x86intrin.h"
 	]],[[
+	  #if defined(__x86_64__)
 	  __m512i a = _mm512_set1_epi32(1);
 	  __m512i b = _mm512_add_epi32(a, a);
 	  return *((char *) &b);
+	  #endif
 	]])
 ])
 AM_CONDITIONAL([RANS_32x16_AVX512],[test "x$MAVX512" != "x"])
@@ -205,10 +215,15 @@ AC_CACHE_CHECK([whether C compiler supports ARM Neon], [htscodecs_cv_have_neon],
     AC_LANG_PROGRAM([[
       #include "arm_neon.h"
     ]], [[
+      #if defined(__ARM_NEON)
       int32x4_t a = vdupq_n_s32(1);
       int32x4_t b = vaddq_s32(a, a);
       return *((char *) &b);
+      #endif
     ]])], [htscodecs_cv_have_neon=yes], [htscodecs_cv_have_neon=no])])
+AS_IF([test "$htscodecs_cv_have_neon" = yes],[
+  AC_DEFINE([HAVE_NEON],1,[Defined to 1 if the compiler can issue NEON instructions.])
+])
 AM_CONDITIONAL([RANS_32x16_NEON],[test "$htscodecs_cv_have_neon" = yes])
 
 AC_SUBST([HTSCODECS_SIMD_SRC])

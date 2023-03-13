@@ -33,7 +33,7 @@
 
 #include "config.h"
 
-#ifdef HAVE_AVX2
+#if defined(__x86_64__) && defined(HAVE_AVX2)
 
 #include <stdint.h>
 #include <stdlib.h>

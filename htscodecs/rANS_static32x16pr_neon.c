@@ -32,7 +32,7 @@
  */
 
 #include "config.h"
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON) && defined(HAVE_NEON)
 #include <arm_neon.h>
 
 #include <limits.h>

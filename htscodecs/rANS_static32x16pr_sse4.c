@@ -33,7 +33,8 @@
 
 #include "config.h"
 
-#if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
+#if defined(__x86_64__) && \
+    defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
 
 #include <stdint.h>
 #include <stdlib.h>
