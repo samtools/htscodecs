@@ -47,6 +47,7 @@ libhtscodecs_base_src = \
 	rANS_word.h \
 	rANS_static32x16pr.c \
 	rANS_static32x16pr.h \
+	rANS_static32x16pr_neon.c \
 	rANS_static16_int.h \
 	permute.h \
 	tokenise_name3.c \
@@ -85,9 +86,6 @@ noinst_LTLIBRARIES += librANS_static32x16pr_avx512.la
 librANS_static32x16pr_avx512_la_SOURCES = rANS_static32x16pr_avx512.c
 librANS_static32x16pr_avx512_la_CFLAGS = @MAVX512@
 libhtscodecs_la_LIBADD += librANS_static32x16pr_avx512.la
-endif
-if RANS_32x16_NEON
-libhtscodecs_la_SOURCES += rANS_static32x16pr_neon.c
 endif
 
 libhtscodecs_la_LDFLAGS = -version-info @VERS_CURRENT@:@VERS_REVISION@:@VERS_AGE@ 
