@@ -122,94 +122,101 @@ dnl Count parts needed to build rANS_static32x16pr_sse4.c
 sse4_prerequisites=""
 
 dnl Check if we can use our SSSE3 implementations of rANS 32x16 codec.
-AX_CHECK_COMPILE_FLAG([-mssse3], [
-        MSSSE3=-mssse3
-	sse4_prerequisites="o$sse4_prerequisites"
-	AC_SUBST([MSSSE3])
-        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if the compiler can issue SSSE3 instructions.])
-], [], [], [AC_LANG_PROGRAM([[
+HTS_CHECK_COMPILE_FLAGS_NEEDED([ssse3], [-mssse3], [AC_LANG_PROGRAM([[
+	  #ifdef __x86_64__
 	  #include "x86intrin.h"
+	  #endif
 	]],[[
+	  #ifdef __x86_64__
 	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
 	  __m128i c = _mm_shuffle_epi8(a, b);
 	  return *((char *) &c);
-	]])
+	  #endif
+	]])], [
+        MSSSE3="$flags_needed"
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MSSSE3])
+        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if rANS source using SSSE3 can be compiled.])
 ])
 
 dnl Check if we can use popcnt instructions
-AX_CHECK_COMPILE_FLAG([-mpopcnt], [
-        MPOPCNT=-mpopcnt
-	sse4_prerequisites="o$sse4_prerequisites"
-	AC_SUBST([MPOPCNT])
-        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if the compiler can issue popcnt instructions.])
-], [], [], [AC_LANG_PROGRAM([[
+HTS_CHECK_COMPILE_FLAGS_NEEDED([popcnt], [-mpopcnt], [AC_LANG_PROGRAM([[
+	  #ifdef __x86_64__
 	  #include "x86intrin.h"
+	  #endif
 	]],[[
+	  #ifdef __x86_64__
 	  unsigned int i = _mm_popcnt_u32(1);
 	  return i != 1;
-	]])
+	  #endif
+	]])], [
+        MPOPCNT="$flags_needed"
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MPOPCNT])
+        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if rANS source using popcnt can be compiled.])
 ])
 
 dnl Check if we can use our SSE4.1 too.  This *may* always imply SSSE3?
 dnl It may be easier just to target an old era of cpu than -mssse3 -msse4.1
 dnl -mpopcnt.  Eg -march=nehalem.  I don't know how wide spread that is.
-AX_CHECK_COMPILE_FLAG([-msse4.1], [
-        MSSE4_1=-msse4.1
-	sse4_prerequisites="o$sse4_prerequisites"
-	AC_SUBST([MSSE4_1])
-        AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if the compiler can issue SSE4.1 instructions.])
-], [], [], [AC_LANG_PROGRAM([[
+HTS_CHECK_COMPILE_FLAGS_NEEDED([sse4.1], [-msse4.1], [AC_LANG_PROGRAM([[
+	  #ifdef __x86_64__
 	  #include "x86intrin.h"
+	  #endif
 	]],[[
+	  #ifdef __x86_64__
 	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
 	  __m128i c = _mm_max_epu32(a, b);
 	  return *((char *) &c);
-	]])
+	  #endif
+	]])], [
+        MSSE4_1="$flags_needed"
+	sse4_prerequisites="o$sse4_prerequisites"
+	AC_SUBST([MSSE4_1])
+        AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if rANS source using SSE4.1 can be compiled.])
 ])
 AM_CONDITIONAL([RANS_32x16_SSE4],[test "x$sse4_prerequisites" = "xooo"])
 
 dnl Check if we can use our AVX2 implementations.
-AX_CHECK_COMPILE_FLAG([-mavx2], [
-        MAVX2=-mavx2
-	AC_SUBST([MAVX2])
-        AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if the compiler can issue AVX2 instructions.])
-], [], [], [AC_LANG_PROGRAM([[
+build_rans_avx2=no
+HTS_CHECK_COMPILE_FLAGS_NEEDED([avx2], [-mavx2], [AC_LANG_PROGRAM([[
+	  #ifdef __x86_64__
 	  #include "x86intrin.h"
+	  #endif
 	]],[[
+	  #ifdef __x86_64__
 	  __m256i a = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
 	  __m256i b = _mm256_add_epi32(a, a);
 	  long long c = _mm256_extract_epi64(b, 0);
 	  return (int) c;
-	]])
+	  #endif
+	]])], [
+        MAVX2="$flags_needed"
+	build_rans_avx2=yes
+	AC_SUBST([MAVX2])
+        AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if rANS source using AVX2 can be compiled.])
 ])
-AM_CONDITIONAL([RANS_32x16_AVX2],[test "x$MAVX2" != "x"])
+AM_CONDITIONAL([RANS_32x16_AVX2],[test "$build_rans_avx2" = yes])
 
 dnl Check also if we have AVX512.  If so this overrides AVX2
-AX_CHECK_COMPILE_FLAG([-mavx512f], [
-        MAVX512=-mavx512f
-	AC_SUBST([MAVX512])
-        AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if the compiler can issue AVX512F instructions.])
-], [], [], [AC_LANG_PROGRAM([[
+build_rans_avx512=no
+HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f], [AC_LANG_PROGRAM([[
+	  #ifdef __x86_64__
 	  #include "x86intrin.h"
+	  #endif
 	]],[[
+	  #ifdef __x86_64__
 	  __m512i a = _mm512_set1_epi32(1);
 	  __m512i b = _mm512_add_epi32(a, a);
 	  return *((char *) &b);
-	]])
+	  #endif
+	]])], [
+        MAVX512="$flags_needed"
+	build_rans_avx512=yes
+	AC_SUBST([MAVX512])
+        AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if rANS source using AVX512F can be compiled.])
 ])
-AM_CONDITIONAL([RANS_32x16_AVX512],[test "x$MAVX512" != "x"])
-
-dnl Detect ARM Neon availability
-AC_CACHE_CHECK([whether C compiler supports ARM Neon], [htscodecs_cv_have_neon], [
-  AC_COMPILE_IFELSE([
-    AC_LANG_PROGRAM([[
-      #include "arm_neon.h"
-    ]], [[
-      int32x4_t a = vdupq_n_s32(1);
-      int32x4_t b = vaddq_s32(a, a);
-      return *((char *) &b);
-    ]])], [htscodecs_cv_have_neon=yes], [htscodecs_cv_have_neon=no])])
-AM_CONDITIONAL([RANS_32x16_NEON],[test "$htscodecs_cv_have_neon" = yes])
+AM_CONDITIONAL([RANS_32x16_AVX512],[test "$build_rans_avx512" = yes])
 
 AC_SUBST([HTSCODECS_SIMD_SRC])
 
