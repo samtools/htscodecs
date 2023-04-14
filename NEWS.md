@@ -1,3 +1,19 @@
+Release 1.5.0: 14th April 2023
+------------------------------
+
+Changes
+
+- Significant speed ups to the fqzcomp codec via code restructuring
+  and use of memory prefetch instructions.  Encode is 30-40% faster
+  and decode 5-8% faster. (PR#75 James Bonfield)
+
+- Improve multiarch builds on MacOS, fixing issues with getting the
+  various SIMD implementations integrated. (Issue#76 John Marshall,
+  PR#77/#78 Rob Davies)
+
+- Remove unused ax_with_libdeflate.m4 file from build system.
+
+
 Release 1.4.0: Februrary 2023
 -----------------------------
 
