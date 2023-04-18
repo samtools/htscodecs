@@ -32,7 +32,7 @@
  */
 
 #include "config.h"
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON) && defined(__aarch64__)
 #include <arm_neon.h>
 
 #include <limits.h>
