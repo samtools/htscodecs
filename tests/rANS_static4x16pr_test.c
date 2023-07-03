@@ -291,7 +291,7 @@ int main(int argc, char **argv) {
 
                 if (4 != fread(&in_size, 1, 4, infp))
                     break;
-                if (in_size > blk_size)
+                if (in_size > blk_size2)
                     exit(1);
 
                 if (in_size != fread(in_buf, 1, in_size, infp)) {
