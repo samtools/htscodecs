@@ -992,7 +992,12 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
         return rans_uncompress_O1_32x16;
     } else {
 #if defined(HAVE_AVX512)
+#if defined(__clang__)
+        // Clang's AVX2 implementation decodes faster than AVX512
         if (have_avx512f && (!is_amd || !have_avx2))
+#else
+        if (have_avx512f)
+#endif
             return rans_uncompress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
