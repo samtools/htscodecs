@@ -215,7 +215,6 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
         SET512(SDv,  SD);
         int pc2 = _mm_popcnt_u32(gt_mask2);
 
-        //Rp1 = _mm512_maskz_compress_epi32(gt_mask1, Rp1);
         Rp1 = _mm512_maskz_compress_epi32(gt_mask1, Rp1);
         Rp2 = _mm512_maskz_compress_epi32(gt_mask2, Rp2);
 
@@ -387,13 +386,13 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
       R1 = _mm512_add_epi32(
                _mm512_mullo_epi32(
                    _mm512_srli_epi32(R1, TF_SHIFT), f1), b1);
+      __mmask16 renorm_mask1, renorm_mask2;
+      renorm_mask1=_mm512_cmplt_epu32_mask(R1, _mm512_set1_epi32(RANS_BYTE_L));
       R2 = _mm512_add_epi32(
                _mm512_mullo_epi32(
                    _mm512_srli_epi32(R2, TF_SHIFT), f2), b2);
 
       // renorm. this is the interesting part:
-      __mmask16 renorm_mask1, renorm_mask2;
-      renorm_mask1=_mm512_cmplt_epu32_mask(R1, _mm512_set1_epi32(RANS_BYTE_L));
       renorm_mask2=_mm512_cmplt_epu32_mask(R2, _mm512_set1_epi32(RANS_BYTE_L));
       // advance by however many words we actually read
       sp += _mm_popcnt_u32(renorm_mask1);
@@ -582,6 +581,27 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
     __m512i c1 = _mm512_i32gather_epi32(iN1, in, 1);
     __m512i c2 = _mm512_i32gather_epi32(iN2, in, 1);
 
+    // We cache the next 64-bytes locally and transpose.
+    // This means we can load 32 ints from t32[x] with load instructions
+    // instead of gathers.  The copy, transpose and expand is easier done
+    // in scalar code.
+#define BATCH 64
+    uint8_t t32[BATCH][32] __attribute__((aligned(64)));
+    int next_batch;
+    if (iN[0] > BATCH) {
+        int i, j;
+        for (i = 0; i < BATCH; i++)
+            // memcpy(c[i], &in[iN[i]-32], 32); fast mode
+            for (j = 0; j < 32; j++)
+                t32[BATCH-1-i][j] = in[iN[j]-1-i];
+        next_batch = BATCH;
+    } else {
+        next_batch = -1;
+    }
+
+    c1 = _mm512_and_si512(c1, _mm512_set1_epi32(0xff));
+    c2 = _mm512_and_si512(c2, _mm512_set1_epi32(0xff));
+
     for (; iN[0] >= 0; iN[0]--) {
         // Note, consider doing the same approach for the AVX2 encoder.
         // Maybe we can also get gather working well there?
@@ -591,8 +611,6 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
         // FIXME: maybe we need to cope with in[31] read over-flow
         // on loop cycles 0, 1, 2 where gather reads 32-bits instead of
         // 8 bits.  Use set instead there on c2?
-        c1 = _mm512_and_si512(c1, _mm512_set1_epi32(0xff));
-        c2 = _mm512_and_si512(c2, _mm512_set1_epi32(0xff));
 
         // index into syms[0][0] array, used for x_max, rcp_freq, and bias
         __m512i vidx1 = _mm512_slli_epi32(c1, 8);
@@ -622,8 +640,45 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
         last2 = c2;
         iN1 = _mm512_sub_epi32(iN1, _mm512_set1_epi32(1));
         iN2 = _mm512_sub_epi32(iN2, _mm512_set1_epi32(1));
-        c1 = _mm512_i32gather_epi32(iN1, in, 1);
-        c2 = _mm512_i32gather_epi32(iN2, in, 1);
+
+        // Code below is equivalent to this:
+        // c1 = _mm512_i32gather_epi32(iN1, in, 1);
+        // c2 = _mm512_i32gather_epi32(iN2, in, 1);
+
+        // Better when we have a power of 2
+        if (next_batch >= 0) {
+            if (--next_batch < 0 && iN[0] > BATCH) {
+                int i, j;
+                uint8_t c[32][BATCH];
+                iN[0] += BATCH;
+                for (j = 0; j < 32; j++) {
+                    iN[j] -= BATCH;
+                    memcpy(c[j], &in[iN[j]-BATCH], BATCH);
+                }
+                // transpose matrix
+                for (j = 0; j < 32; j++) {
+                    for (i = 0; i < BATCH; i+=16) {
+                        for (int z = 0; z < 16; z++)
+                            t32[i+z][j] = c[j][i+z];
+                    }
+                }
+                next_batch = BATCH-1;
+            }
+            if (next_batch >= 0) {
+              __m128i c1_ = _mm_load_si128((__m128i *)&t32[next_batch][0]);
+              __m128i c2_ = _mm_load_si128((__m128i *)&t32[next_batch][16]);
+              c1 = _mm512_cvtepu8_epi32(c1_);
+              c2 = _mm512_cvtepu8_epi32(c2_);
+            }
+        }
+        if (next_batch < 0) {
+            c1 = _mm512_i32gather_epi32(iN1, in, 1);
+            c2 = _mm512_i32gather_epi32(iN2, in, 1);
+
+            c1 = _mm512_and_si512(c1, _mm512_set1_epi32(0xff));
+            c2 = _mm512_and_si512(c2, _mm512_set1_epi32(0xff));
+        }
+        // End of "equivalent to" code block
 
         SET512x(xmax, x_max); // high latency
 
@@ -817,9 +872,9 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 
             // This is the biggest bottleneck
             __m512i _Sv1 = _mm512_i32gather_epi32x(_masked1, (int *)&s3F[0][0],
-                                                  sizeof(s3F[0][0]));
+                                                   sizeof(s3F[0][0]));
             __m512i _Sv2 = _mm512_i32gather_epi32x(_masked2, (int *)&s3F[0][0],
-                                                  sizeof(s3F[0][0]));
+                                                   sizeof(s3F[0][0]));
 
             //  f[z] = S[z]>>(TF_SHIFT_O1+8);
             __m512i _fv1 = _mm512_srli_epi32(_Sv1, TF_SHIFT_O1+8);
@@ -986,9 +1041,9 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 
             // This is the biggest bottleneck
             __m512i _Sv1 = _mm512_i32gather_epi32x(_masked1, (int *)&s3F[0][0],
-                                                  sizeof(s3F[0][0]));
+                                                   sizeof(s3F[0][0]));
             __m512i _Sv2 = _mm512_i32gather_epi32x(_masked2, (int *)&s3F[0][0],
-                                                  sizeof(s3F[0][0]));
+                                                   sizeof(s3F[0][0]));
 
             //  f[z] = S[z]>>(TF_SHIFT_O1+8);
             __m512i _fv1 = _mm512_srli_epi32(_Sv1, TF_SHIFT_O1_FAST+8);
