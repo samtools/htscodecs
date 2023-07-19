@@ -1,3 +1,29 @@
+Release 1.5.1: 19th July 2023
+-----------------------------
+
+This release is mainly small updates and bug fixes focusing on
+specific platforms, with no new features added.
+
+Changes
+
+- Be more selective in use of AVX512 on AMD Zen4 processors.  This can
+  be faster (e.g. with 64-way unrolling), but in the current rANS codec
+  implementations AVX2 is faster for certain operations (PR#85).
+
+- Add config.h to test programs to help them pick up definitions such
+  as XOPEN_SOURCE (PR#84)
+
+- Add FreeBSD to CI testing (PR#83)
+
+Bug fixes
+
+- Trivial bug fix to the rans4x16pr test harness when given
+  incompressible data (PR#86).
+
+- Make ARM NEON checks specific to AArch64 and exclude AArch32 systems.
+  (PR#82 to fix issue#81, reported by Robert Clausecker)
+
+
 Release 1.5.0: 14th April 2023
 ------------------------------
 
