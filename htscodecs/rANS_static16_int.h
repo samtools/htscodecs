@@ -537,15 +537,13 @@ static inline int decode_freq1(uint8_t *cp, uint8_t *cp_end, int shift,
 
 // Build s3 symbol lookup table.
 // This is 12 bit freq, 12 bit bias and 8 bit symbol.
-static inline int rans_F_to_s3(uint32_t *F, int shift, uint32_t *s3) {
-    int j, x, y;
+static inline int rans_F_to_s3(const uint32_t *F, int shift, uint32_t *s3) {
+    int j, x;
     for (j = x = 0; j < 256; j++) {
-        if (F[j]) {
-            if (F[j] > (1<<shift) - x)
-                return 1;
-            for (y = 0; y < F[j]; y++)
-                s3[y+x] = (((uint32_t)F[j])<<(shift+8))|(y<<8)|j;
-            x += F[j];
+        if (F[j] && F[j] <= (1<<shift) - x) {
+            uint32_t base = (((uint32_t)F[j])<<(shift+8))|j, y;
+            for (y = 0; y < F[j]; y++, x++)
+                s3[x] = base + (y<<8);
         }
     }
 
