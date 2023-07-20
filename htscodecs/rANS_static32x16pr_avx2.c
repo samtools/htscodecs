@@ -751,6 +751,23 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
 
     uint16_t *ptr16 = (uint16_t *)ptr;
 
+// (AMD)   8  16  32  64 128 256
+// Clang 265 284 292 298 305 304
+// gcc13 300 320 326 327 320 305
+// gcc7  298 320 327 331 325 315
+#define BATCH 64     //^
+    uint8_t t32[BATCH][32] __attribute__((aligned(64)));
+    int next_batch;
+    if (iN[0] > BATCH) {
+        int i, j;
+        for (i = 0; i < BATCH; i++)
+            for (j = 0; j < 32; j++)
+                t32[BATCH-1-i][j] = in[iN[j]-i];
+        next_batch = BATCH;
+    } else {
+        next_batch = -1;
+    }
+
     LOAD(Rv, ransN);
 
     for (; iN[0] >= 0; ) {
@@ -784,58 +801,85 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
         // [2] B2......
         // [3] ......B3  OR to get B2B1B0B3 and shuffle to B3B2B1B0
 
+        unsigned char new_sym[32], *new_symp;
+
+        if (next_batch >= 0) {
+            if (--next_batch <= 0 && iN[0] > BATCH) {
+                int i, j;
+                uint8_t c[32][BATCH];
+                for (j = 0; j < 32; j++)
+                    memcpy(c[j], &in[iN[j]-BATCH+1], BATCH);
+
+                // transpose matrix
+                for (j = 0; j < 32; j++) {
+                    for (i = 0; i < BATCH; i+=16) {
+                        //uint8_t (*t32_i)[32] = &t32[i];
+                        //uint8_t *cji = &c[j][i];
+                        for (int z = 0; z < 16; z++)
+                            t32[i+z][j] = c[j][i+z];
+                            //t32_i[z][j] = cji[z]; // not necessary
+                    }
+                }
+                next_batch = BATCH-1;
+            }
+            new_symp = t32[next_batch];
+        }
+        if (next_batch < 0) {
+            new_symp = new_sym;
+            for (z = 0; z < 32; z++)
+                new_sym[z] = in[iN[z]];
+        }
+
         __m256i sh[16];
         for (z = 0; z < 16; z+=4) {
             int Z = z*2;
 
 #define m128_to_256 _mm256_castsi128_si256
-            __m256i t0, t1, t2, t3;
-            __m128i *s0, *s1, *s2, *s3;
-            s0 = (__m128i *)(&syms[in[iN[Z+0]]][lN[Z+0]]);
-            s1 = (__m128i *)(&syms[in[iN[Z+4]]][lN[Z+4]]);
-            s2 = (__m128i *)(&syms[in[iN[Z+1]]][lN[Z+1]]);
-            s3 = (__m128i *)(&syms[in[iN[Z+5]]][lN[Z+5]]);
+            __m256i t0, t1, t2, t3, t4, t5, t6, t7;
+            __m128i *s0, *s1, *s2, *s3, *s4, *s5, *s6, *s7;
 
-            t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0xE4);
-            t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0xE4);
-            t2 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s2)), 0x93);
-            t3 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s3)), 0x93);
+            s0 = (__m128i *)(&syms[new_symp[Z+0]][lN[Z+0]]);
+            s1 = (__m128i *)(&syms[new_symp[Z+4]][lN[Z+4]]);
+            s2 = (__m128i *)(&syms[new_symp[Z+1]][lN[Z+1]]);
+            s3 = (__m128i *)(&syms[new_symp[Z+5]][lN[Z+5]]);
+            s4 = (__m128i *)(&syms[new_symp[Z+2]][lN[Z+2]]);
+            s5 = (__m128i *)(&syms[new_symp[Z+6]][lN[Z+6]]);
+            s6 = (__m128i *)(&syms[new_symp[Z+3]][lN[Z+3]]);
+            s7 = (__m128i *)(&syms[new_symp[Z+7]][lN[Z+7]]);
 
-            lN[Z+0] = in[iN[Z+0]];
-            lN[Z+4] = in[iN[Z+4]];
-            lN[Z+1] = in[iN[Z+1]];
-            lN[Z+5] = in[iN[Z+5]];
+            __m256i M0 = m128_to_256(_mm_loadu_si128(s0));
+            __m256i M1 = m128_to_256(_mm_loadu_si128(s1));
+            __m256i M2 = m128_to_256(_mm_loadu_si128(s2));
+            __m256i M3 = m128_to_256(_mm_loadu_si128(s3));
+            __m256i M4 = m128_to_256(_mm_loadu_si128(s4));
+            __m256i M5 = m128_to_256(_mm_loadu_si128(s5));
+            __m256i M6 = m128_to_256(_mm_loadu_si128(s6));
+            __m256i M7 = m128_to_256(_mm_loadu_si128(s7));
+
+            t0 = _mm256_shuffle_epi32(M0, 0xE4);
+            t1 = _mm256_shuffle_epi32(M1, 0xE4);
+            t2 = _mm256_shuffle_epi32(M2, 0x93);
+            t3 = _mm256_shuffle_epi32(M3, 0x93);
+            t4 = _mm256_shuffle_epi32(M4, 0x4E);
+            t5 = _mm256_shuffle_epi32(M5, 0x4E);
+            t6 = _mm256_shuffle_epi32(M6, 0x39);
+            t7 = _mm256_shuffle_epi32(M7, 0x39);
 
             sh[z+0] = _mm256_permute2x128_si256(t0, t1, 0x20);
             sh[z+1] = _mm256_permute2x128_si256(t2, t3, 0x20);
-
-            s0 = (__m128i *)(&syms[in[iN[Z+2]]][lN[Z+2]]);
-            s1 = (__m128i *)(&syms[in[iN[Z+6]]][lN[Z+6]]);
-            s2 = (__m128i *)(&syms[in[iN[Z+3]]][lN[Z+3]]);
-            s3 = (__m128i *)(&syms[in[iN[Z+7]]][lN[Z+7]]);
-
-            t0 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s0)), 0x4E);
-            t1 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s1)), 0x4E);
-            t2 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s2)), 0x39);
-            t3 = _mm256_shuffle_epi32(m128_to_256(_mm_loadu_si128(s3)), 0x39);
-
-            lN[Z+2] = in[iN[Z+2]];
-            lN[Z+6] = in[iN[Z+6]];
-            lN[Z+3] = in[iN[Z+3]];
-            lN[Z+7] = in[iN[Z+7]];
-
-            sh[z+2] = _mm256_permute2x128_si256(t0, t1, 0x20);
-            sh[z+3] = _mm256_permute2x128_si256(t2, t3, 0x20);
+            sh[z+2] = _mm256_permute2x128_si256(t4, t5, 0x20);
+            sh[z+3] = _mm256_permute2x128_si256(t6, t7, 0x20);
 
             // potential to set xmax, rf, bias, and SD in-situ here, removing
             // the need to hold sh[] in regs.  Doing so doesn't seem to speed
             // things up though.
         }
+        memcpy(lN, new_symp, 32);
 
-        __m256i xA = _mm256_set_epi32(0,0,0,-1, 0,0,0,-1);
-        __m256i xB = _mm256_set_epi32(0,0,-1,0, 0,0,-1,0);
-        __m256i xC = _mm256_set_epi32(0,-1,0,0, 0,-1,0,0);
-        __m256i xD = _mm256_set_epi32(-1,0,0,0, -1,0,0,0);
+        const __m256i xA = _mm256_set_epi32(0,0,0,-1, 0,0,0,-1);
+        const __m256i xB = _mm256_set_epi32(0,0,-1,0, 0,0,-1,0);
+        const __m256i xC = _mm256_set_epi32(0,-1,0,0, 0,-1,0,0);
+        const __m256i xD = _mm256_set_epi32(-1,0,0,0, -1,0,0,0);
 
         // Extract 32-bit xmax elements from syms[] data (in sh vec array)
 /*
