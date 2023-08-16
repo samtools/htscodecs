@@ -156,7 +156,7 @@ task:
 task:
   name: freebsd
   freebsd_instance:
-    image_family: freebsd-13-1
+    image_family: freebsd-13-2
 
   pkginstall_script:
     - pkg update -f
