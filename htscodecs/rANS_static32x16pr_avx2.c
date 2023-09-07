@@ -115,14 +115,41 @@ static inline __m256i _mm256_mulhi_epu32(__m256i a, __m256i b) {
 }
 #endif
 
-#if 0
-// Simulated gather.  This is sometimes faster as it can run on other ports.
+#ifndef USE_GATHER
+// Simulated gather.  This is sometimes faster if gathers are slow, either
+// due to the particular implementation (maybe on Zen4) or because of
+// a microcode patch such as Intel's Downfall fix.
 static inline __m256i _mm256_i32gather_epi32x(int *b, __m256i idx, int size) {
+    volatile // force the store to happen, hence forcing scalar loads
     int c[8] __attribute__((aligned(32)));
     _mm256_store_si256((__m256i *)c, idx);
-    return _mm256_set_epi32(b[c[7]], b[c[6]], b[c[5]], b[c[4]],
-                            b[c[3]], b[c[2]], b[c[1]], b[c[0]]);
+
+    // Fast with modern gccs, and no change with clang.
+    // Equivalent to:
+    //     return _mm256_set_epi32(b[c[7]], b[c[6]], b[c[5]], b[c[4]],
+    //                             b[c[3]], b[c[2]], b[c[1]], b[c[0]]);
+    register int bc1 = b[c[1]];
+    register int bc3 = b[c[3]];
+    register int bc5 = b[c[5]];
+    register int bc7 = b[c[7]];
+
+    __m128i x0a = _mm_cvtsi32_si128(b[c[0]]);
+    __m128i x1a = _mm_cvtsi32_si128(b[c[2]]);
+    __m128i x2a = _mm_cvtsi32_si128(b[c[4]]);
+    __m128i x3a = _mm_cvtsi32_si128(b[c[6]]);
+
+    __m128i x0 = _mm_insert_epi32(x0a, bc1, 1);
+    __m128i x1 = _mm_insert_epi32(x1a, bc3, 1);
+    __m128i x2 = _mm_insert_epi32(x2a, bc5, 1);
+    __m128i x3 = _mm_insert_epi32(x3a, bc7, 1);
+
+    __m128i x01 = _mm_unpacklo_epi64(x0, x1);
+    __m128i x23 = _mm_unpacklo_epi64(x2, x3);
+
+    __m256i y =_mm256_castsi128_si256(x01);
+    return _mm256_inserti128_si256(y, x23, 1);
 }
+
 #else
 #define _mm256_i32gather_epi32x _mm256_i32gather_epi32
 #endif
@@ -501,11 +528,15 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         //for (z = 0; z < NX; z++)
         //  m[z] = R[z] & mask;
         __m256i masked1 = _mm256_and_si256(Rv1, maskv);
-        __m256i masked2 = _mm256_and_si256(Rv2, maskv);
+	__m256i masked2 = _mm256_and_si256(Rv2, maskv);
+        __m256i masked3 = _mm256_and_si256(Rv3, maskv);
+        __m256i masked4 = _mm256_and_si256(Rv4, maskv);
 
-        //  S[z] = s3[m[z]];
-        __m256i Sv1 = _mm256_i32gather_epi32x((int *)s3, masked1, sizeof(*s3));
+	//  S[z] = s3[m[z]];
+	__m256i Sv1 = _mm256_i32gather_epi32x((int *)s3, masked1, sizeof(*s3));
         __m256i Sv2 = _mm256_i32gather_epi32x((int *)s3, masked2, sizeof(*s3));
+        __m256i Sv3 = _mm256_i32gather_epi32x((int *)s3, masked3, sizeof(*s3));
+        __m256i Sv4 = _mm256_i32gather_epi32x((int *)s3, masked4, sizeof(*s3));
 
         //  f[z] = S[z]>>(TF_SHIFT+8);
         __m256i fv1 = _mm256_srli_epi32(Sv1, TF_SHIFT+8);
@@ -526,15 +557,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Rv2 = _mm256_add_epi32(
                   _mm256_mullo_epi32(
                       _mm256_srli_epi32(Rv2,TF_SHIFT), fv2), bv2);
-#ifdef __clang__
-        // Protect against running off the end of in buffer.
-        // We copy it to a worst-case local buffer when near the end.
-        if ((uint8_t *)sp > cp_end) {
-            memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
-            sp = (uint16_t *)overflow;
-            cp_end = overflow + sizeof(overflow) - 64;
-        }
-#endif
+
         // Tricky one:  out[i+z] = s[z];
         //             ---h---g ---f---e  ---d---c ---b---a
         //             ---p---o ---n---m  ---l---k ---j---i
@@ -545,6 +568,14 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         sv1 = _mm256_permute4x64_epi64(sv1, 0xd8);
         __m256i Vv1 = _mm256_cvtepu16_epi32(_mm_loadu_si128((__m128i *)sp));
         sv1 = _mm256_packus_epi16(sv1, sv1);
+
+        // Protect against running off the end of in buffer.
+        // We copy it to a worst-case local buffer when near the end.
+        if ((uint8_t *)sp > cp_end) {
+            memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
+            sp = (uint16_t *)overflow;
+            cp_end = overflow + sizeof(overflow) - 64;
+        }
 
         // c =  R[z] < RANS_BYTE_L;
 
@@ -566,6 +597,14 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Vv1 = _mm256_permutevar8x32_epi32(Vv1, idx1);
         __m256i Yv2 = _mm256_slli_epi32(Rv2, 16);
 
+        // Protect against running off the end of in buffer.
+        // We copy it to a worst-case local buffer when near the end.
+        if ((uint8_t *)sp > cp_end) {
+            memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
+            sp = (uint16_t *)overflow;
+            cp_end = overflow + sizeof(overflow) - 64;
+        }
+
         // Shuffle the renorm values to correct lanes and incr sp pointer
         unsigned int imask2 = _mm256_movemask_ps((__m256)renorm_mask2);
         sp += _mm_popcnt_u32(imask1);
@@ -583,18 +622,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Rv2 = _mm256_blendv_epi8(Rv2, Yv2, renorm_mask2);
 
         // ------------------------------------------------------------
-
-        //  m[z] = R[z] & mask;
-        //  S[z] = s3[m[z]];
-        __m256i masked3 = _mm256_and_si256(Rv3, maskv);
-        __m256i Sv3 = _mm256_i32gather_epi32x((int *)s3, masked3, sizeof(*s3));
-
-        *(uint64_t *)&out[i+0] = _mm256_extract_epi64(sv1, 0);
-        *(uint64_t *)&out[i+8] = _mm256_extract_epi64(sv1, 2);
-
-        __m256i masked4 = _mm256_and_si256(Rv4, maskv);
-        __m256i Sv4 = _mm256_i32gather_epi32x((int *)s3, masked4, sizeof(*s3));
-
         //  f[z] = S[z]>>(TF_SHIFT+8);
         __m256i fv3 = _mm256_srli_epi32(Sv3, TF_SHIFT+8);
         __m256i fv4 = _mm256_srli_epi32(Sv4, TF_SHIFT+8);
@@ -625,12 +652,15 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         renorm_mask3 = _mm256_cmplt_epu32_imm(Rv3, RANS_BYTE_L);
         sv3 = _mm256_packus_epi16(sv3, sv3);
         renorm_mask4 = _mm256_cmplt_epu32_imm(Rv4, RANS_BYTE_L);
-        
-        *(uint64_t *)&out[i+16] = _mm256_extract_epi64(sv3, 0);
-        *(uint64_t *)&out[i+24] = _mm256_extract_epi64(sv3, 2);
 
         // y = (R[z] << 16) | V[z];
         __m256i Vv3 = _mm256_cvtepu16_epi32(_mm_loadu_si128((__m128i *)sp));
+
+        *(uint64_t *)&out[i+0]  = _mm256_extract_epi64(sv1, 0);
+        *(uint64_t *)&out[i+8]  = _mm256_extract_epi64(sv1, 2);
+        *(uint64_t *)&out[i+16] = _mm256_extract_epi64(sv3, 0);
+        *(uint64_t *)&out[i+24] = _mm256_extract_epi64(sv3, 2);
+
         __m256i Yv3 = _mm256_slli_epi32(Rv3, 16);
         unsigned int imask3 = _mm256_movemask_ps((__m256)renorm_mask3);
         __m256i idx3 = _mm256_load_si256((const __m256i*)permute[imask3]);
@@ -649,19 +679,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Vv4 = _mm256_permutevar8x32_epi32(Vv4, idx4);
         Yv4 = _mm256_or_si256(Yv4, Vv4);
         sp += _mm_popcnt_u32(imask4);
-
-#ifndef __clang__
-        // 26% faster here than above for gcc10, but former location is
-        // better on clang.
-
-        // Protect against running off the end of in buffer.
-        // We copy it to a worst-case local buffer when near the end.
-        if ((uint8_t *)sp > cp_end) {
-            memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
-            sp = (uint16_t *)overflow;
-            cp_end = overflow + sizeof(overflow) - 64;
-        }
-#endif
 
         // R[z] = c ? Y[z] : R[z];
         Rv3 = _mm256_blendv_epi8(Rv3, Yv3, renorm_mask3);
@@ -836,13 +853,6 @@ unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_si
         __m256i xD = _mm256_set_epi32(-1,0,0,0, -1,0,0,0);
 
         // Extract 32-bit xmax elements from syms[] data (in sh vec array)
-/*
-#define SYM_LOAD(x, A, B, C, D)                                         \
-        _mm256_or_si256(_mm256_or_si256(_mm256_and_si256(sh[x+0], A),   \
-                                        _mm256_and_si256(sh[x+1], B)),  \
-                        _mm256_or_si256(_mm256_and_si256(sh[x+2], C),   \
-                                        _mm256_and_si256(sh[x+3], D)))
-*/
         __m256i xmax1 = SYM_LOAD( 0, xA, xB, xC, xD);
         __m256i xmax2 = SYM_LOAD( 4, xA, xB, xC, xD);
         __m256i xmax3 = SYM_LOAD( 8, xA, xB, xC, xD);
@@ -1539,26 +1549,10 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
             sv3 = _mm256_permute4x64_epi64(sv3, 0xd8); // shuffle;  AaBb
             sv3 = _mm256_packus_epi16(sv3, sv3);       // 16 to 8
 
-            // Method 1
             u.tbuf64[tidx][0] = _mm256_extract_epi64(sv1, 0);
             u.tbuf64[tidx][1] = _mm256_extract_epi64(sv1, 2);
             u.tbuf64[tidx][2] = _mm256_extract_epi64(sv3, 0);
             u.tbuf64[tidx][3] = _mm256_extract_epi64(sv3, 2);
-
-//          // Method 2
-//          sv1 = _mm256_permute4x64_epi64(sv1, 8); // x x 10 00
-//          _mm_storeu_si128((__m128i *)&u.tbuf64[tidx][0],
-//                           _mm256_extractf128_si256(sv1, 0));
-//          sv3 = _mm256_permute4x64_epi64(sv3, 8); // x x 10 00
-//          _mm_storeu_si128((__m128i *)&u.tbuf64[tidx][2],
-//                           _mm256_extractf128_si256(sv3, 0));
-
-//          // Method 3
-//          sv1 = _mm256_and_si256(sv1, _mm256_set_epi64x(0,-1,0,-1)); // AxBx
-//          sv3 = _mm256_and_si256(sv3, _mm256_set_epi64x(-1,0,-1,0)); // xCxD
-//          sv1 = _mm256_or_si256(sv1, sv3);                           // ACBD
-//          sv1 = _mm256_permute4x64_epi64(sv1, 0xD8); //rev 00 10 01 11; ABCD
-//          _mm256_storeu_si256((__m256i *)u.tbuf64[tidx], sv1);
 
             iN[0]++;
             if (++tidx == 32) {

@@ -922,8 +922,19 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 #endif
 
     if (order & 1) {
+        // With simulated gathers, the AVX512 is now slower than AVX2, so
+        // we avoid using it unless asking for the real avx512 gather.
+        // Note for testing we do -c 0x0404 to enable AVX512 and disable AVX2.
+        // We then need to call the avx512 func regardless.
+        int use_gather;
+#ifdef USE_GATHER
+        use_gather = 1;
+#else
+        use_gather = !have_avx2;
+#endif
+
 #if defined(HAVE_AVX512)
-        if (have_e_avx512f && (!is_amd || !have_e_avx2))
+        if (have_e_avx512f && (!is_amd || !have_e_avx2) && use_gather)
             return rans_compress_O1_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
@@ -1000,7 +1011,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
         return rans_uncompress_O1_32x16;
     } else {
 #if defined(HAVE_AVX512)
-        if (have_d_avx512f && (!is_amd || !have_d_avx2))
+        if (have_d_avx512f)
             return rans_uncompress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)

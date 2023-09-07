@@ -32,6 +32,32 @@ separate entity.  If you are attempting to make use of these codecs
 within your own library, such as we do within Staden io_lib, it may be
 useful to configure this with `--disable-shared --with-pic'.
 
+Intel GDS/Downfall
+------------------
+
+The new Intel microcode to patch the Gather Data Sampling (GDS) bug
+has severely impacted the performance of the AVX2 and AVX512 gather
+SIMD intrinsics.  So much so that simulating vector gather
+instructions using traditional scalar code is now more performant.
+Due to the slower AVX512 gathers on AMD Zen4, the simulated gather
+code is faster there too, even without having a Downfall mitigation.
+
+Unfortunately this simulated code is slower than the original gather
+code when run on an unpatched CPUs.  Without the GDS microcode patch
+on Intel CPUs, the simulated gathers slows the rate of decode by
+10-30% and the rate of encode for AVX512 by up to 50%.  The GDS
+microcode patch however can slow AVX2 decode and AVX512 encode by
+2-3x.
+
+Ideally we would auto-detect and select the optimal algorithm, but the
+easy solution is simply to pick the method with the most uniform
+performance without having bad worst-case rates.
+
+Hence by default the simulated gather implementation is now the
+default.  The old code can be reenabled by building with:
+
+    make CPPFLAGS=-DUSE_GATHER
+
 
 Testing
 -------
