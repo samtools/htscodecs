@@ -415,6 +415,7 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
 
     tab_size = cp - out;
     assert(tab_size < 257*257*3);
+    (void) tab_size; // silence compiler warnings about unused variable
 
     *cp_p = cp;
     htscodecs_tls_free(F);
