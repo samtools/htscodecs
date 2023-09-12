@@ -241,7 +241,7 @@ int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
     uint8_t *op = cp, c;
     uint64_t j = 0;
 
-    if (!endp || endp - cp >= 10) {
+    if (!endp || endp - cp >= 11) {
         int n = 10;
         do {
             c = *cp++;
