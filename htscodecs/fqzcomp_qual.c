@@ -1017,9 +1017,10 @@ unsigned char *compress_block_fqz2f(int vers,
 
     int comp_idx = 0;
     RangeCoder rc;
+    size_t comp_sz = in_size*1.1+100000;
 
-    unsigned char *comp = (unsigned char *)malloc(in_size*1.1+100000);
-    unsigned char *compe = comp + (size_t)(in_size*1.1+100000);
+    unsigned char *comp = (unsigned char *)malloc(comp_sz);
+    unsigned char *compe = comp + (size_t)comp_sz;
     if (!comp)
         return NULL;
 
@@ -1054,6 +1055,7 @@ unsigned char *compress_block_fqz2f(int vers,
         return NULL;
 
     RC_SetOutput(&rc, (char *)comp+comp_idx);
+    RC_SetOutputEnd(&rc, (char *)comp+comp_sz);
     RC_StartEncode(&rc);
 
     // For CRAM3.1, reverse upfront if needed
@@ -1151,7 +1153,12 @@ unsigned char *compress_block_fqz2f(int vers,
 #endif
     }
 
-    RC_FinishEncode(&rc);
+    if (RC_FinishEncode(&rc) < 0) {
+        free(comp);
+        comp = NULL;
+        *out_size = 0;
+        goto err;
+    }
 
     // For CRAM3.1, undo our earlier reversal step
     rec = state.rec;
@@ -1186,6 +1193,7 @@ unsigned char *compress_block_fqz2f(int vers,
     *out_size = comp_idx + RC_OutSize(&rc);
     //fprintf(stderr, "%d -> %d\n", (int)in_size, (int)*out_size);
 
+ err:
     fqz_destroy_models(&model);
     if (free_params)
         fqz_free_parameters(gp);
@@ -1550,7 +1558,9 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
         }
     }
 
-    RC_FinishDecode(&rc);
+    if (RC_FinishDecode(&rc) < 0)
+        goto err;
+
     fqz_destroy_models(&model);
     free(rev_a);
     free(len_a);
