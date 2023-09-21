@@ -1017,12 +1017,6 @@ unsigned char *compress_block_fqz2f(int vers,
 
     int comp_idx = 0;
     RangeCoder rc;
-    size_t comp_sz = in_size*1.1+100000;
-
-    unsigned char *comp = (unsigned char *)malloc(comp_sz);
-    unsigned char *compe = comp + (size_t)comp_sz;
-    if (!comp)
-        return NULL;
 
     // Pick and store params
     if (!gp) {
@@ -1031,6 +1025,36 @@ unsigned char *compress_block_fqz2f(int vers,
             return NULL;
         free_params = 1;
     }
+
+    // Worst case scenario assuming random input data and no way to compress
+    // is NBytes*growth for some small growth factor (arith_dynamic uses 1.05),
+    // plus fixed overheads for the header / params.  Growth can be high
+    // here as we're modelling things and pathological cases may trigger a
+    // bad probability model.
+    //
+    // Per read is 4-byte len if not fixed length (but less if avg smaller)
+    //             up to 1 byte for selection state (log2(max_sel) bits)
+    //             1-bit for reverse flag
+    //             1-bit for dup-last flag (but then no quals)
+    // Per qual is 1-byte (assuming QMAX==256)
+    //
+    // Header size is total guess, as depends on params, but it's almost
+    // always tiny, so a few K extra should be sufficient.
+    //
+    // => Total of (s->num_records*4.25 + in_size)*growth + hdr
+    int sel_bits = 0, sel = gp->max_sel;
+    while (sel) {
+        sel_bits++;
+        sel >>= 1;
+    }
+    double len_sz = gp->p[0].fixed_len ? 0.25 : 4.25;
+    len_sz += sel_bits / 8.0;
+    size_t comp_sz = (s->num_records*len_sz + in_size)*1.1 + 10000;
+
+    unsigned char *comp = (unsigned char *)malloc(comp_sz);
+    unsigned char *compe = comp + (size_t)comp_sz;
+    if (!comp)
+        return NULL;
 
     //dump_params(gp);
     comp_idx = var_put_u32(comp, compe, in_size);
