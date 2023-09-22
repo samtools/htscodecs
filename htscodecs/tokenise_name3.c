@@ -1468,10 +1468,16 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
 
     // Encode name
     for (i = j = 0; i < len; j=++i) {
-        while (i < len && blk[i] > '\n')
+        while (i < len && (signed char)blk[i] >= ' ') // non-ASCII check
             i++;
         if (i >= len)
             break;
+
+        if (blk[i] != '\0' && blk[i] != '\n') {
+            // Names must be 7-bit ASCII printable
+            free_context(ctx);
+            return NULL;
+        }
 
         blk[i] = '\0';
         // try both 0 and 1 and pick best?
