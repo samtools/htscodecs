@@ -526,7 +526,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Rv2 = _mm256_add_epi32(
                   _mm256_mullo_epi32(
                       _mm256_srli_epi32(Rv2,TF_SHIFT), fv2), bv2);
-
 #ifdef __clang__
         // Protect against running off the end of in buffer.
         // We copy it to a worst-case local buffer when near the end.
@@ -649,6 +648,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         Yv3 = _mm256_or_si256(Yv3, Vv3);
         Vv4 = _mm256_permutevar8x32_epi32(Vv4, idx4);
         Yv4 = _mm256_or_si256(Yv4, Vv4);
+        sp += _mm_popcnt_u32(imask4);
 
 #ifndef __clang__
         // 26% faster here than above for gcc10, but former location is
@@ -662,8 +662,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
             cp_end = overflow + sizeof(overflow) - 64;
         }
 #endif
-
-        sp += _mm_popcnt_u32(imask4);
 
         // R[z] = c ? Y[z] : R[z];
         Rv3 = _mm256_blendv_epi8(Rv3, Yv3, renorm_mask3);
