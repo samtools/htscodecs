@@ -566,8 +566,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         // packs_epi16 ponmlkji ponmlkji  hgfedcba hgfedcba
         sv1 = _mm256_packus_epi32(sv1, sv2);
         sv1 = _mm256_permute4x64_epi64(sv1, 0xd8);
-        __m256i Vv1 = _mm256_cvtepu16_epi32(_mm_loadu_si128((__m128i *)sp));
-        sv1 = _mm256_packus_epi16(sv1, sv1);
 
         // Protect against running off the end of in buffer.
         // We copy it to a worst-case local buffer when near the end.
@@ -576,6 +574,9 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
             sp = (uint16_t *)overflow;
             cp_end = overflow + sizeof(overflow) - 64;
         }
+
+        __m256i Vv1 = _mm256_cvtepu16_epi32(_mm_loadu_si128((__m128i *)sp));
+        sv1 = _mm256_packus_epi16(sv1, sv1);
 
         // c =  R[z] < RANS_BYTE_L;
 
@@ -596,14 +597,6 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
         __m256i Yv1 = _mm256_slli_epi32(Rv1, 16);
         Vv1 = _mm256_permutevar8x32_epi32(Vv1, idx1);
         __m256i Yv2 = _mm256_slli_epi32(Rv2, 16);
-
-        // Protect against running off the end of in buffer.
-        // We copy it to a worst-case local buffer when near the end.
-        if ((uint8_t *)sp > cp_end) {
-            memmove(overflow, sp, cp_end+64 - (uint8_t *)sp);
-            sp = (uint16_t *)overflow;
-            cp_end = overflow + sizeof(overflow) - 64;
-        }
 
         // Shuffle the renorm values to correct lanes and incr sp pointer
         unsigned int imask2 = _mm256_movemask_ps((__m256)renorm_mask2);
