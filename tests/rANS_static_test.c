@@ -259,12 +259,13 @@ int main(int argc, char **argv) {
                 bytes += out_size;
             }
         } else {
-            for (;;) {
+            int loop=0;
+            for (;;loop++) {
                 uint32_t in_size, out_size;
                 unsigned char *out;
 
                 in_size = fread(in_buf, 1, BLK_SIZE, infp);
-                if (in_size <= 0)
+                if (loop && in_size <= 0)
                     break;
 
                 out = rans_compress(in_buf, in_size, &out_size,
