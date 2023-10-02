@@ -822,13 +822,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
  */
 #include "rANS_static32x16pr.h"
 
-// Test interface for restricting the auto-detection methods so we
-// can forcibly compare different implementations on the same machine.
-// See RANS_CPU_ defines in rANS_static4x16.h
 static int rans_cpu = 0xFFFF; // all
-void rans_set_cpu(int opts) {
-    rans_cpu = opts;
-}
 
 #if (defined(__GNUC__) || defined(__clang__)) && defined(__x86_64__)
 // Icc and Clang both also set __GNUC__ on linux, but not on Windows.
@@ -861,6 +855,7 @@ static int have_avx2    UNUSED = 0;
 static int have_avx512f UNUSED = 0;
 static int is_amd       UNUSED = 0;
 
+#define HAVE_HTSCODECS_TLS_CPU_INIT
 static void htscodecs_tls_cpu_init(void) {
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
     // These may be unused, depending on HAVE_* config.h macros
@@ -1122,6 +1117,16 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 }
 
 #endif
+
+// Test interface for restricting the auto-detection methods so we
+// can forcibly compare different implementations on the same machine.
+// See RANS_CPU_ defines in rANS_static4x16.h
+void rans_set_cpu(int opts) {
+    rans_cpu = opts;
+#ifdef HAVE_HTSCODECS_TLS_CPU_INIT
+    htscodecs_tls_cpu_init();
+#endif
+}
 
 /*-----------------------------------------------------------------------------
  * Simple interface to the order-0 vs order-1 encoders and decoders.
