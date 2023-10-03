@@ -887,10 +887,6 @@ static void htscodecs_tls_cpu_init(void) {
 
     if (!have_popcnt) have_avx512f = have_avx2 = have_sse4_1 = 0;
     if (!have_ssse3)  have_sse4_1 = 0;
-
-    if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_avx512f = 0;
-    if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_avx2 = 0;
-    if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_sse4_1 = 0;
 }
 
 static inline
@@ -899,6 +895,15 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
      unsigned int in_size,
      unsigned char *out,
      unsigned int *out_size) {
+
+    int have_e_sse4_1  = have_sse4_1;
+    int have_e_avx2    = have_avx2;
+    int have_e_avx512f = have_avx512f;
+
+    if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_e_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_e_avx2    = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_e_sse4_1  = 0;
+
     if (!do_simd) { // SIMD disabled
         return order & 1
             ? rans_compress_O1_4x16
@@ -918,29 +923,29 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 
     if (order & 1) {
 #if defined(HAVE_AVX512)
-        if (have_avx512f && (!is_amd || !have_avx2))
+        if (have_e_avx512f && (!is_amd || !have_e_avx2))
             return rans_compress_O1_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-        if (have_avx2)
+        if (have_e_avx2)
             return rans_compress_O1_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
-        if (have_sse4_1) 
+        if (have_e_sse4_1)
             return rans_compress_O1_32x16;
 #endif
         return rans_compress_O1_32x16;
     } else {
 #if defined(HAVE_AVX512)
-        if (have_avx512f && (!is_amd || !have_avx2))
+        if (have_e_avx512f && (!is_amd || !have_e_avx2))
             return rans_compress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-        if (have_avx2)
+        if (have_e_avx2)
             return rans_compress_O0_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
-        if (have_sse4_1)
+        if (have_e_sse4_1)
             return rans_compress_O0_32x16;
 #endif
         return rans_compress_O0_32x16;
@@ -953,6 +958,14 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
      unsigned int in_size,
      unsigned char *out,
      unsigned int out_size) {
+
+    int have_d_sse4_1  = have_sse4_1;
+    int have_d_avx2    = have_avx2;
+    int have_d_avx512f = have_avx512f;
+
+    if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_d_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_d_avx2    = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_d_sse4_1  = 0;
 
     if (!do_simd) { // SIMD disabled
         return order & 1
@@ -973,29 +986,29 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 
     if (order & 1) {
 #if defined(HAVE_AVX512)
-        if (have_avx512f)
+        if (have_d_avx512f)
             return rans_uncompress_O1_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-        if (have_avx2)
+        if (have_d_avx2)
             return rans_uncompress_O1_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
-        if (have_sse4_1)
+        if (have_d_sse4_1)
             return rans_uncompress_O1_32x16_sse4;
 #endif
         return rans_uncompress_O1_32x16;
     } else {
 #if defined(HAVE_AVX512)
-        if (have_avx512f && (!is_amd || !have_avx2))
+        if (have_d_avx512f && (!is_amd || !have_d_avx2))
             return rans_uncompress_O0_32x16_avx512;
 #endif
 #if defined(HAVE_AVX2)
-        if (have_avx2)
+        if (have_d_avx2)
             return rans_uncompress_O0_32x16_avx2;
 #endif
 #if defined(HAVE_SSE4_1) && defined(HAVE_SSSE3) && defined(HAVE_POPCNT)
-        if (have_sse4_1)
+        if (have_d_sse4_1)
             return rans_uncompress_O0_32x16_sse4;
 #endif
         return rans_uncompress_O0_32x16;
