@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
     unsigned char *in = load(infp, &in_size);
     int order_a[] = {0,1,                            // r4x8
                      64,65, 128,129, 192,193,        // r4x16, arith
-                     4,5, 68,69, 132,133, 194,197,   // r4x16 SIMD
+                     4,5, 68,69, 132,133, 196,197,   // r4x16 SIMD
                      };
     char *codec[] = {"r4x8", "r4x16", "r32x16", "arith"};
     int i, j;
