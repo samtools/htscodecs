@@ -1414,8 +1414,10 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
             uint32_t S = s3[l[z]][m];
             unsigned char c = S & 0xff;
             out[i4[z]++] = c;
-            R[z] = (S>>(TF_SHIFT_O1+8)) * (R[z]>>TF_SHIFT_O1) +
-                ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
+            int f = (S>>(TF_SHIFT_O1+8));
+            if (f == 0)
+                f = 4096;
+            R[z] = f * (R[z]>>TF_SHIFT_O1) + ((S>>8) & ((1u<<TF_SHIFT_O1)-1));
             RansDecRenormSafe(&R[z], &ptr, ptr_end);
             l[z] = c;
         }
