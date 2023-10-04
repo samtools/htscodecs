@@ -1176,9 +1176,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
 
     if (in_size <= 20)
         order &= ~RANS_ORDER_STRIPE;
+#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     if (in_size <= 1000)
         order &= ~RANS_ORDER_X32;
-
+#endif
     if (order & RANS_ORDER_STRIPE) {
         int N = (order>>8) & 0xff;
         if (N == 0) N = 4; // default for compatibility with old tests
