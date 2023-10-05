@@ -1,3 +1,65 @@
+Release 1.5.2: 6th October 2023
+-------------------------------
+
+*** SECURITY FIXES ***
+
+This release contains multiple bug fixes, including a couple
+buffer overruns that could corrupt memory when used in specific
+scenarios.  These have not been observed with real data, but could
+represent an attack vector for a malicious user.  (We know of no
+exploit.)
+
+
+Changes
+
+- The range coder has been extended to do bounds checking if the
+  new RC_SetOutputEnd() is called.  This has a small performance hit
+  for the encoder, depending on compiler, but tests showed within 10%
+  at worst.
+
+Bug fixes
+
+- Fix write-buffer overruns in fqzcomp and name tokeniser.
+
+  SECURITY ISSUE: FQZComp could overflow the computed maximum growth
+  size, causing writes beyond the ends of the allocated memory.  This
+  is triggered by many very small 1bp reads.  Fixed the maximum
+  bounds for compressed data.
+
+  SECURITY ISSUE: The name tokeniser using the maximum number of
+  tokens (128) would erroneously write a 129th token.  This is a
+  restricted overflow of a few bytes.
+
+  (PR#97, reported by Shubham Chandak)
+
+- Fix an maximum 8-byte read overflow in the AVX2 rans decoder.
+  SECURITY ISSUE: This was only present when using gcc.
+  (PR#100, reported by Rob Davies)
+
+- The rANS Order-1 SSE4 decoder could decode incorrectly.
+  When a single symbol only occurs and we're using 12-bit freqs, the
+  frequency of 4096 was interpreted as freq 0.  This only happens in
+  the non-SIMD tidy-up stage at the end of the decode, so at worst the
+  final 31 bytes may be incorrect. (PR#102)
+
+- Fixed a 1-byte heap read-buffer overflow. Existed since 6a87ead2
+  (Oct 2021).  Low severity security due to size and high likelihood
+  it's just malloc meta-data. (PR#95; OSS-Fuzz 62270)
+
+- rans_compress_4x16 now works on zero length input.
+  Previously this was giving divide-by-zero errors.
+  (PR#101, reported by Shubham Chandak)
+
+- Remove asserts which caused warnings about unused variables when
+  building with -DNDEBUG.
+
+- Fix ARM builds when HWCAP_ASIMD is missing (on Conda) (PR#91)
+
+- Improve FreeBSD CI testing
+
+- Fix undefined behaviour from signed bit-shifting (PR#90).
+
+
 Release 1.5.1: 19th July 2023
 -----------------------------
 
