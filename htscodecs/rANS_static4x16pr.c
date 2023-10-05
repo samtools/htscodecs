@@ -1267,7 +1267,8 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         out[0] = RANS_ORDER_CAT;
         c_meta_len = 1;
         c_meta_len += var_put_u32(&out[1], out_end, in_size);
-        memcpy(out+c_meta_len, in, in_size);
+        if (in_size)
+            memcpy(out+c_meta_len, in, in_size);
         *out_size = c_meta_len + in_size;
         return out;
     }
@@ -1380,7 +1381,8 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
     if (*out_size >= in_size) {
         out[0] &= ~3;
         out[0] |= RANS_ORDER_CAT | no_size;
-        memcpy(out+c_meta_len, in, in_size);
+        if (in_size)
+            memcpy(out+c_meta_len, in, in_size);
         *out_size = in_size;
     }
 
