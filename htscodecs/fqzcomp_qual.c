@@ -911,7 +911,7 @@ int fqz_pick_parameters(fqz_gparams *gp,
         // NB: stab is already all zero
     }
 
-    if (gp->max_sel) {
+    if (gp->max_sel && s->num_records) {
         int max = 0;
         for (i = 0; i < s->num_records; i++) {
             if (max < (s->flags[i] >> 16))
@@ -1117,6 +1117,12 @@ unsigned char *compress_block_fqz2f(int vers,
 
     for (i = 0; i < in_size; i++) {
         if (state.p == 0) {
+            if (state.rec >= s->num_records || s->len[state.rec] <= 0) {
+                free(comp);
+                comp = NULL;
+                goto err;
+            }
+
             if (compress_new_read(s, &state, gp, pm, &model, &rc,
                                   in, &i, /*&rec,*/ &last))
                 continue;

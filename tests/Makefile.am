@@ -88,7 +88,16 @@ fuzzer_ldadd   = $(top_builddir)/htscodecs/libcodecsfuzz.a \
 	$(top_builddir)/htscodecs/libcodecsfuzz_avx2.a \
 	$(top_builddir)/htscodecs/libcodecsfuzz_avx512.a
 
-EXTRA_PROGRAMS = rans4x8_fuzz rans4x16pr_fuzz arith_dynamic_fuzz tokenise_name3_fuzz fqzcomp_qual_fuzz entropy_fuzz
+EXTRA_PROGRAMS = \
+	rans4x8_fuzz \
+	rans4x16pr_fuzz \
+	arith_dynamic_fuzz \
+	tokenise_name3_fuzz \
+	tokenise_name3_fuzzrt \
+	fqzcomp_qual_fuzz \
+	fqzcomp_qual_fuzzrt \
+	entropy_fuzz
+
 rans4x8_fuzz_SOURCES = rANS_static_fuzz.c
 rans4x8_fuzz_CFLAGS  = $(fuzzer_cflags)
 rans4x8_fuzz_LDFLAGS = $(fuzzer_ldflags)
@@ -109,6 +118,11 @@ tokenise_name3_fuzz_CFLAGS  = $(fuzzer_cflags)
 tokenise_name3_fuzz_LDFLAGS = $(fuzzer_ldflags)
 tokenise_name3_fuzz_LDADD   = $(fuzzer_ldadd)
 
+tokenise_name3_fuzzrt_SOURCES = tokenise_name3_fuzzrt.c
+tokenise_name3_fuzzrt_CFLAGS  = $(fuzzer_cflags)
+tokenise_name3_fuzzrt_LDFLAGS = $(fuzzer_ldflags)
+tokenise_name3_fuzzrt_LDADD   = $(fuzzer_ldadd)
+
 fqzcomp_qual_fuzz_SOURCES = fqzcomp_qual_fuzz.c
 fqzcomp_qual_fuzz_CFLAGS  = $(fuzzer_cflags)
 fqzcomp_qual_fuzz_LDFLAGS = $(fuzzer_ldflags)
@@ -118,3 +132,8 @@ entropy_fuzz_SOURCES = entropy_fuzz.c
 entropy_fuzz_CFLAGS  = $(fuzzer_cflags)
 entropy_fuzz_LDFLAGS = $(fuzzer_ldflags)
 entropy_fuzz_LDADD   = $(fuzzer_ldadd)
+
+fqzcomp_qual_fuzzrt_SOURCES = fqzcomp_qual_fuzzrt.c
+fqzcomp_qual_fuzzrt_CFLAGS  = $(fuzzer_cflags)
+fqzcomp_qual_fuzzrt_LDFLAGS = $(fuzzer_ldflags)
+fqzcomp_qual_fuzzrt_LDADD   = $(fuzzer_ldadd)
