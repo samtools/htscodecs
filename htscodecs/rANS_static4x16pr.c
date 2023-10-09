@@ -930,7 +930,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 #ifdef USE_GATHER
         use_gather = 1;
 #else
-        use_gather = !have_avx2;
+        use_gather = !have_e_avx2;
 #endif
 
 #if defined(HAVE_AVX512)
