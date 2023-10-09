@@ -1685,7 +1685,7 @@ uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
     while (o < sz) {
         uint8_t ttype = in[o++];
         if (ttype & 64) {
-            if (o+2 >= sz) goto err;
+            if (o+2 > sz) goto err;
             int j = in[o++]<<4;
             j += in[o++];
             if (ttype & 128) {
