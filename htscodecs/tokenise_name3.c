@@ -489,11 +489,11 @@ int build_trie(name_context *ctx, char *data, size_t len, int n) {
     for (nlines = i = 0; i < len; i++, nlines++) {
         t = ctx->t_head;
         t->count++;
-        while (i < len && data[i] > '\n') {
+        while (i < len && (unsigned char)data[i] > '\n') {
             unsigned char c = data[i++];
             if (c & 0x80)
                 //fprintf(stderr, "8-bit ASCII is unsupported\n");
-                abort();
+                return -1;
             c &= 127;
 
 
@@ -653,7 +653,7 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
             unsigned char c = data[i++];
             if (c & 0x80)
                 //fprintf(stderr, "8-bit ASCII is unsupported\n");
-                abort();
+                return -1;
             c &= 127;
 
             trie_t *x = t->next;
