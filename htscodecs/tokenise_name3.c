@@ -839,14 +839,14 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                     //ctx->lc[pnum].last[ntok].token_delta=0;
                 } else if (mode == 1 && d < 256 && d >= 0 && ctx->lc[pnum].last[ntok].token_str == s-i) {
 #ifdef ENC_DEBUG
-                    fprintf(stderr, "Tok %d (dig-delta, %d / %d)\n", N_DDELTA, ctx->lc[pnum].last[ntok].token_int, v);
+                    fprintf(stderr, "Tok %d (dig0-delta, %d / %d)\n", N_DDELTA0, ctx->lc[pnum].last[ntok].token_int, v);
 #endif
                     //if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
                     if (encode_token_int1(ctx, ntok, N_DDELTA0, d) < 0) return -1;
                     //ctx->lc[pnum].last[ntok].token_delta=1;
                 } else {
 #ifdef ENC_DEBUG
-                    fprintf(stderr, "Tok %d (dig, %d / %d)\n", N_DIGITS, ctx->lc[pnum].last[ntok].token_int, v);
+                    fprintf(stderr, "Tok %d (dig0, %d / %d len %d)\n", N_DIGITS0, ctx->lc[pnum].last[ntok].token_int, v, s-i);
 #endif
                     if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
                     if (encode_token_int(ctx, ntok, N_DIGITS0, v) < 0) return -1;
@@ -854,7 +854,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                 }
             } else {
 #ifdef ENC_DEBUG
-                fprintf(stderr, "Tok %d (new dig, %d)\n", N_DIGITS, v);
+                fprintf(stderr, "Tok %d (new dig0, %d len %d)\n", N_DIGITS0, v, s-i);
 #endif
                 if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
                 if (encode_token_int(ctx, ntok, N_DIGITS0, v) < 0) return -1;
