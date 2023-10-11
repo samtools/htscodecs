@@ -646,6 +646,8 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
         // Better when we have a power of 2
         if (next_batch >= 0) {
             if (--next_batch < 0 && iN[0] > BATCH) {
+                // Load 32 BATCH blocks of data.
+                // Executed once every BATCH cycles
                 int i, j;
                 uint8_t c[32][BATCH];
                 iN[0] += BATCH;
@@ -653,7 +655,7 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
                     iN[j] -= BATCH;
                     memcpy(c[j], &in[iN[j]-BATCH], BATCH);
                 }
-                // transpose matrix
+                // transpose matrix from 32xBATCH to BATCHx32
                 for (j = 0; j < 32; j++) {
                     for (i = 0; i < BATCH; i+=16) {
                         for (int z = 0; z < 16; z++)
@@ -663,17 +665,21 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
                 next_batch = BATCH-1;
             }
             if (next_batch >= 0) {
-              __m128i c1_ = _mm_load_si128((__m128i *)&t32[next_batch][0]);
-              __m128i c2_ = _mm_load_si128((__m128i *)&t32[next_batch][16]);
-              c1 = _mm512_cvtepu8_epi32(c1_);
-              c2 = _mm512_cvtepu8_epi32(c2_);
+                // Copy from our of our pre-loaded BATCHx32 tables
+                // Executed every cycles
+                __m128i c1_ = _mm_load_si128((__m128i *)&t32[next_batch][0]);
+                __m128i c2_ = _mm_load_si128((__m128i *)&t32[next_batch][16]);
+                c1 = _mm512_cvtepu8_epi32(c1_);
+                c2 = _mm512_cvtepu8_epi32(c2_);
             }
         }
-        if (next_batch < 0) {
+
+        if (next_batch < 0 && iN[0]) {
+            // no pre-loaded data as within BATCHx32 of input end
             c1 = _mm512_i32gather_epi32x1(iN1, in);
             c2 = _mm512_i32gather_epi32x1(iN2, in);
 
-            // Speed sup clang, even though not needed any more.
+            // Speeds up clang, even though not needed any more.
             // Harmless to leave here.
             c1 = _mm512_and_si512(c1, _mm512_set1_epi32(0xff));
             c2 = _mm512_and_si512(c2, _mm512_set1_epi32(0xff));
