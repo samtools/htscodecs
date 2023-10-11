@@ -1577,7 +1577,7 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
             ctx->desc[i].dup_from = j;
             tot_size += 3; // flag, dup_from, ttype
         } else {
-            ctx->desc[i].dup_from = 0;
+            ctx->desc[i].dup_from = -1;
             tot_size += out_len + 1; // ttype
         }
     }
@@ -1585,7 +1585,7 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
 #if 0
     for (i = 0; i < ctx->max_tok*16; i++) {
         char fn[1024];
-        if (!ctx->desc[i].buf_l && !ctx->desc[i].dup_from) continue;
+        if (!ctx->desc[i].buf_l && ctx->desc[i].dup_from == -1) continue;
         sprintf(fn, "_tok.%02d_%02d.%d.comp", i>>4,i&15,i);
         FILE *fp = fopen(fn, "w");
         fwrite(ctx->desc[i].buf, 1, ctx->desc[i].buf_l, fp);
@@ -1623,7 +1623,7 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
             ttype8 |= 128;
             last_tnum = ctx->desc[i].tnum;
         }
-        if (ctx->desc[i].dup_from) {
+        if (ctx->desc[i].dup_from >= 0) {
             //fprintf(stderr, "Dup %d from %d, sz %d\n", i, ctx->desc[i].dup_from, ctx->desc[i].buf_l);
             *cp++ = ttype8 | 64;
             *cp++ = ctx->desc[i].dup_from >> 4;
