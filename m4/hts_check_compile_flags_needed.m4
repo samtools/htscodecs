@@ -50,7 +50,7 @@ AC_CACHE_CHECK([_AC_LANG compiler flags needed for $1], CACHEVAR, [
     [ax_check_save_flags=$[]_AC_LANG_PREFIX[]FLAGS
      _AC_LANG_PREFIX[]FLAGS="$[]_AC_LANG_PREFIX[]FLAGS $6 $2"
      AC_LINK_IFELSE([m4_default([$3],[AC_LANG_PROGRAM()])],
-       [AS_VAR_SET(CACHEVAR,[$2])],
+       [AS_VAR_SET(CACHEVAR,["$2"])],
        [AS_VAR_SET(CACHEVAR,[unsupported])])
      _AC_LANG_PREFIX[]FLAGS=$ax_check_save_flags])])
 AS_VAR_IF(CACHEVAR,unsupported, [

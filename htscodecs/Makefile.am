@@ -72,7 +72,7 @@ noinst_LTLIBRARIES =
 if RANS_32x16_SSE4
 noinst_LTLIBRARIES += librANS_static32x16pr_sse4.la
 librANS_static32x16pr_sse4_la_SOURCES = rANS_static32x16pr_sse4.c
-librANS_static32x16pr_sse4_la_CFLAGS = @MSSE4_1@ @MSSSE3@ @MPOPCNT@
+librANS_static32x16pr_sse4_la_CFLAGS = @MSSE4_1@
 libhtscodecs_la_LIBADD += librANS_static32x16pr_sse4.la
 endif
 if RANS_32x16_AVX2

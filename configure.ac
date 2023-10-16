@@ -129,68 +129,33 @@ dnl AC_CHECK_LIB([bsc], [bsc_compress], [
 dnl 	LIBS="-lbsc $LIBS"
 dnl 	AC_DEFINE([HAVE_LIBBSC],1,[Define to 1 if you have the libbsc library.])])
 
-dnl Count parts needed to build rANS_static32x16pr_sse4.c
-sse4_prerequisites=""
-
-dnl Check if we can use our SSSE3 implementations of rANS 32x16 codec.
-HTS_CHECK_COMPILE_FLAGS_NEEDED([ssse3], [-mssse3], [AC_LANG_PROGRAM([[
+dnl Check if we can use our SSE4.1 too.
+dnl Our SSE4 codec uses SSE4.1, SSSE3 (shuffle) and POPCNT, so we check all 3
+dnl together.  This helps Zig builds which don't work well if we test each
+dnl individually.
+HTS_CHECK_COMPILE_FLAGS_NEEDED([sse4.1], [-msse4.1 -mssse3 -mpopcnt], [AC_LANG_PROGRAM([[
 	  #ifdef __x86_64__
 	  #include "x86intrin.h"
 	  #endif
 	]],[[
 	  #ifdef __x86_64__
 	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
-	  __m128i c = _mm_shuffle_epi8(a, b);
-	  return *((char *) &c);
-	  #endif
-	]])], [
-        MSSSE3="$flags_needed"
-	sse4_prerequisites="o$sse4_prerequisites"
-	AC_SUBST([MSSSE3])
-        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if rANS source using SSSE3 can be compiled.])
-])
-
-dnl Check if we can use popcnt instructions
-HTS_CHECK_COMPILE_FLAGS_NEEDED([popcnt], [-mpopcnt], [AC_LANG_PROGRAM([[
-	  #ifdef __x86_64__
-	  #include "x86intrin.h"
-	  #endif
-	]],[[
-	  #ifdef __x86_64__
-	  unsigned int i = _mm_popcnt_u32(1);
-	  return i != 1;
-	  #endif
-	]])], [
-        MPOPCNT="$flags_needed"
-	sse4_prerequisites="o$sse4_prerequisites"
-	AC_SUBST([MPOPCNT])
-        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if rANS source using popcnt can be compiled.])
-])
-
-dnl Check if we can use our SSE4.1 too.  This *may* always imply SSSE3?
-dnl It may be easier just to target an old era of cpu than -mssse3 -msse4.1
-dnl -mpopcnt.  Eg -march=nehalem.  I don't know how wide spread that is.
-HTS_CHECK_COMPILE_FLAGS_NEEDED([sse4.1], [-msse4.1], [AC_LANG_PROGRAM([[
-	  #ifdef __x86_64__
-	  #include "x86intrin.h"
-	  #endif
-	]],[[
-	  #ifdef __x86_64__
-	  __m128i a = _mm_set_epi32(1, 2, 3, 4), b = _mm_set_epi32(4, 3, 2, 1);
-	  __m128i c = _mm_max_epu32(a, b);
-	  return *((char *) &c);
+	  __m128i c = _mm_shuffle_epi8(_mm_max_epu32(a, b), b);
+	  return _mm_popcnt_u32(*((char *) &c));
 	  #endif
 	]])], [
         MSSE4_1="$flags_needed"
-	sse4_prerequisites="o$sse4_prerequisites"
+	build_rans_sse4=yes
 	AC_SUBST([MSSE4_1])
         AC_DEFINE([HAVE_SSE4_1],1,[Defined to 1 if rANS source using SSE4.1 can be compiled.])
+        AC_DEFINE([HAVE_SSSE3],1,[Defined to 1 if rANS source using SSSE3 can be compiled.])
+        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if rANS source using popcnt can be compiled.])
 ])
-AM_CONDITIONAL([RANS_32x16_SSE4],[test "x$sse4_prerequisites" = "xooo"])
+AM_CONDITIONAL([RANS_32x16_SSE4],[test "$build_rans_sse4" = yes])
 
 dnl Check if we can use our AVX2 implementations.
 build_rans_avx2=no
-HTS_CHECK_COMPILE_FLAGS_NEEDED([avx2], [-mavx2], [AC_LANG_PROGRAM([[
+HTS_CHECK_COMPILE_FLAGS_NEEDED([avx2], [-mavx2 -mpopcnt], [AC_LANG_PROGRAM([[
 	  #ifdef __x86_64__
 	  #include "x86intrin.h"
 	  #endif
@@ -199,19 +164,20 @@ HTS_CHECK_COMPILE_FLAGS_NEEDED([avx2], [-mavx2], [AC_LANG_PROGRAM([[
 	  __m256i a = _mm256_set_epi32(1, 2, 3, 4, 5, 6, 7, 8);
 	  __m256i b = _mm256_add_epi32(a, a);
 	  long long c = _mm256_extract_epi64(b, 0);
-	  return (int) c;
+	  return _mm_popcnt_u32((int)c);
 	  #endif
 	]])], [
         MAVX2="$flags_needed"
 	build_rans_avx2=yes
 	AC_SUBST([MAVX2])
         AC_DEFINE([HAVE_AVX2],1,[Defined to 1 if rANS source using AVX2 can be compiled.])
+        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if rANS source using popcnt can be compiled.])
 ])
 AM_CONDITIONAL([RANS_32x16_AVX2],[test "$build_rans_avx2" = yes])
 
-dnl Check also if we have AVX512.  If so this overrides AVX2
+dnl Check also if we have AVX512.
 build_rans_avx512=no
-HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f], [AC_LANG_PROGRAM([[
+HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f -mpopcnt], [AC_LANG_PROGRAM([[
 	  #ifdef __x86_64__
 	  #include "x86intrin.h"
 	  #endif
@@ -219,7 +185,7 @@ HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f], [AC_LANG_PROGRAM([[
 	  #ifdef __x86_64__
 	  __m512i a = _mm512_set1_epi32(1);
 	  __m512i b = _mm512_add_epi32(a, a);
-	  return *((char *) &b);
+	  return _mm_popcnt_u32(*((char *) &b));
 	  #endif
 	]])], [
         MAVX512="$flags_needed"
@@ -227,6 +193,7 @@ HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f], [AC_LANG_PROGRAM([[
 	AC_SUBST([MAVX512])
         AC_DEFINE([HAVE_AVX512],1,[Defined to 1 if rANS source using AVX512F can be compiled.])
 ])
+        AC_DEFINE([HAVE_POPCNT],1,[Defined to 1 if rANS source using popcnt can be compiled.])
 AM_CONDITIONAL([RANS_32x16_AVX512],[test "$build_rans_avx512" = yes])
 
 AC_SUBST([HTSCODECS_SIMD_SRC])
