@@ -78,13 +78,13 @@ endif
 if RANS_32x16_AVX2
 noinst_LTLIBRARIES += librANS_static32x16pr_avx2.la
 librANS_static32x16pr_avx2_la_SOURCES = rANS_static32x16pr_avx2.c
-librANS_static32x16pr_avx2_la_CFLAGS = @MAVX2@
+librANS_static32x16pr_avx2_la_CFLAGS = @MAVX2@ @MPOPCNT@
 libhtscodecs_la_LIBADD += librANS_static32x16pr_avx2.la
 endif
 if RANS_32x16_AVX512
 noinst_LTLIBRARIES += librANS_static32x16pr_avx512.la
 librANS_static32x16pr_avx512_la_SOURCES = rANS_static32x16pr_avx512.c
-librANS_static32x16pr_avx512_la_CFLAGS = @MAVX512@
+librANS_static32x16pr_avx512_la_CFLAGS = @MAVX512@ @MPOPCNT@
 libhtscodecs_la_LIBADD += librANS_static32x16pr_avx512.la
 endif
 
