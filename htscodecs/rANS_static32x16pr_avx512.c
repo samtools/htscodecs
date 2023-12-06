@@ -658,7 +658,8 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
                 // transpose matrix from 32xBATCH to BATCHx32
                 for (j = 0; j < 32; j++) {
                     for (i = 0; i < BATCH; i+=16) {
-                        for (int z = 0; z < 16; z++)
+                        int z;
+                        for (z = 0; z < 16; z++)
                             t32[i+z][j] = c[j][i+z];
                     }
                 }
