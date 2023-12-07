@@ -1,3 +1,54 @@
+Release 1.6.0: 7th December 2023
+--------------------------------
+
+This release is primarily bug fixes, mostly spotted through improved fuzz
+testing.
+
+One big change however is the SIMD rANS codecs are now performant on Intel
+CPUs with the DownFall mitigation microcode applied.
+
+
+Changes
+
+- Replaced the rANS codec SIMD gathers with simulated gathers via scalar
+  memory fetches.  This helps AMD Zen4, but importantly it also fixes a
+  disastrous performance regression caused by Intel's DownFall microcode fix.
+
+  There is an impact on pre-DownFall speeds, but we should focus on patched
+  CPUs as a priority.
+
+- A small speed up to the rans_F_to_s3 function used by order-0 rans decode.
+
+- Small speed up to SIMD rans32x16 order-1 encoder by reducing cache misses.
+  Also sped up the rans4x8 order-1 encoder, particularly on AMD Zen4.
+
+- Now supports building with "zig cc"
+  (Issue #109, reported by David Jackson)
+
+
+Bug fixes
+
+- Improve robustness of name tokeniser when given non 7-bit ASCII and on
+  machines where "char" defaults to unsigned.
+  (Issue #105, reported by Shubham Chandak)
+
+- Also fixed a 1 byte buffer read-overrun in name tokeniser.
+
+- Fix name tokeniser encoder failure with some duplicated streams.
+
+- Fixed rans_set_cpu to work multiple times, as well as reinstating the
+  ability to change decode and encode side independently (accidentally lost in
+  commit 958032c).  No effect on usage, but it improves the test coverage.
+
+- Added a round-trip fuzz tester to test the ability to encode.  The old fuzz
+  testing was decode streams only.
+
+- Fixed bounds checking in rans_uncompress_O0_32x16_avx2, fixing buffer read
+  overruns.
+
+- Removed undefined behaviour in transpose_and_copy(), fixing zig cc builds.
+
+
 Release 1.5.2: 6th October 2023
 -------------------------------
 
