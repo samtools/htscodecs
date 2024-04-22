@@ -824,8 +824,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
 static int rans_cpu = 0xFFFF; // all
 
-#if (defined(__GNUC__) || defined(__clang__)) && defined(__x86_64__)
-// Icc and Clang both also set __GNUC__ on linux, but not on Windows.
+#if defined(__x86_64__) && defined(HAVE_CPUID)
 #include <cpuid.h>
 
 #if defined(__clang__) && defined(__has_attribute)

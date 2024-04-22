@@ -120,6 +120,25 @@ AS_IF([test "$ax_cv_builtin_prefetch" = "yes"],
            [Define to 1 if you have a __builtin_prefetch])],
 	[])
 
+dnl Check is cpuid works, needed by rANS_static4x16pr.c
+AC_MSG_CHECKING(for cpuid support)
+AC_LINK_IFELSE(
+    [AC_LANG_PROGRAM([
+        #include <cpuid.h>
+        #include <stddef.h>
+    ], [
+        unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+        int level = __get_cpuid_max(0, NULL);
+        if (level >= 1)
+            __cpuid_count(1, 0, eax, ebx, ecx, edx);
+    ])], [
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_CPUID, 1, [Set to 1 to use cpuid])
+    ], [
+        AC_MSG_RESULT(no)
+    ]
+)
+
 dnl AC_CHECK_LIB([lzma], [lzma_easy_buffer_encode], [
 dnl 	LIBS="-llzma $LIBS"
 dnl 	AC_DEFINE([HAVE_LIBLZMA],1,[Define to 1 if you have the liblzma library.])])
