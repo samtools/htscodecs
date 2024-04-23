@@ -824,7 +824,9 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 
 static int rans_cpu = 0xFFFF; // all
 
-#if defined(__x86_64__) && defined(HAVE_CPUID)
+#if defined(__x86_64__) && \
+    defined(HAVE_DECL___CPUID_COUNT)   && HAVE_DECL___CPUID_COUNT && \
+    defined(HAVE_DECL___GET_CPUID_MAX) && HAVE_DECL___GET_CPUID_MAX
 #include <cpuid.h>
 
 #if defined(__clang__) && defined(__has_attribute)
