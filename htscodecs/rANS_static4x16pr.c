@@ -1034,7 +1034,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 #include <processthreadsapi.h>
 #endif
 
-static inline int have_neon() {
+static inline int have_neon(void) {
 #if defined(__linux__) && defined(__arm__)
     return (getauxval(AT_HWCAP) & HWCAP_NEON) != 0;
 #elif defined(__linux__) && defined(__aarch64__) && defined(HWCAP_ASIMD)
