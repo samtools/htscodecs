@@ -188,7 +188,9 @@ HTS_CHECK_COMPILE_FLAGS_NEEDED([avx512f], [-mavx512f -mpopcnt], [AC_LANG_PROGRAM
 	  #ifdef __x86_64__
 	  __m512i a = _mm512_set1_epi32(1);
 	  __m512i b = _mm512_add_epi32(a, a);
-	  return _mm_popcnt_u32(*((char *) &b));
+          __m256i c = _mm512_castsi512_si256(b);
+	  __m256i d = _mm512_extracti64x4_epi64(a, 1);
+	  return _mm_popcnt_u32(*((char *) &c)) + (*(char *) &d);
 	  #endif
 	]])], [
         MAVX512="$flags_needed"
