@@ -1043,11 +1043,11 @@ static inline int have_neon(void) {
 #elif defined(__APPLE__)
     return 1;
 #elif defined(__FreeBSD__) && defined(__arm__)
-    u_long cap;
+    unsigned long cap;
     if (elf_aux_info(AT_HWCAP, &cap, sizeof cap) != 0) return 0;
     return (cap & HWCAP_NEON) != 0;
 #elif defined(__FreeBSD__) && defined(__aarch64__) && defined(HWCAP_ASIMD)
-    u_long cap;
+    unsigned long cap;
     if (elf_aux_info(AT_HWCAP, &cap, sizeof cap) != 0) return 0;
     return (cap & HWCAP_ASIMD) != 0;
 #elif defined(_WIN32)
