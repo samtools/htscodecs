@@ -31,7 +31,7 @@
 # 
 
 # Standalone test programs
-noinst_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint entropy
+check_PROGRAMS = rans4x16pr tokenise_name3 arith_dynamic rans4x8 rans4x16pr fqzcomp_qual varint entropy
 
 LDADD = $(top_builddir)/htscodecs/libhtscodecs.la
 AM_CPPFLAGS = -I$(top_srcdir)
