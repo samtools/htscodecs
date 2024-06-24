@@ -1,0 +1,4 @@
+# Github's git changes NL for NL-CR on Windows.
+# We pretend everything is binary so any comparisons of test files
+# work.
+tests/** -text
