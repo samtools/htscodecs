@@ -1,3 +1,4 @@
+# A faster alternative to AppVeyor
 name: Windows/MinGW-W64
 on: [push, pull_request]
 
