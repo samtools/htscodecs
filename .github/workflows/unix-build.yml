@@ -41,5 +41,5 @@ jobs:
 
     - name: Check
       run: |
-        make check || cat tests/test-suite.log
+        make check || (cat tests/test-suite.log; false)
 

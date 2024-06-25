@@ -26,12 +26,12 @@ jobs:
         export PATH=/mingw64/bin:$PATH
         export MSYSTEM=MINGW64
         autoreconf -i
-        ./configure --disable-shared CFLAGS='-g -O3 -D_XOPEN_SOURCE=600  -Wno-char-subscripts'
-        make -j32
+        ./configure --disable-shared CFLAGS='-g -O3 -D_XOPEN_SOURCE=600 -Wall -Werror'
+        make -j8
     - name: Check htscodecs
       shell: msys2 {0}
       run: |
         export PATH=/mingw64/bin:$PATH
         export MSYSTEM=MINGW64
-        make check || cat tests/test-suite.log
+        make check || (cat tests/test-suite.log; false)
 
