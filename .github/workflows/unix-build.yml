@@ -1,0 +1,48 @@
+# Various unix builds
+name: unix CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-20, macos-latest]
+    
+    defaults:
+      run:
+        shell: bash {0}
+
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: macOS specific
+      if: runner.os == 'macOS' }}
+      run: |
+        brew install autoconf automake libtool
+        autoreconf -i
+        ./configure CFLAGS="-g -O3 -Wall -Werror -arch arm64 -arch x86_64"
+
+    - name: Ubuntu-20 is with clang, default opts
+      if: runner.os == 'Linux'
+      run: |
+        apt-get install clang
+        autoreconf -i
+        ./configure CC=clang
+
+     - name: Ubuntu-latest using gcc with sanitizers
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+        autoreconf -i
+        ./configure CC="gcc -fsanitize=address,undefined"
+
+    - name: Compile
+      run: |
+        make -j32
+
+    - name: Check
+      run: |
+        make check || cat tests/test-suite.log
+
