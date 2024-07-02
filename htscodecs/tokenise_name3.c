@@ -765,19 +765,20 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         }
 
         /* Determine data type of this segment */
-        if (isalpha(name[i])) {
+        if (isalpha((uint8_t)name[i])) {
             int s = i+1;
 //          int S = i+1;
 
 //          // FIXME: try which of these is best.  alnum is good sometimes.
-//          while (s < len && isalpha(name[s]))
-            while (s < len && (isalpha(name[s]) || ispunct(name[s])))
+//          while (s < len && isalpha((uint8_t)name[s]))
+            while (s < len && (isalpha((uint8_t)name[s]) ||
+                               ispunct((uint8_t)name[s])))
 //          while (s < len && name[s] != ':')
-//          while (s < len && !isdigit(name[s]) && name[s] != ':')
+//          while (s < len && !isdigit((uint8_t)name[s]) && name[s] != ':')
                 s++;
 
 //          if (!is_fixed) {
-//              while (S < len && isalnum(name[S]))
+//              while (S < len && isalnum((uint8_t)name[S]))
 //                  S++;
 //              if (s < S)
 //                  s = S;
@@ -821,7 +822,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             uint32_t v = 0;
             int d = 0;
 
-            while (s < len && isdigit(name[s]) && s-i < 9) {
+            while (s < len && isdigit((uint8_t)name[s]) && s-i < 9) {
                 v = v*10 + name[s] - '0';
                 //putchar(name[s]);
                 s++;
@@ -866,13 +867,13 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
 
             i = s-1;
-        } else if (isdigit(name[i])) {
+        } else if (isdigit((uint8_t)name[i])) {
             // digits starting 1-9; encode value
             uint32_t s = i;
             uint32_t v = 0;
             int d = 0;
 
-            while (s < len && isdigit(name[s]) && s-i < 9) {
+            while (s < len && isdigit((uint8_t)name[s]) && s-i < 9) {
                 v = v*10 + name[s] - '0';
                 //putchar(name[s]);
                 s++;
@@ -938,7 +939,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             i = s-1;
         } else {
         n_char:
-            //if (!isalpha(name[i])) putchar(name[i]);
+            //if (!isalpha((uint8_t)name[i])) putchar(name[i]);
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok && ctx->lc[pnum].last[ntok].token_type == N_CHAR) {
                 if (name[i] == ctx->lc[pnum].last[ntok].token_int) {
 #ifdef ENC_DEBUG
