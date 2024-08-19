@@ -176,8 +176,11 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
 
     switch (i=(in_size&3)) {
     case 3: RansEncPutSymbol(&rans2, &ptr, &syms[in[in_size-(i-2)]]);
+        // fall-through
     case 2: RansEncPutSymbol(&rans1, &ptr, &syms[in[in_size-(i-1)]]);
+        // fall-through
     case 1: RansEncPutSymbol(&rans0, &ptr, &syms[in[in_size-(i-0)]]);
+        // fall-through
     case 0:
         break;
     }

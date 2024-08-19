@@ -232,15 +232,15 @@ static void free_context(name_context *ctx) {
 // Returns number of bytes written.
 static int append_uint32_fixed(char *cp, uint32_t i, uint8_t l) {
     switch (l) {
-    case 9:*cp++ = i / 100000000 + '0', i %= 100000000;
-    case 8:*cp++ = i / 10000000  + '0', i %= 10000000;
-    case 7:*cp++ = i / 1000000   + '0', i %= 1000000;
-    case 6:*cp++ = i / 100000    + '0', i %= 100000;
-    case 5:*cp++ = i / 10000     + '0', i %= 10000;
-    case 4:*cp++ = i / 1000      + '0', i %= 1000;
-    case 3:*cp++ = i / 100       + '0', i %= 100;
-    case 2:*cp++ = i / 10        + '0', i %= 10;
-    case 1:*cp++ = i             + '0';
+    case 9:*cp++ = i / 100000000 + '0', i %= 100000000; // fall-through
+    case 8:*cp++ = i / 10000000  + '0', i %= 10000000;  // fall-through
+    case 7:*cp++ = i / 1000000   + '0', i %= 1000000;   // fall-through
+    case 6:*cp++ = i / 100000    + '0', i %= 100000;    // fall-through
+    case 5:*cp++ = i / 10000     + '0', i %= 10000;     // fall-through
+    case 4:*cp++ = i / 1000      + '0', i %= 1000;      // fall-through
+    case 3:*cp++ = i / 100       + '0', i %= 100;       // fall-through
+    case 2:*cp++ = i / 10        + '0', i %= 10;        // fall-through
+    case 1:*cp++ = i             + '0';                 // fall-throuhg
     case 0:break;
     }
     return l;
