@@ -1,3 +1,32 @@
+Release 1.6.1: (upcoming)
+-------------------------
+
+This release is primarily portability and minor bug fixes.
+
+Changes
+
+- Improve warning levels by the compiler in CI. (#125)
+
+- Switch to GitHub actions for some CI builds. (#121, #123)
+
+- Add configure check for cpuid systems. (#115, #116.  Reported by
+  Ryan Carsten Schmidt)
+
+Bug fixes
+
+- Use unsigned chars for ctype macros in the name tokeniser.
+  On many systems this was already mitigated against, but on some OSes
+  a char > 128 could trigger a buffer underrun. (#124)
+
+- Fix interaction between _XOPEN_SOURCE and FreeBSD.
+  (#119, John Marshall)
+
+- Improve AVX512 compiler support, notably MacOS El Capitan's XCode.
+  (#118, Rob Davies)
+
+- Fix -std=c99 -pendantic pedantry (#117)
+
+
 Release 1.6.0: 7th December 2023
 --------------------------------
 
