@@ -1,5 +1,5 @@
-Release 1.6.1: (upcoming)
--------------------------
+Release 1.6.1: 22nd August 2024
+-------------------------------
 
 This release is primarily portability and minor bug fixes.
 
