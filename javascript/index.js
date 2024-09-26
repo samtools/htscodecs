@@ -54,7 +54,7 @@ function r4x16_uncompress(inputBuffer, outputBuffer) {
 }
 
 function arith_uncompress(inputBuffer, outputBuffer) {
-    arith.decode(inputBuffer).copy(outputBuffer, 0, 0);
+    new arith().decode(inputBuffer).copy(outputBuffer, 0, 0);
 }
 
 function fqzcomp_uncompress(inputBuffer, outputBuffer) {
