@@ -764,81 +764,87 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             ctx->max_tok = ntok+1;
         }
 
+        if (ispunct((uint8_t)name[i])) {
+            /* Treat punctuation as seperate tokens. */
+            goto n_char;
+        }
+
+        /* Determine segment length */ 
+        int s = i; 
+        while (s < len && !ispunct((uint8_t)name[s])) {
+            s++;
+        }
+        char *token = name + i;
+        int token_length = s - i; 
+        int token_is_number = 1;
+        int token_starts_with_zero = token[0] == '0';
+        for (int j=0; j<token_length; j++) {
+            if (isalpha(token[j])) {
+                token_is_number = 0;
+                break;
+            }
+        }
+
+        
         /* Determine data type of this segment */
-        if (isalpha((uint8_t)name[i])) {
-            int s = i+1;
-//          int S = i+1;
-
-//          // FIXME: try which of these is best.  alnum is good sometimes.
-//          while (s < len && isalpha((uint8_t)name[s]))
-            while (s < len && (isalpha((uint8_t)name[s]) ||
-                               ispunct((uint8_t)name[s])))
-//          while (s < len && name[s] != ':')
-//          while (s < len && !isdigit((uint8_t)name[s]) && name[s] != ':')
-                s++;
-
-//          if (!is_fixed) {
-//              while (S < len && isalnum((uint8_t)name[S]))
-//                  S++;
-//              if (s < S)
-//                  s = S;
-//          }
+        if (!token_is_number) {
 
             // Single byte strings are better encoded as chars.
-            if (s-i == 1) goto n_char;
+            if (token_length == 1) goto n_char;
 
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok && ctx->lc[pnum].last[ntok].token_type == N_ALPHA) {
-                if (s-i == ctx->lc[pnum].last[ntok].token_int &&
+                if (token_length == ctx->lc[pnum].last[ntok].token_int &&
                     memcmp(&name[i], 
                            &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str],
-                           s-i) == 0) {
+                           token_length) == 0) {
 #ifdef ENC_DEBUG
-                    fprintf(stderr, "Tok %d (alpha-mat, %.*s)\n", N_MATCH, s-i, &name[i]);
+                    fprintf(stderr, "Tok %d (alpha-mat, %.*s)\n", N_MATCH, token_length, &name[i]);
 #endif
                     if (encode_token_match(ctx, ntok) < 0) return -1;
                 } else {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (alpha, %.*s / %.*s)\n", N_ALPHA,
-                            s-i, &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str], s-i, &name[i]);
+                            token_length, &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str], token_length, &name[i]);
 #endif
                     // same token/length, but mismatches
-                    if (encode_token_alpha(ctx, ntok, &name[i], s-i) < 0) return -1;
+                    if (encode_token_alpha(ctx, ntok, token, token_length) < 0) return -1;
                 }
             } else {
 #ifdef ENC_DEBUG
                 fprintf(stderr, "Tok %d (new alpha, %.*s)\n", N_ALPHA, s-i, &name[i]);
 #endif
-                if (encode_token_alpha(ctx, ntok, &name[i], s-i) < 0) return -1;
+                if (encode_token_alpha(ctx, ntok, token, token_length) < 0) return -1;
             }
 
-            ctx->lc[cnum].last[ntok].token_int = s-i;
+            ctx->lc[cnum].last[ntok].token_int = token_length;
             ctx->lc[cnum].last[ntok].token_str = i;
             ctx->lc[cnum].last[ntok].token_type = N_ALPHA;
 
             i = s-1;
-        } else if (name[i] == '0') digits0: {
+        } else if (token_starts_with_zero && token_is_number) digits0: {
             // Digits starting with zero; encode length + value
-            uint32_t s = i;
             uint32_t v = 0;
             int d = 0;
 
-            while (s < len && isdigit((uint8_t)name[s]) && s-i < 9) {
-                v = v*10 + name[s] - '0';
-                //putchar(name[s]);
-                s++;
+            /* Do not encode larger numbers because of uint32_t limits */
+            if (token_length > 9) {
+                token_length = 9;
+            }
+            for (int j=0; j < token_length; j++) {
+                v = v * 10 + token[j] - '0';
             }
 
             // TODO: optimise choice over whether to switch from DIGITS to DELTA
             // regularly vs all DIGITS, also MATCH vs DELTA 0.
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok && ctx->lc[pnum].last[ntok].token_type == N_DIGITS0) {
                 d = v - ctx->lc[pnum].last[ntok].token_int;
-                if (d == 0 && ctx->lc[pnum].last[ntok].token_str == s-i) {
+                if (d == 0 && ctx->lc[pnum].last[ntok].token_str == token_length) {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (dig-mat, %d)\n", N_MATCH, v);
 #endif
                     if (encode_token_match(ctx, ntok) < 0) return -1;
                     //ctx->lc[pnum].last[ntok].token_delta=0;
-                } else if (mode == 1 && d < 256 && d >= 0 && ctx->lc[pnum].last[ntok].token_str == s-i) {
+                } else if (mode == 1 && d < 256 && d >= 0 && ctx->lc[pnum].last[ntok].token_str == token_length) {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (dig0-delta, %d / %d)\n", N_DDELTA0, ctx->lc[pnum].last[ntok].token_int, v);
 #endif
@@ -849,7 +855,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (dig0, %d / %d len %d)\n", N_DIGITS0, ctx->lc[pnum].last[ntok].token_int, v, s-i);
 #endif
-                    if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
+                    if (encode_token_int1_(ctx, ntok, N_DZLEN, token_length) < 0) return -1;
                     if (encode_token_int(ctx, ntok, N_DIGITS0, v) < 0) return -1;
                     //ctx->lc[pnum].last[ntok].token_delta=0;
                 }
@@ -862,21 +868,22 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                 //ctx->lc[pnum].last[ntok].token_delta=0;
             }
 
-            ctx->lc[cnum].last[ntok].token_str = s-i; // length
+            ctx->lc[cnum].last[ntok].token_str = token_length;
             ctx->lc[cnum].last[ntok].token_int = v;
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
 
-            i = s-1;
-        } else if (isdigit((uint8_t)name[i])) {
+            i = i + token_length - 1;
+        } else if (token_is_number) {
             // digits starting 1-9; encode value
-            uint32_t s = i;
             uint32_t v = 0;
             int d = 0;
 
-            while (s < len && isdigit((uint8_t)name[s]) && s-i < 9) {
-                v = v*10 + name[s] - '0';
-                //putchar(name[s]);
-                s++;
+            /* Do not encode larger numbers because of uint32_t limits */
+            if (token_length > 9) {
+                token_length = 9;
+            }
+            for (int j=0; j < token_length; j++) {
+                v = v * 10 + token[j] - '0';
             }
 
             // dataset/10/K562_cytosol_LID8465_TopHat_v2.names
@@ -892,7 +899,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             // width, sometimes with leading zeros.
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok &&
                 ctx->lc[pnum].last[ntok].token_type == N_DIGITS0 &&
-                ctx->lc[pnum].last[ntok].token_str == s-i)
+                ctx->lc[pnum].last[ntok].token_str == token_length)
                 goto digits0;
             
             // TODO: optimise choice over whether to switch from DIGITS to DELTA
@@ -936,7 +943,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             ctx->lc[cnum].last[ntok].token_int = v;
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS;
 
-            i = s-1;
+            i = i + token_length - 1;
         } else {
         n_char:
             //if (!isalpha((uint8_t)name[i])) putchar(name[i]);
