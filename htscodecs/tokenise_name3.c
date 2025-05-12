@@ -764,7 +764,8 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             ctx->max_tok = ntok+1;
         }
 
-        if (ispunct((uint8_t)name[i])) {
+        uint8_t first_char = (uint8_t)name[i]; 
+        if (ispunct(first_char) || isspace(first_char)) {
             /* Treat punctuation as seperate tokens. */
             goto n_char;
         }
@@ -774,7 +775,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         int token_is_number = 1;
         while (s < len) {
             uint8_t c = (uint8_t)name[s];
-            if (ispunct(c)) {
+            if (ispunct(c) || isspace(c)) {
                 break;
             }
             if (!isdigit(c)) {
@@ -784,7 +785,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         }
         char *token = name + i;
         int token_length = s - i; 
-        int token_starts_with_zero = token[0] == '0';
+        int token_starts_with_zero = first_char == '0';
         uint32_t v = 0;
         if (token_is_number) {
             /* Do not encode larger numbers because of uint32_t limits */
