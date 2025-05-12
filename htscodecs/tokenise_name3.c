@@ -779,12 +779,15 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         int token_is_number = 1;
         int token_starts_with_zero = token[0] == '0';
         for (int j=0; j<token_length; j++) {
-            if (isalpha(token[j])) {
+            if (!isdigit(token[j])) {
                 token_is_number = 0;
                 break;
             }
         }
-
+        /* Do not encode larger numbers because of uint32_t limits */
+        if (token_is_number && token_length > 9) {
+            token_length = 9;
+        }
         
         /* Determine data type of this segment */
         if (!token_is_number) {
@@ -811,7 +814,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                 }
             } else {
 #ifdef ENC_DEBUG
-                fprintf(stderr, "Tok %d (new alpha, %.*s)\n", N_ALPHA, s-i, &name[i]);
+                fprintf(stderr, "Tok %d (new alpha, %.*s)\n", N_ALPHA, token_length, &name[i]);
 #endif
                 if (encode_token_alpha(ctx, ntok, token, token_length) < 0) return -1;
             }
@@ -826,10 +829,6 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             uint32_t v = 0;
             int d = 0;
 
-            /* Do not encode larger numbers because of uint32_t limits */
-            if (token_length > 9) {
-                token_length = 9;
-            }
             for (int j=0; j < token_length; j++) {
                 v = v * 10 + token[j] - '0';
             }
@@ -848,12 +847,12 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (dig0-delta, %d / %d)\n", N_DDELTA0, ctx->lc[pnum].last[ntok].token_int, v);
 #endif
-                    //if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
+                    //if (encode_token_int1_(ctx, ntok, N_DZLEN, token_length) < 0) return -1;
                     if (encode_token_int1(ctx, ntok, N_DDELTA0, d) < 0) return -1;
                     //ctx->lc[pnum].last[ntok].token_delta=1;
                 } else {
 #ifdef ENC_DEBUG
-                    fprintf(stderr, "Tok %d (dig0, %d / %d len %d)\n", N_DIGITS0, ctx->lc[pnum].last[ntok].token_int, v, s-i);
+                    fprintf(stderr, "Tok %d (dig0, %d / %d len %d)\n", N_DIGITS0, ctx->lc[pnum].last[ntok].token_int, v, token_length);
 #endif
                     if (encode_token_int1_(ctx, ntok, N_DZLEN, token_length) < 0) return -1;
                     if (encode_token_int(ctx, ntok, N_DIGITS0, v) < 0) return -1;
@@ -861,9 +860,9 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                 }
             } else {
 #ifdef ENC_DEBUG
-                fprintf(stderr, "Tok %d (new dig0, %d len %d)\n", N_DIGITS0, v, s-i);
+                fprintf(stderr, "Tok %d (new dig0, %d len %d)\n", N_DIGITS0, v, token_length);
 #endif
-                if (encode_token_int1_(ctx, ntok, N_DZLEN, s-i) < 0) return -1;
+                if (encode_token_int1_(ctx, ntok, N_DZLEN, token_length) < 0) return -1;
                 if (encode_token_int(ctx, ntok, N_DIGITS0, v) < 0) return -1;
                 //ctx->lc[pnum].last[ntok].token_delta=0;
             }
@@ -878,10 +877,6 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             uint32_t v = 0;
             int d = 0;
 
-            /* Do not encode larger numbers because of uint32_t limits */
-            if (token_length > 9) {
-                token_length = 9;
-            }
             for (int j=0; j < token_length; j++) {
                 v = v * 10 + token[j] - '0';
             }
