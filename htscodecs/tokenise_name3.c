@@ -765,7 +765,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         }
 
         uint8_t first_char = (uint8_t)name[i]; 
-        if (ispunct(first_char) || isspace(first_char)) {
+        if (!isalnum(first_char)) {
             /* Treat punctuation as seperate tokens. */
             goto n_char;
         }
@@ -775,7 +775,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         int token_is_number = 1;
         while (s < len) {
             uint8_t c = (uint8_t)name[s];
-            if (ispunct(c) || isspace(c)) {
+            if (!isalnum(c)) {
                 break;
             }
             if (!isdigit(c)) {
