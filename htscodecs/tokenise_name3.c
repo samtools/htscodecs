@@ -769,7 +769,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             goto n_char;
         }
 
-        /* Determine segment length */ 
+        /* Determine segment length and data type */ 
         int s = i; 
         int token_is_number = 1;
         while (s < len) {
@@ -785,13 +785,17 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         char *token = name + i;
         int token_length = s - i; 
         int token_starts_with_zero = token[0] == '0';
-
-        /* Do not encode larger numbers because of uint32_t limits */
-        if (token_is_number && token_length > 9) {
-            token_length = 9;
+        uint32_t v = 0;
+        if (token_is_number) {
+            /* Do not encode larger numbers because of uint32_t limits */
+            if (token_length > 9) {
+                token_length = 9;
+            }
+            for (int j=0; j < token_length; j++) {
+                v = v * 10 + token[j] - '0';
+            }
         }
         
-        /* Determine data type of this segment */
         if (!token_is_number) {
 
             // Single byte strings are better encoded as chars.
@@ -828,13 +832,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             i = s-1;
         } else if (token_starts_with_zero && token_is_number) digits0: {
             // Digits starting with zero; encode length + value
-            uint32_t v = 0;
             int d = 0;
-
-            for (int j=0; j < token_length; j++) {
-                v = v * 10 + token[j] - '0';
-            }
-
             // TODO: optimise choice over whether to switch from DIGITS to DELTA
             // regularly vs all DIGITS, also MATCH vs DELTA 0.
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok && ctx->lc[pnum].last[ntok].token_type == N_DIGITS0) {
@@ -876,12 +874,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
             i = i + token_length - 1;
         } else if (token_is_number) {
             // digits starting 1-9; encode value
-            uint32_t v = 0;
             int d = 0;
-
-            for (int j=0; j < token_length; j++) {
-                v = v * 10 + token[j] - '0';
-            }
 
             // dataset/10/K562_cytosol_LID8465_TopHat_v2.names
             // col 4 is Illumina lane - we don't want match & delta in there
