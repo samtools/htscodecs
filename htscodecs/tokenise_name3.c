@@ -771,19 +771,21 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 
         /* Determine segment length */ 
         int s = i; 
-        while (s < len && !ispunct((uint8_t)name[s])) {
+        int token_is_number = 1;
+        while (s < len) {
+            uint8_t c = (uint8_t)name[s];
+            if (ispunct(c)) {
+                break;
+            }
+            if (!isdigit(c)) {
+                token_is_number = 0;
+            }
             s++;
         }
         char *token = name + i;
         int token_length = s - i; 
-        int token_is_number = 1;
         int token_starts_with_zero = token[0] == '0';
-        for (int j=0; j<token_length; j++) {
-            if (!isdigit(token[j])) {
-                token_is_number = 0;
-                break;
-            }
-        }
+
         /* Do not encode larger numbers because of uint32_t limits */
         if (token_is_number && token_length > 9) {
             token_length = 9;
@@ -797,24 +799,24 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 
             if (pnum < cnum && ntok < ctx->lc[pnum].last_ntok && ctx->lc[pnum].last[ntok].token_type == N_ALPHA) {
                 if (token_length == ctx->lc[pnum].last[ntok].token_int &&
-                    memcmp(&name[i], 
+                    memcmp(token, 
                            &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str],
                            token_length) == 0) {
 #ifdef ENC_DEBUG
-                    fprintf(stderr, "Tok %d (alpha-mat, %.*s)\n", N_MATCH, token_length, &name[i]);
+                    fprintf(stderr, "Tok %d (alpha-mat, %.*s)\n", N_MATCH, token_length, token);
 #endif
                     if (encode_token_match(ctx, ntok) < 0) return -1;
                 } else {
 #ifdef ENC_DEBUG
                     fprintf(stderr, "Tok %d (alpha, %.*s / %.*s)\n", N_ALPHA,
-                            token_length, &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str], token_length, &name[i]);
+                            token_length, &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str], token_length, token);
 #endif
                     // same token/length, but mismatches
                     if (encode_token_alpha(ctx, ntok, token, token_length) < 0) return -1;
                 }
             } else {
 #ifdef ENC_DEBUG
-                fprintf(stderr, "Tok %d (new alpha, %.*s)\n", N_ALPHA, token_length, &name[i]);
+                fprintf(stderr, "Tok %d (new alpha, %.*s)\n", N_ALPHA, token_length, token);
 #endif
                 if (encode_token_alpha(ctx, ntok, token, token_length) < 0) return -1;
             }
