@@ -9,11 +9,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-    
-    defaults:
-      run:
-        shell: bash {0}
-
 
     steps:
     - name: Checkout
