@@ -729,8 +729,38 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
     if (!ctx->lc[cnum].last)
         return -1;
     encode_token_diff(ctx, cnum-pnum);
-
     int ntok = 1;
+
+    // Look for common form of UUID4 names and special case them
+    i = 0;
+    if (len == 36) {
+        for (i = 0; i < len; i++) {
+            if (!(isxdigit((uint8_t)name[i]) || name[i] == '-'))
+                break;
+        }
+    }
+
+    // Is uuid4 (eg ONT).
+    if (i == len) {
+        if (37 >= ctx->max_tok) {
+            do {
+                memset(&ctx->desc[ctx->max_tok << 4], 0, 16*sizeof(ctx->desc[0]));
+                memset(&ctx->token_dcount[ctx->max_tok], 0, sizeof(int));
+                memset(&ctx->token_icount[ctx->max_tok], 0, sizeof(int));
+            } while (ctx->max_tok++ < 37);
+        }
+#ifdef ENC_DEBUG
+        fprintf(stderr, "Tok %d (%d x uuid chr)", ntok, len);
+#endif
+        //encode_token_nop(ctx, ntok++);
+        for (i = 0; i < len; i++, ntok++) {
+            encode_token_char(ctx, ntok, name[i]);
+            ctx->lc[cnum].last[ntok].token_int = name[i];
+            ctx->lc[cnum].last[ntok].token_type = N_CHAR;
+        }
+        goto end;
+    }
+
     i = 0;
     if (is_fixed) {
         if (ntok >= ctx->max_tok) {
@@ -967,6 +997,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         //putchar(' ');
     }
 
+ end:
 #ifdef ENC_DEBUG
     fprintf(stderr, "Tok %d (end)\n", N_END);
 #endif
