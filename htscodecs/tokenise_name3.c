@@ -681,6 +681,51 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
     return *exact ? from : p3;
 }
 
+enum char_types {
+    DIGIT = 0,          // 0b0000 0000
+    HEXDIGIT_LOWER = 1, // 0b0000 0001
+    HEXDIGIT_UPPER = 2, // 0b0000 0010
+    STRING = 3,         // 0b0000 0011
+    SEPARATION = 7,     // 0b0000 0111
+};
+
+#define D DIGIT
+#define L HEXDIGIT_LOWER
+#define U HEXDIGIT_UPPER
+#define S STRING 
+#define P SEPARATION
+
+/* Alternative classification table. 
+Contrary to `ispunct` some characters are classified as the string type: 
+$, !, ? are normal values in Strings and not used to indicate field separators. 
+, + and & are often used for multiple values in the same field and should thus 
+not be separated. */
+static uint8_t CHAR_TO_TYPE[256] = {
+// Control characters
+    P, P, P, P, P, P, P, P, P, P, P, P, P, P, P, P,
+    P, P, P, P, P, P, P, P, P, P, P, P, P, P, P, P,
+//   , !, ", #, $, %, &, ', (, ), *, +, ,, -, ., /
+    P, S, P, P, S, P, S, P, P, P, P, S, P, P, P, P,
+//  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, :, ;, <, =, >, ?
+    D, D, D, D, D, D, D, D, D, D, P, P, P, P, P, S,
+//  @, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O,
+    S, U, U, U, U, U, U, S, S, S, S, S, S, S, S, S,
+//  P, Q, R, S, T, U, V, W, X, Y, Z, [, \, ], ^, _, 
+    S, S, S, S, S, S, S, S, S, S, S, P, P, P, P, P,
+//  `, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o,
+    P, L, L, L, L, L, L, S, S, S, S, S, S, S, S, S,
+//  p, q, r, s, t, u, v, w, x, y, z, {, }, |, ~,
+    S, S, S, S, S, S, S, S, S, S, S, P, P, P, P, P,
+// Assume all non-ASCII characters are strings
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+    S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,
+};
 
 //-----------------------------------------------------------------------------
 // Name encoder
@@ -765,29 +810,29 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
         }
 
         uint8_t first_char = (uint8_t)name[i]; 
-        if (!isalnum(first_char)) {
-            /* Treat punctuation as seperate tokens. */
+        if (CHAR_TO_TYPE[first_char] == SEPARATION) {
+            /* Treat separation as seperate tokens. */
             goto n_char;
         }
 
         /* Determine segment length and data type */ 
         int s = i; 
-        int token_is_number = 1;
+        uint8_t token_type = DIGIT;
         while (s < len) {
             uint8_t c = (uint8_t)name[s];
-            if (!isalnum(c)) {
+            uint8_t char_type = CHAR_TO_TYPE[c];
+            if (char_type == SEPARATION) {
                 break;
             }
-            if (!isdigit(c)) {
-                token_is_number = 0;
-            }
-            s++;
+            token_type |= char_type;
+            s+=1;
         }
         char *token = name + i;
         int token_length = s - i; 
         int token_starts_with_zero = first_char == '0';
+        int token_is_number = token_type == DIGIT;
         uint32_t v = 0;
-        if (token_is_number) {
+        if (token_type == DIGIT) {
             /* Do not encode larger numbers because of uint32_t limits */
             if (token_length > 9) {
                 token_length = 9;
