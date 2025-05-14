@@ -841,6 +841,46 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
                 v = v * 10 + token[j] - '0';
             }
         }
+        if (token_type == HEXDIGIT_LOWER || token_type == HEXDIGIT_UPPER) {
+            if (token_length > 16) {
+                // Hexadecimals more than 64-bits are unlikely. This is a most 
+                // likely just a string.
+                token_type = STRING;
+            }
+        }
+        if (token_type == STRING && token_length > 1) {
+            // Determine if it is prefix<number> or <number>suffix
+            size_t digit_start = token_length;
+            size_t i = 0;
+            for (;i < token_length; i++) {
+                if (CHAR_TO_TYPE[(uint8_t)token[i]] == DIGIT) {
+                    digit_start = i;
+                    break;
+                }
+            }
+            for (; i < token_length; i++) {
+                if (CHAR_TO_TYPE[(uint8_t)token[i]] != DIGIT) {
+                    break;
+                }
+            }
+            int digit_end = i;
+            int remainder_all_string = 1;
+            for (; i < token_length; i++) {
+                if (CHAR_TO_TYPE[(uint8_t)token[i] == DIGIT]) {
+                    remainder_all_string = 0;
+                }
+            }
+            if (digit_start == 0 && remainder_all_string) {
+                // <number>suffix
+                token_is_number = 1; 
+                token_length = digit_end - digit_start;
+            }
+            if (digit_end == token_length && digit_start != token_length) {
+                // prefix<number>
+                // Only encode the prefix as a string and come back for the number later.
+                token_length = digit_start;
+            }
+        }
         
         if (!token_is_number) {
 
