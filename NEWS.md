@@ -1,3 +1,23 @@
+Release 1.6.2: 22nd May 2025
+----------------------------
+
+This release has minor bug fixes and some continuous integration test
+improvements.
+
+Bug fixes
+
+- Improved check of out_size in rans4x16 and arithmetic coder, plus
+  better memory freeing on error. (#127]
+
+- [CI] Bump FreeBSD release used to 14.2 and Ubuntu to 24.04 (#129 jkb,
+  #133 from John Marshall).
+
+- [CI] Remove GitHub workflow shell override. (#133, John Marshall)
+
+- [JavaScript] Correct arithmetic coder, (Commit 9d3127d, with thanks to
+  Colin Diesh)
+
+
 Release 1.6.1: 22nd August 2024
 -------------------------------
 
