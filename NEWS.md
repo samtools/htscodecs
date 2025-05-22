@@ -1,3 +1,10 @@
+Release 1.6.3: 22nd May 2025
+----------------------------
+
+A tiny bug fix to 1.6.2 to fix a memory leak in rans_compress_to_4x16,
+detected by htslib's CI system. (#136)
+
+
 Release 1.6.2: 22nd May 2025
 ----------------------------
 
