@@ -1332,6 +1332,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         c_meta_len += var_put_u32(&out[1], out_end, in_size);
 
         if (c_meta_len + in_size > *out_size) {
+            free(out_free);
             *out_size = 0;
             return NULL;
         }
@@ -1460,6 +1461,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
     }
 
     if (c_meta_len > *out_size) {
+        free(out_free);
         free(rle);
         free(packed);
         *out_size = 0;
@@ -1473,6 +1475,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
     }
 
     if (!rans_enc_func(do_simd, order)(in, in_size, out+c_meta_len, out_size)) {
+        free(out_free);
         free(rle);
         free(packed);
         *out_size = 0;
@@ -1484,6 +1487,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         out[0] |= RANS_ORDER_CAT | no_size;
 
         if (out + c_meta_len + in_size > out_end) {
+            free(out_free);
             free(rle);
             free(packed);
             *out_size = 0;
