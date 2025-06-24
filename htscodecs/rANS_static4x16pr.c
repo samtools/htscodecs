@@ -1169,6 +1169,12 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         return NULL;
     }
 
+#ifdef VALIDATE_RANS
+    int orig_order = order;
+    int orig_in_size = in_size;
+    unsigned char *orig_in = in;
+#endif
+
     unsigned int c_meta_len;
     uint8_t *meta = NULL, *rle = NULL, *packed = NULL;
     uint8_t *out_free = NULL;
@@ -1385,6 +1391,11 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
             int sz = var_put_u32(out+c_meta_len, out_end, in_size);
             c_meta_len += sz;
             *out_size -= sz;
+
+            if (do_simd && in_size < 32) {
+                do_simd = 0;
+                out[0] &= ~RANS_ORDER_X32;
+            }
         }
     } else if (do_pack) {
         out[0] &= ~RANS_ORDER_PACK;
@@ -1430,6 +1441,10 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
                 return NULL;
             }
             c_rmeta_len = *out_size - (c_meta_len+sz+5);
+            if (do_simd && (rmeta_len < 32 || rle_len < 32)) {
+                do_simd = 0;
+                out[0] &= ~RANS_ORDER_X32;
+            }
             if (!rans_enc_func(do_simd, 0)(meta, rmeta_len, out+c_meta_len+sz+5, &c_rmeta_len)) {
                 free(out_free);
                 free(rle);
@@ -1502,6 +1517,24 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
     free(packed);
 
     *out_size += c_meta_len;
+
+// Validation mode
+#ifdef VALIDATE_RANS
+    unsigned int decoded_size = orig_in_size;
+    unsigned char *decoded = malloc(decoded_size);
+    decoded = rans_uncompress_to_4x16(out, *out_size,
+                                      decoded, &decoded_size);
+    if (!decoded ||
+        decoded_size != orig_in_size ||
+        memcmp(orig_in, decoded, orig_in_size) != 0) {
+        fprintf(stderr, "rans round trip failed for order %d. Written to fd 5\n", orig_order);
+        if (write(5, orig_in, orig_in_size) < 0)
+            abort();
+        abort();
+    }
+    free(decoded);
+#endif
+
 
     return out;
 }
