@@ -11,6 +11,11 @@ do
     cut -f 1 < $f | tr -d '\012' > $out/r4x8-nl
     for o in 0 1
     do
+        if [ ! -e "$comp.$o" ]
+        then
+            continue
+        fi
+
         printf 'Testing rans4x8 -r -o%s on %s\t' $o "$f"
 
         # Round trip

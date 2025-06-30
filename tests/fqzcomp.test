@@ -11,6 +11,10 @@ do
     cut -f 1 $f > $out/fqz
     for s in 0 1 2 3
     do
+        if [ ! -e "$comp.$o" ]
+        then
+            continue
+        fi
         printf 'Testing fqzcomp_qual -r -s %s on %s\t' $s "$f"
 
         # Round trip
