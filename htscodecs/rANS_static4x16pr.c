@@ -900,14 +900,6 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
      unsigned char *out,
      unsigned int *out_size) {
 
-    int have_e_sse4_1  = have_sse4_1;
-    int have_e_avx2    = have_avx2;
-    int have_e_avx512f = have_avx512f;
-
-    if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_e_avx512f = 0;
-    if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_e_avx2    = 0;
-    if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_e_sse4_1  = 0;
-
     if (!do_simd) { // SIMD disabled
         return order & 1
             ? rans_compress_O1_4x16
@@ -924,6 +916,14 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
         fprintf(stderr, "Using scalar code only\n");
     }
 #endif
+
+    int have_e_sse4_1  = have_sse4_1;
+    int have_e_avx2    = have_avx2;
+    int have_e_avx512f = have_avx512f;
+
+    if (!(rans_cpu & RANS_CPU_ENC_AVX512)) have_e_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_AVX2))   have_e_avx2    = 0;
+    if (!(rans_cpu & RANS_CPU_ENC_SSE4))   have_e_sse4_1  = 0;
 
     if (order & 1) {
         // With simulated gathers, the AVX512 is now slower than AVX2, so
@@ -974,14 +974,6 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
      unsigned char *out,
      unsigned int out_size) {
 
-    int have_d_sse4_1  = have_sse4_1;
-    int have_d_avx2    = have_avx2;
-    int have_d_avx512f = have_avx512f;
-
-    if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_d_avx512f = 0;
-    if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_d_avx2    = 0;
-    if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_d_sse4_1  = 0;
-
     if (!do_simd) { // SIMD disabled
         return order & 1
             ? rans_uncompress_O1_4x16
@@ -998,6 +990,14 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
         fprintf(stderr, "Using scalar code only\n");
     }
 #endif
+
+    int have_d_sse4_1  = have_sse4_1;
+    int have_d_avx2    = have_avx2;
+    int have_d_avx512f = have_avx512f;
+
+    if (!(rans_cpu & RANS_CPU_DEC_AVX512)) have_d_avx512f = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_AVX2))   have_d_avx2    = 0;
+    if (!(rans_cpu & RANS_CPU_DEC_SSE4))   have_d_sse4_1  = 0;
 
     if (order & 1) {
 #if defined(HAVE_AVX512)
