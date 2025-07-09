@@ -1,3 +1,22 @@
+Release 1.6.4: 9th July 2025
+----------------------------
+
+This is parimarily a bug fix release.
+
+Fixes
+
+- Fixed a minor thread data race in first call of the rans4x16 codec.
+
+- Protect against SIMD rANS encoding on small or highly compressible data
+  sets.  This could fail when combined with the RLE method where one
+  sub-component was very small (<32 bytes) and the other was large.
+
+Changes
+
+- UUID4 based read names are now compressed better with the name tokeniser.
+  This also slightly improves name compression of mixed data sets.
+
+
 Release 1.6.3: 22nd May 2025
 ----------------------------
 
