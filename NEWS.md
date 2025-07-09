@@ -1,7 +1,7 @@
 Release 1.6.4: 9th July 2025
 ----------------------------
 
-This is parimarily a bug fix release.
+This is primarily a bug fix release.
 
 Fixes
 
