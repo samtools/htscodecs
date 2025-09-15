@@ -862,6 +862,8 @@ static int is_amd       UNUSED = 0;
 #define HAVE_HTSCODECS_TLS_CPU_INIT
 static void htscodecs_tls_cpu_init(void) {
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    unsigned int have_xsave UNUSED = 0;
+    unsigned int have_avx   UNUSED = 0;
     // These may be unused, depending on HAVE_* config.h macros
 
     int level = __get_cpuid_max(0, NULL);
@@ -878,8 +880,15 @@ static void htscodecs_tls_cpu_init(void) {
 #if defined(bit_SSE4_1)
         have_sse4_1 = ecx & bit_SSE4_1;
 #endif
+#if defined(bit_XSAVE) && defined(bit_OSXSAVE)
+        have_xsave = (ecx & bit_XSAVE) && (ecx & bit_OSXSAVE);
+#endif
+#if defined(bit_AVX)
+        have_avx = ecx & bit_AVX;
+#endif
     }
-    if (level >= 7) {
+    // AVX2 and AVX512F depend on XSAVE, OSXSAVE and AVX
+    if (level >= 7 && have_xsave && have_avx) {
         __cpuid_count(7, 0, eax, ebx, ecx, edx);
 #if defined(bit_AVX2)
         have_avx2 = ebx & bit_AVX2;
