@@ -844,6 +844,33 @@ static int rans_cpu = 0xFFFF; // all
 #  define UNUSED
 #endif
 
+#if defined(__APPLE__)
+/*
+   MacOS before 12.2 (a.k.a. Darwin 21.3) had a bug that could cause random
+   failures on some AVX512 operations due to opmask registers not being restored
+   correctly following interrupts.  For simplicity, check that the major version
+   is 22 or higher before using AVX512.
+   See https://community.intel.com/t5/Software-Tuning-Performance/MacOS-Darwin-kernel-bug-clobbers-AVX-512-opmask-register-state/m-p/1327259
+*/
+
+#include <sys/utsname.h>
+static inline int not_ancient_darwin(void) {
+    static long version = 0;
+    if (!version) {
+        struct utsname uname_info;
+        if (uname(&uname_info) == 0) {
+            version = strtol(uname_info.release, NULL, 10);
+        }
+    }
+    return version >= 22;
+}
+#else
+static inline int not_ancient_darwin(void) {
+    return 1;
+}
+#endif
+
+
 // CPU detection is performed once.  NB this has an assumption that we're
 // not migrating between processes with different instruction stes, but
 // to date the only systems I know of that support this don't have different
@@ -916,7 +943,8 @@ static void htscodecs_tls_cpu_init(void) {
 #endif
 #if defined(bit_AVX512F)
         // AVX512 depends on bits 5:7 of XCR0
-        if ((xcr0 & xcr0_can_use_avx512) == xcr0_can_use_avx512)
+        if ((xcr0 & xcr0_can_use_avx512) == xcr0_can_use_avx512
+            && not_ancient_darwin())
             have_avx512f = ebx & bit_AVX512F;
 #endif
     }
