@@ -864,6 +864,9 @@ static void htscodecs_tls_cpu_init(void) {
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
     unsigned int have_xsave UNUSED = 0;
     unsigned int have_avx   UNUSED = 0;
+    uint64_t xcr0 UNUSED = 0ULL;
+    const uint64_t xcr0_can_use_avx UNUSED = (1ULL << 2);
+    const uint64_t xcr0_can_use_avx512 UNUSED = (7ULL << 5);
     // These may be unused, depending on HAVE_* config.h macros
 
     int level = __get_cpuid_max(0, NULL);
@@ -880,21 +883,41 @@ static void htscodecs_tls_cpu_init(void) {
 #if defined(bit_SSE4_1)
         have_sse4_1 = ecx & bit_SSE4_1;
 #endif
-#if defined(bit_XSAVE) && defined(bit_OSXSAVE)
-        have_xsave = (ecx & bit_XSAVE) && (ecx & bit_OSXSAVE);
-#endif
 #if defined(bit_AVX)
         have_avx = ecx & bit_AVX;
 #endif
+#if defined(bit_XSAVE) && defined(bit_OSXSAVE)
+        have_xsave = (ecx & bit_XSAVE) && (ecx & bit_OSXSAVE);
+        if (have_xsave) {
+            /* OSXSAVE tells us it's safe to use XGETBV to read XCR0
+               which then describes if AVX / AVX512 instructions can be
+               executed.  See Intel 64 and IA-32 Architectures Software
+               Developer’s Manual Vol. 1 sections 13.2 and 13.3.
+
+               Use inline assembly for XGETBV here to avoid problems
+               with builtins either not working correctly, or requiring
+               specific compiler options to be in use.  Also emit raw
+               bytes here as older toolchains may not have the XGETBV
+               instruction.
+            */
+            __asm__ volatile (".byte 0x0f, 0x01, 0xd0" :
+                              "=d" (edx), "=a" (eax) :
+                              "c" (0));
+            xcr0 = ((uint64_t) edx << 32) | eax;
+        }
+#endif
     }
-    // AVX2 and AVX512F depend on XSAVE, OSXSAVE and AVX
-    if (level >= 7 && have_xsave && have_avx) {
+    // AVX2 and AVX512F depend on XSAVE, AVX and bit 2 of XCR0.
+    if (level >= 7 && have_xsave && have_avx
+        && (xcr0 & xcr0_can_use_avx) == xcr0_can_use_avx) {
         __cpuid_count(7, 0, eax, ebx, ecx, edx);
 #if defined(bit_AVX2)
         have_avx2 = ebx & bit_AVX2;
 #endif
 #if defined(bit_AVX512F)
-        have_avx512f = ebx & bit_AVX512F;
+        // AVX512 depends on bits 5:7 of XCR0
+        if ((xcr0 & xcr0_can_use_avx512) == xcr0_can_use_avx512)
+            have_avx512f = ebx & bit_AVX512F;
 #endif
     }
 
