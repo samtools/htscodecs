@@ -77,10 +77,10 @@ rocky_task:
 task:
   name: freebsd
   freebsd_instance:
-    image_family: freebsd-14-2
+    image_family: freebsd-15-0-snap
 
   pkginstall_script:
-    - pkg update -f
+    - IGNORE_OSVERSION=yes pkg update -f
     - pkg install -y gcc autoconf automake libdeflate libtool
 
   compile_script:
