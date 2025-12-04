@@ -1,3 +1,18 @@
+Release 1.6.5: 9th December 2025
+--------------------------------
+
+This is a bug fix release.
+
+Bug fixes
+
+- Add cpuid checks for XSAVE, OSXSAVE and AVX.  Corrects auto-detection of
+  SIMD version on machines that have but disable specific CPU features.
+  (PR #140 Robert Davies, fixes samtools/samtools#2256 Ran Fan).
+
+- Avoid undefined behaviour by replacing literal copies with memcpy
+  (PR #142 James Bonfield, fixes Issue #141 Vasudeva Easwara Sarma)
+
+
 Release 1.6.4: 9th July 2025
 ----------------------------
 
