@@ -77,7 +77,7 @@ rocky_task:
 task:
   name: freebsd
   freebsd_instance:
-    image_family: freebsd-15-0-snap
+    image_family: freebsd-14-3
 
   pkginstall_script:
     - IGNORE_OSVERSION=yes pkg update -f
