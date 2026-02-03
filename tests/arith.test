@@ -16,7 +16,7 @@ do
 	    cp $f $out/arith-nl
 	    ;;
     esac
-    for o in 0 1 64 65 128 129 192 193 8 9 4
+    for o in 0 1 32 64 65 128 129 192 193 8 9 4
     do
         if [ ! -e "$comp.$o" ]
         then
