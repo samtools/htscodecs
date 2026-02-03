@@ -222,20 +222,20 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
         SET512(xmax, SB);
 
         uint16_t gt_mask1 = _mm512_cmpgt_epi32_mask(Rv1, xmax1);
-        int pc1 = _mm_popcnt_u32(gt_mask1) * 2;
+        int pc1 = _mm_popcnt_u32(gt_mask1);
         __m512i Rp1 = _mm512_and_si512(Rv1, _mm512_set1_epi32(0xffff));
         __m512i Rp2 = _mm512_and_si512(Rv2, _mm512_set1_epi32(0xffff));
         uint16_t gt_mask2 = _mm512_cmpgt_epi32_mask(Rv2, xmax2);
         SET512(SDv,  SD);
-        int pc2 = _mm_popcnt_u32(gt_mask2) * 2;
+        int pc2 = _mm_popcnt_u32(gt_mask2);
 
         Rp1 = _mm512_maskz_compress_epi32(gt_mask1, Rp1);
         Rp2 = _mm512_maskz_compress_epi32(gt_mask2, Rp2);
 
-        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc2, pc2-1, Rp2);
-        ptr -= pc2;
-        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc1, pc1-1, Rp1);
-        ptr -= pc1;
+        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc2*2, (1<<pc2)-1, Rp2);
+        ptr -= pc2*2;
+        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc1*2, (1<<pc1)-1, Rp1);
+        ptr -= pc1*2;
 
         SET512(rfv,  SA);
         Rv1 = _mm512_mask_srli_epi32(Rv1, gt_mask1, Rv1, 16);
@@ -688,20 +688,20 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
         SET512x(xmax, x_max); // high latency
 
         uint16_t gt_mask1 = _mm512_cmpgt_epi32_mask(Rv1, xmax1);
-        int pc1 = _mm_popcnt_u32(gt_mask1) * 2;
+        int pc1 = _mm_popcnt_u32(gt_mask1);
         __m512i Rp1 = _mm512_and_si512(Rv1, _mm512_set1_epi32(0xffff));
         __m512i Rp2 = _mm512_and_si512(Rv2, _mm512_set1_epi32(0xffff));
         uint16_t gt_mask2 = _mm512_cmpgt_epi32_mask(Rv2, xmax2);
         SET512x(SDv, cmpl_freq); // good
-        int pc2 = _mm_popcnt_u32(gt_mask2) * 2;
+        int pc2 = _mm_popcnt_u32(gt_mask2);
 
         Rp1 = _mm512_maskz_compress_epi32(gt_mask1, Rp1);
         Rp2 = _mm512_maskz_compress_epi32(gt_mask2, Rp2);
 
-        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc2, pc2-1, Rp2);
-        ptr -= pc2;
-        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc1, pc1-1, Rp1);
-        ptr -= pc1;
+        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc2*2, (1<<pc2)-1, Rp2);
+        ptr -= pc2*2;
+        _mm512_mask_cvtepi32_storeu_epi16(ptr-pc1*2, (1<<pc1)-1, Rp1);
+        ptr -= pc1*2;
 
         Rv1 = _mm512_mask_srli_epi32(Rv1, gt_mask1, Rv1, 16);
         Rv2 = _mm512_mask_srli_epi32(Rv2, gt_mask2, Rv2, 16);
@@ -1087,11 +1087,11 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
 
             __m512i renorm_words1 = _mm512_cvtepu16_epi32
                 (_mm256_loadu_si256((const __m256i *)sp));
-            sp += _mm_popcnt_u32(_imask1);
+            sp += _mm_popcnt_u32(_imask1) * 2;
 
             __m512i renorm_words2 = _mm512_cvtepu16_epi32
                 (_mm256_loadu_si256((const __m256i *)sp));
-            sp += _mm_popcnt_u32(_imask2);
+            sp += _mm_popcnt_u32(_imask2) * 2;
 
             __m512i _renorm_vals1 =
                 _mm512_maskz_expand_epi32(_imask1, renorm_words1);
