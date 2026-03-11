@@ -1,3 +1,17 @@
+Release 1.6.6: 11th January 2026
+--------------------------------
+
+This is a bug fix release.
+
+Bug fixes
+
+- Prevent use of unaligned 16-bit integers from memmove.
+  (PR #145 Robert Davies)
+
+- Add missing support for X_CAT in arithmetic codec.
+  (PR #146; Issue #144 Michael Macias)
+
+
 Release 1.6.5: 9th December 2025
 --------------------------------
 
