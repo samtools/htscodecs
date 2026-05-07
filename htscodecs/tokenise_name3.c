@@ -475,7 +475,6 @@ static int encode_token_diff(name_context *ctx, uint32_t val) {
 // Trie implementation for tracking common name prefixes.
 static
 int build_trie(name_context *ctx, char *data, size_t len, int n) {
-    int nlines = 0;
     size_t i;
     trie_t *t;
 
@@ -486,7 +485,7 @@ int build_trie(name_context *ctx, char *data, size_t len, int n) {
     }
 
     // Build our trie, also counting input lines
-    for (nlines = i = 0; i < len; i++, nlines++) {
+    for (i = 0; i < len; i++) {
         t = ctx->t_head;
         t->count++;
         while (i < len && (unsigned char)data[i] > '\n') {
@@ -589,7 +588,6 @@ void dump_trie(trie_t *t, int depth) {
 
 static
 int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, int *is_fixed, int *fixed_len) {
-    int nlines = 0;
     size_t i;
     trie_t *t;
     int from = -1, p3 = -1;
@@ -651,7 +649,7 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
 
     // Find an item in the trie
     int from_punct = from;
-    for (nlines = i = 0; i < len; i++, nlines++) {
+    for (i = 0; i < len; i++) {
         t = ctx->t_head;
         while (i < len && data[i] > '\n') {
             unsigned char c = data[i++];
