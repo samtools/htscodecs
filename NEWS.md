@@ -1,3 +1,16 @@
+Release 1.6.7: 24th June 2026
+-----------------------------
+
+This is a trivial release containing a single new commit removing a
+harmless compiler warning.  (The primary purpose of a release is to
+ensure htslib is using a released and tagged htscodecs submodule.)
+
+Bug fixes
+
+- Remove an unused variable detected by gcc 16.
+  (PR #148: James Bonfield)
+
+
 Release 1.6.6: 11th January 2026
 --------------------------------
 
