@@ -190,10 +190,10 @@ the exception of X32 as there is currently no unrolling of this code.
 ```
 #include "htscodecs/tokenise_name3.h"
 
-uint8_t *encode_names(char *blk, int len, int level, int use_arith,
-                      int *out_len, int *last_start_p);
+uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+                           int *out_len, int *last_start_p);
 
-uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
+uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
 ```
 
 This differs to the general purpose entropy encoders as it takes a
