@@ -270,8 +270,8 @@ Changes
 - Remove unused ax_with_libdeflate.m4 file from build system.
 
 
-Release 1.4.0: Februrary 2023
------------------------------
+Release 1.4.0: February 2023
+----------------------------
 
 This is almost entirely minor bug fixing with a few small updates.
 

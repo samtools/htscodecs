@@ -78,7 +78,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *in, size_t in_sz) {
 	    uint8_t *cdat = tok3_encode_names((char *)in2, in_sz, level,
 					      arith, &clen, NULL);
 	    if (!cdat)
-		// skip this input from corpus as it's unparseable
+		// skip this input from corpus as it's unparsable
 		return -1;
 
 	    uint32_t ulen;

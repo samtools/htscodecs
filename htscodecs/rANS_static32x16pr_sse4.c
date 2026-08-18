@@ -239,7 +239,7 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
     if (hist8(in, in_size, F) < 0)
         return NULL;
 
-    // Normalise so frequences sum to power of 2
+    // Normalise so frequencies sum to power of 2
     uint32_t fsum = in_size;
     uint32_t max_val = round2(fsum);
     if (max_val > TOTFREQ)
@@ -409,7 +409,7 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
         __m128i freqv6 = _mm_and_si128(SDv6, _mm_set1_epi32(0xffff));
         __m128i freqv5 = _mm_and_si128(SDv5, _mm_set1_epi32(0xffff));
 
-        // Bake this into the tabel to start with?
+        // Bake this into the table to start with?
         shiftv8 = _mm_sub_epi32(shiftv8, _mm_set1_epi32(32));
         shiftv7 = _mm_sub_epi32(shiftv7, _mm_set1_epi32(32));
         shiftv6 = _mm_sub_epi32(shiftv6, _mm_set1_epi32(32));
@@ -819,12 +819,12 @@ static inline void transpose_and_copy(uint8_t *out, int iN[32],
 
 
     // A better approach for clang and gcc can be had with some manual
-    // restructuring to attempt to do the two loops in explcit blocks.
+    // restructuring to attempt to do the two loops in explicit blocks.
     // With gcc -O3 or -O2 -ftree-vectorize this is quite fast, as is clang
     // and zig but neither beat the version below (or, for zig, the basic
     // code above).
     //
-    // It's left here incase we ever want to move to tidier code and
+    // It's left here in case we ever want to move to tidier code and
     // to understand what auto-vectorises and what doesn't.
     /*
 #define NZ 2
