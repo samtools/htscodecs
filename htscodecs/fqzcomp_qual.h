@@ -111,7 +111,7 @@ typedef struct {
     unsigned int ptab[1024];
     unsigned int dtab[256];
 
-    // Not stored paramters, but computed as part of encoder
+    // Not stored parameters, but computed as part of encoder
     // parameterisation.
     int qshift;
     int pshift;
@@ -144,7 +144,7 @@ typedef struct {
  * @param in_size       Size of in buffer
  * @param out_size      Size of returned output
  * @param strat         FQZ compression strategy (0 to FQZ_MAX_STRAT)
- * @param gp            Optional fqzcomp paramters (may be NULL).
+ * @param gp            Optional fqzcomp parameters (may be NULL).
  *
  * @return              The compressed quality buffer on success,
  *                      NULL on failure.
@@ -166,7 +166,7 @@ char *fqz_compress(int vers, fqz_slice *s, char *in, size_t in_size,
 char *fqz_decompress(char *in, size_t in_size, size_t *out_size,
                      int *lengths, int nlengths);
 
-/** A utlity function to analyse a quality buffer to gather statistical
+/** A utility function to analyse a quality buffer to gather statistical
  *  information.  This is written into qhist and pm.  This function is only
  *  useful if you intend on passing your own fqz_gparams block to
  *  fqz_compress.

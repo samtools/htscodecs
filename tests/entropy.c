@@ -36,7 +36,7 @@
 /*
  * This test aims to test all entropy codecs on an input file.
  * This therefore validates the pthead_once memory allocations to ensure
- * there are not unforseen initialisation interactions.
+ * there are not unforeseen initialisation interactions.
  *
  * We repeatedly compress and decompress a single input file,
  * validating the result.

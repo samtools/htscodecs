@@ -143,7 +143,7 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     if (hist8(in, in_size, F) < 0)
         return NULL;
 
-    // Normalise so frequences sum to power of 2
+    // Normalise so frequencies sum to power of 2
     uint32_t fsum = in_size;
     uint32_t max_val = round2(fsum);
     if (max_val > TOTFREQ)

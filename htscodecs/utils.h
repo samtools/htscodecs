@@ -361,7 +361,7 @@ int hist1_4(unsigned char *in, unsigned int in_size,
 // This is better on some low entropy data, but generally we prefer to do
 // bit-packing and/or RLE to turn it into higher-entropy data first.
 //
-// Kept here for posterity incase we need it again, as it's quick tricky.
+// Kept here for posterity in case we need it again, as it's quite tricky.
 static inline
 int hist1_4(unsigned char *in, unsigned int in_size,
             uint32_t F0[256][256], uint32_t *T0) {

@@ -61,7 +61,7 @@
 //
 // - Consider token choice for isalnum instead of isalpha.  Sometimes better.
 //
-// - Consider token synchronisation (eg on matching chr symbols?) incase of
+// - Consider token synchronisation (eg on matching chr symbols?) in case of
 //   variable number.  Eg consider foo:0999, foo:1000, foo:1001 (the leading
 //   zero adds an extra token).
 //

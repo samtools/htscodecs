@@ -81,7 +81,7 @@ fqz_slice *fake_slice(size_t buf_len, int nrec) {
 
     // Otherwise variable length records
 
-    // Reproducability of randomness
+    // Reproducibility of randomness
     int seed = rand();
     srand(0);
 
@@ -109,7 +109,7 @@ int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
 	fqz_slice *s = fake_slice(in_size, mval[mode]);
 
 	// Semi random strat, but based on a few bits of input data
-	// for reproducability.
+	// for reproducibility.
 	// This lets the fuzzer explore the parameter space itself.
 	int strat = in_size ? in[0] & 3 : 0;
 	char *comp = fqz_compress(3, s, (char *)in, in_size, &c_size,

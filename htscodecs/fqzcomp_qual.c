@@ -1231,7 +1231,7 @@ unsigned char *compress_block_fqz2f(int vers,
     return comp;
 }
 
-// Read fqz paramaters.
+// Read fqz parameters.
 //
 // FIXME: pass in and check in_size.
 //

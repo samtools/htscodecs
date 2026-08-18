@@ -54,7 +54,7 @@ easy solution is simply to pick the method with the most uniform
 performance without having bad worst-case rates.
 
 Hence by default the simulated gather implementation is now the
-default.  The old code can be reenabled by building with:
+default.  The old code can be re-enabled by building with:
 
     make CPPFLAGS=-DUSE_GATHER
 
@@ -107,7 +107,7 @@ and the more advanced codecs have additional options to pass in order
 (so it should really be renamed to flags).  See below.  Fqzcomp
 requires more input data - also see below.  In all cases, sufficient
 information is stored in the compressed byte stream such that the
-decompression will work without needing these input paramaters.
+decompression will work without needing these input parameters.
 
 Finally the various `compress_bound` functions give the size of buffer
 needed to be allocated when compressing a block of data.
@@ -198,7 +198,7 @@ uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
 
 This differs to the general purpose entropy encoders as it takes a
 specific type of data.  The names should be newline or nul separated
-for `encode_names`.  `decode_names` will alway return nul terminated
+for `encode_names`.  `decode_names` will always return nul terminated
 names, so you may need to swap these to newlines if you do round-trip
 tests.
 
