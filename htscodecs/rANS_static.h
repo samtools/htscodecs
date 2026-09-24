@@ -38,9 +38,9 @@
 extern "C" {
 #endif
 
-unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress(const unsigned char *in, unsigned int in_size,
                              unsigned int *out_size, int order);
-unsigned char *rans_uncompress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress(const unsigned char *in, unsigned int in_size,
                                unsigned int *out_size);
 
 #ifdef __cplusplus

@@ -64,7 +64,7 @@
 
 #define NX 32
 
-unsigned char *rans_compress_O0_32x16(unsigned char *in,
+unsigned char *rans_compress_O0_32x16(const unsigned char *in,
                                       unsigned int in_size,
                                       unsigned char *out,
                                       unsigned int *out_size) {
@@ -187,7 +187,7 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
                 // RansEncPutSymbol added in-situ
                 RansState *rp = &ransN[z]-3;
                 RansEncSymbol *sy[4];
-                uint8_t *C = &in[i-(NX-z)]-3;
+                const uint8_t *C = &in[i-(NX-z)]-3;
 
                 sy[0] = &syms[C[3]];
                 sy[1] = &syms[C[2]];
@@ -251,7 +251,7 @@ unsigned char *rans_compress_O0_32x16(unsigned char *in,
     return out;
 }
 
-unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
+unsigned char *rans_uncompress_O0_32x16(const unsigned char *in,
                                         unsigned int in_size,
                                         unsigned char *out,
                                         unsigned int out_sz) {
@@ -267,8 +267,9 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in;
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]; // For TF_SHIFT <= 12
 
@@ -409,7 +410,7 @@ unsigned char *rans_uncompress_O0_32x16(unsigned char *in,
 
 
 //-----------------------------------------------------------------------------
-unsigned char *rans_compress_O1_32x16(unsigned char *in,
+unsigned char *rans_compress_O1_32x16(const unsigned char *in,
                                       unsigned int in_size,
                                       unsigned char *out,
                                       unsigned int *out_size) {
@@ -469,7 +470,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
         lN[z] = c;
     }
 
-    unsigned char *i32[NX];
+    const unsigned char *i32[NX];
     for (i = 0; i < NX; i++)
         i32[i] = &in[iN[i]];
 
@@ -524,7 +525,7 @@ unsigned char *rans_compress_O1_32x16(unsigned char *in,
 #define MAGIC2 179
 //#define MAGIC2 0
 
-unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
+unsigned char *rans_uncompress_O1_32x16(const unsigned char *in,
                                         unsigned int in_size,
                                         unsigned char *out,
                                         unsigned int out_sz) {
@@ -540,7 +541,8 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in, *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
     int i;
 
@@ -580,8 +582,8 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -608,7 +610,7 @@ unsigned char *rans_uncompress_O1_32x16(unsigned char *in,
         goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 2*NX;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size - 2*NX;
     int z;
     for (z = 0; z < NX; z++) {
         RansDecInit(&R[z], &ptr);

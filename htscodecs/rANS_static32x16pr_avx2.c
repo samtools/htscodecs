@@ -154,7 +154,7 @@ static inline __m256i _mm256_i32gather_epi32x(int *b, __m256i idx, int size) {
 #define _mm256_i32gather_epi32x _mm256_i32gather_epi32
 #endif
 
-unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
+unsigned char *rans_compress_O0_32x16_avx2(const unsigned char *in,
                                            unsigned int in_size,
                                            unsigned char *out,
                                            unsigned int *out_size) {
@@ -453,7 +453,7 @@ unsigned char *rans_compress_O0_32x16_avx2(unsigned char *in,
     return out;
 }
 
-unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
+unsigned char *rans_uncompress_O0_32x16_avx2(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -469,8 +469,9 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in;
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ] __attribute__((aligned(32))); // For TF_SHIFT <= 12
 
@@ -503,7 +504,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
             goto err;
     }
 
-    uint8_t *sp = cp;
+    const uint8_t *sp = cp;
     uint8_t overflow[64+64] = {0};
     cp_end -= 64;
 
@@ -695,7 +696,7 @@ unsigned char *rans_uncompress_O0_32x16_avx2(unsigned char *in,
 
 //-----------------------------------------------------------------------------
 
-unsigned char *rans_compress_O1_32x16_avx2(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O1_32x16_avx2(const unsigned char *in, unsigned int in_size,
                                            unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
@@ -1027,7 +1028,7 @@ static inline void transpose_and_copy(uint8_t *out, int iN[32],
     rot32_simd(t, out, iN);
 }
 
-unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
+unsigned char *rans_uncompress_O1_32x16_avx2(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -1043,7 +1044,8 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in, *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
 
     uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
@@ -1061,8 +1063,8 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -1090,7 +1092,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
         goto err;
 
     RansState R[NX] __attribute__((aligned(32)));
-    uint8_t *ptr = cp, *ptr_end = in + in_size;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
         RansDecInit(&R[z], &ptr);
@@ -1103,7 +1105,7 @@ unsigned char *rans_uncompress_O1_32x16_avx2(unsigned char *in,
     for (z = 0; z < NX; z++)
         iN[z] = z*isz4;
 
-    uint8_t *sp = ptr;
+    const uint8_t *sp = ptr;
     const uint32_t mask = (1u << shift)-1;
 
     __m256i maskv  = _mm256_set1_epi32(mask);

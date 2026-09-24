@@ -120,10 +120,10 @@ static inline void RansEncFlush(RansState* r, uint8_t** pptr)
 
 // Initializes a rANS decoder.
 // Unlike the encoder, the decoder works forwards as you'd expect.
-static inline void RansDecInit(RansState* r, uint8_t** pptr)
+static inline void RansDecInit(RansState* r, const uint8_t** pptr)
 {
     uint32_t x;
-    uint8_t* ptr = *pptr;
+    const uint8_t* ptr = *pptr;
 
     x  = ptr[0] << 0;
     x |= ptr[1] << 8;
@@ -413,12 +413,12 @@ static inline void RansDecAdvanceSymbolStep(RansState* r, RansDecSymbol const* s
  * These are based on joint ideas from Rob Davies and from looking at
  * the clang assembly output.
  */
-static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
+static inline void RansDecRenorm(RansState* r, const uint8_t** pptr) {
     //       q4        q40
     // clang 730/608   717/467
     // gcc8  733/588   737/458
     uint32_t  x   = *r;
-    uint8_t  *ptr = *pptr;
+    const uint8_t  *ptr = *pptr;
     __asm__ ("movzwl (%0),  %%eax\n\t"
              "mov    %1,    %%edx\n\t"
              "shl    $0x10, %%edx\n\t"
@@ -438,7 +438,7 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
 
 #else /* __x86_64 */
 
-static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
+static inline void RansDecRenorm(RansState* r, const uint8_t** pptr)
 {
     // renormalize, branchless
     uint32_t x = *r;
@@ -467,7 +467,7 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
 // Note the data may not be word aligned here.
 // This function is only used sparingly, for the last few bytes in the buffer,
 // so speed isn't critical.
-static inline void RansDecRenormSafe(RansState* r, uint8_t** pptr, uint8_t *ptr_end)
+static inline void RansDecRenormSafe(RansState* r, const uint8_t** pptr, const uint8_t *ptr_end)
 {
     uint32_t x = *r;
     if (x >= RANS_BYTE_L || *pptr+1 >= ptr_end) return;

@@ -95,7 +95,7 @@ unsigned int arith_compress_bound(unsigned int size, int order) {
 // NB: The output buffer does not hold the original size, so it is up to
 // the caller to store this.
 static
-unsigned char *arith_compress_O0(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O0(const unsigned char *in, unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
     unsigned char *out_free = NULL;
@@ -137,7 +137,7 @@ unsigned char *arith_compress_O0(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *arith_uncompress_O0(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_O0(const unsigned char *in, unsigned int in_size,
                                    unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
     int i;
@@ -169,7 +169,7 @@ unsigned char *arith_uncompress_O0(unsigned char *in, unsigned int in_size,
 
 //-----------------------------------------------------------------------------
 static
-unsigned char *arith_compress_O1(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O1(const unsigned char *in, unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
     unsigned char *out_free = NULL;
@@ -224,7 +224,7 @@ unsigned char *arith_compress_O1(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *arith_uncompress_O1(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_O1(const unsigned char *in, unsigned int in_size,
                                    unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
     unsigned char *out_free = NULL;
@@ -271,7 +271,7 @@ unsigned char *arith_uncompress_O1(unsigned char *in, unsigned int in_size,
 #if 0
 
 #if 0
-unsigned char *arith_compress_O2(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O2(const unsigned char *in, unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size) {
     fprintf(stderr, "WARNING: using undocumented O2 arith\n");
 
@@ -326,7 +326,7 @@ unsigned char *arith_compress_O2(unsigned char *in, unsigned int in_size,
     return out;
 }
 #else
-unsigned char *arith_compress_O2(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O2(const unsigned char *in, unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size) {
     fprintf(stderr, "WARNING: using undocumented O2 arith\n");
 
@@ -392,7 +392,7 @@ unsigned char *arith_compress_O2(unsigned char *in, unsigned int in_size,
 }
 #endif
 
-unsigned char *arith_uncompress_O2(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_O2(const unsigned char *in, unsigned int in_size,
                                    unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
 
@@ -438,7 +438,7 @@ unsigned char *arith_uncompress_O2(unsigned char *in, unsigned int in_size,
 #define MAX_RUN 4
 
 static
-unsigned char *arith_compress_O0_RLE(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O0_RLE(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
     unsigned char *out_free = NULL;
@@ -515,7 +515,7 @@ unsigned char *arith_compress_O0_RLE(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *arith_uncompress_O0_RLE(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_O0_RLE(const unsigned char *in, unsigned int in_size,
                                        unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
     int i;
@@ -572,7 +572,7 @@ unsigned char *arith_uncompress_O0_RLE(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *arith_compress_O1_RLE(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress_O1_RLE(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size) {
     int i, bound = arith_compress_bound(in_size,0)-5; // -5 for order/size
     unsigned char *out_free = NULL;
@@ -657,7 +657,7 @@ unsigned char *arith_compress_O1_RLE(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *arith_uncompress_O1_RLE(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_O1_RLE(const unsigned char *in, unsigned int in_size,
                                        unsigned char *out, unsigned int out_sz) {
     RangeCoder rc;
     int i;
@@ -727,7 +727,7 @@ unsigned char *arith_uncompress_O1_RLE(unsigned char *in, unsigned int in_size,
  *
  * Smallest is method, <in_size> <input>, so worst case 2 bytes longer.
  */
-unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
+unsigned char *arith_compress_to(const unsigned char *in,  unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size,
                                  int order) {
     unsigned int c_meta_len;
@@ -1025,14 +1025,14 @@ unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
     return out;
 }
 
-unsigned char *arith_compress(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress(const unsigned char *in, unsigned int in_size,
                               unsigned int *out_size, int order) {
     return arith_compress_to(in, in_size, NULL, out_size, order);
 }
 
-unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
+unsigned char *arith_uncompress_to(const unsigned char *in,  unsigned int in_size,
                                    unsigned char *out, unsigned int *out_size) {
-    unsigned char *in_end = in + in_size;
+    const unsigned char *in_end = in + in_size;
     unsigned char *out_free = NULL;
     unsigned char *tmp_free = NULL;
 
@@ -1277,7 +1277,7 @@ unsigned char *arith_uncompress_to(unsigned char *in,  unsigned int in_size,
     return NULL;
 }
 
-unsigned char *arith_uncompress(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress(const unsigned char *in, unsigned int in_size,
                                 unsigned int *out_size) {
     return arith_uncompress_to(in, in_size, NULL, out_size);
 }

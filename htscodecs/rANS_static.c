@@ -72,7 +72,7 @@
  */
 
 static
-unsigned char *rans_compress_O0(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O0(const unsigned char *in, unsigned int in_size,
                                 unsigned int *out_size) {
     unsigned char *out_buf = malloc(1.05*in_size + 257*257*3 + 9);
     unsigned char *cp, *out_end;
@@ -218,11 +218,11 @@ typedef struct {
 } ari_decoder;
 
 static
-unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_O0(const unsigned char *in, unsigned int in_size,
                                   unsigned int *out_size) {
     /* Load in the static tables */
-    unsigned char *cp = in + 9;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in + 9;
+    const unsigned char *cp_end = in + in_size;
     const uint32_t mask = (1u << TF_SHIFT)-1;
     int i, j, rle;
     unsigned int x, y;
@@ -384,7 +384,7 @@ unsigned char *rans_uncompress_O0(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O1(const unsigned char *in, unsigned int in_size,
                                 unsigned int *out_size) {
     unsigned char *out_buf = NULL, *out_end, *cp;
     unsigned int tab_size, rle_i, rle_j;
@@ -596,11 +596,11 @@ unsigned char *rans_compress_O1(unsigned char *in, unsigned int in_size,
 }
 
 static
-unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_O1(const unsigned char *in, unsigned int in_size,
                                   unsigned int *out_size) {
     /* Load in the static tables */
-    unsigned char *cp = in + 9;
-    unsigned char *ptr_end = in + in_size;
+    const unsigned char *cp = in + 9;
+    const unsigned char *ptr_end = in + in_size;
     int i, j = -999, rle_i, rle_j;
     unsigned int x;
     unsigned int out_sz, in_sz;
@@ -725,7 +725,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
             map[i] = 0;
 
     RansState rans0, rans1, rans2, rans3;
-    uint8_t *ptr = cp;
+    const uint8_t *ptr = cp;
     if (cp > ptr_end - 16) goto cleanup; // Not enough input bytes left
     RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) goto cleanup;
     RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) goto cleanup;
@@ -826,7 +826,7 @@ unsigned char *rans_uncompress_O1(unsigned char *in, unsigned int in_size,
 /*-----------------------------------------------------------------------------
  * Simple interface to the order-0 vs order-1 encoders and decoders.
  */
-unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress(const unsigned char *in, unsigned int in_size,
                              unsigned int *out_size, int order) {
     if (in_size > INT_MAX) {
         *out_size = 0;
@@ -838,7 +838,7 @@ unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
         : rans_compress_O0(in, in_size, out_size);
 }
 
-unsigned char *rans_uncompress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress(const unsigned char *in, unsigned int in_size,
                                unsigned int *out_size) {
     /* Both rans_uncompress functions need to be able to read at least 9
        bytes. */

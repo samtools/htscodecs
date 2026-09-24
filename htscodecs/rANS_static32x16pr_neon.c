@@ -74,7 +74,7 @@ static uint8x8_t vtab[16] = {
 };
 #undef _
 
-unsigned char *rans_compress_O0_32x16_neon(unsigned char *in,
+unsigned char *rans_compress_O0_32x16_neon(const unsigned char *in,
                                            unsigned int in_size,
                                            unsigned char *out,
                                            unsigned int *out_size) {
@@ -593,7 +593,7 @@ static uint8x8_t idx2[256] = {
 };
 
 // SIMD: 650MB/s
-unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
+unsigned char *rans_uncompress_O0_32x16_neon(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -604,8 +604,9 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
         return NULL; // protect against some overflow cases
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in; 
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]; // For TF_SHIFT <= 12
 
@@ -665,7 +666,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
     // 500MB/s.  Clang does a lot of reordering of this code, removing some
     // of the manual tuning benefits.  Short of dropping to assembly, for now
     // I would recommend using gcc to compile this file.
-    uint8_t *sp = cp;
+    const uint8_t *sp = cp;
     uint8_t overflow[64+64] = {0};
     for (i=0; i < out_end; i+=NX) {
         // Decode freq, bias and symbol from s3 lookups
@@ -912,7 +913,7 @@ unsigned char *rans_uncompress_O0_32x16_neon(unsigned char *in,
 
 //-----------------------------------------------------------------------------
 
-unsigned char *rans_compress_O1_32x16_neon(unsigned char *in,
+unsigned char *rans_compress_O1_32x16_neon(const unsigned char *in,
                                            unsigned int in_size,
                                            unsigned char *out,
                                            unsigned int *out_size) {
@@ -1406,7 +1407,7 @@ static inline void transpose_and_copy(uint8_t *out, int iN[32],
     }
 }
 
-unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
+unsigned char *rans_uncompress_O1_32x16_neon(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -1422,7 +1423,8 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in, *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
     int i, j = -999;
     unsigned int x;
@@ -1451,8 +1453,8 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -1530,7 +1532,7 @@ unsigned char *rans_uncompress_O1_32x16_neon(unsigned char *in,
         goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
         RansDecInit(&R[z], &ptr);

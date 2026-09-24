@@ -118,9 +118,9 @@ needed to be allocated when compressing a block of data.
 ```
 #include "htscodecs/rANS_static.h"
 
-unsigned char *rans_compress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress(const unsigned char *in, unsigned int in_size,
                              unsigned int *out_size, int order);
-unsigned char *rans_uncompress(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress(const unsigned char *in, unsigned int in_size,
                                unsigned int *out_size);
 ```
 
@@ -143,14 +143,14 @@ No (un)compress_to functions exist for this older codec.
 #define RANS_ORDER_PACK   0x80  // Pack 2,4,8 or infinite symbols into a byte.
 
 unsigned int rans_compress_bound_4x16(unsigned int size, int order);
-unsigned char *rans_compress_to_4x16(unsigned char *in,  unsigned int in_size,
+unsigned char *rans_compress_to_4x16(const unsigned char *in,  unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size,
                                      int order);
-unsigned char *rans_compress_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_4x16(const unsigned char *in, unsigned int in_size,
                                   unsigned int *out_size, int order);
-unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
+unsigned char *rans_uncompress_to_4x16(const unsigned char *in,  unsigned int in_size,
                                        unsigned char *out, unsigned int *out_size);
-unsigned char *rans_uncompress_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_4x16(const unsigned char *in, unsigned int in_size,
                                     unsigned int *out_size);
 ```
 
@@ -166,17 +166,17 @@ and dispatching to an appropriate SIMD implementation if available.
 ```
 #include "htscodecs/arith_dynamic.h"
 
-unsigned char *arith_compress(unsigned char *in, unsigned int in_size,
+unsigned char *arith_compress(const unsigned char *in, unsigned int in_size,
                               unsigned int *out_size, int order);
 
-unsigned char *arith_uncompress(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress(const unsigned char *in, unsigned int in_size,
                                 unsigned int *out_size);
 
-unsigned char *arith_compress_to(unsigned char *in,  unsigned int in_size,
+unsigned char *arith_compress_to(const unsigned char *in,  unsigned int in_size,
                                  unsigned char *out, unsigned int *out_size,
                                  int order);
 
-unsigned char *arith_uncompress_to(unsigned char *in, unsigned int in_size,
+unsigned char *arith_uncompress_to(const unsigned char *in, unsigned int in_size,
                                    unsigned char *out, unsigned int *out_sz);
 
 unsigned int arith_compress_bound(unsigned int size, int order);
@@ -190,10 +190,10 @@ the exception of X32 as there is currently no unrolling of this code.
 ```
 #include "htscodecs/tokenise_name3.h"
 
-uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+uint8_t *tok3_encode_names(const char *blk, int len, int level, int use_arith,
                            int *out_len, int *last_start_p);
 
-uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
+uint8_t *tok3_decode_names(const uint8_t *in, uint32_t sz, uint32_t *out_len);
 ```
 
 This differs to the general purpose entropy encoders as it takes a
@@ -227,9 +227,9 @@ typedef struct {
     uint32_t *flags;  // of size num_records
 } fqz_slice;
 
-char *fqz_compress(int vers, fqz_slice *s, char *in, size_t uncomp_size,
+char *fqz_compress(int vers, fqz_slice *s, const char *in, size_t uncomp_size,
                    size_t *comp_size, int strat, fqz_gparams *gp);
-char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size,
+char *fqz_decompress(const char *in, size_t comp_size, size_t *uncomp_size,
                      int *lengths, int nlengths);
 ```
 

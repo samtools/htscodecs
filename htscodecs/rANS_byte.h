@@ -122,10 +122,10 @@ static inline void RansEncFlush(RansState* r, uint8_t** pptr)
 
 // Initializes a rANS decoder.
 // Unlike the encoder, the decoder works forwards as you'd expect.
-static inline void RansDecInit(RansState* r, uint8_t** pptr)
+static inline void RansDecInit(RansState* r, const uint8_t** pptr)
 {
     uint32_t x;
-    uint8_t* ptr = *pptr;
+    const uint8_t* ptr = *pptr;
 
     x  = ptr[0] << 0;
     x |= ptr[1] << 8;
@@ -464,10 +464,10 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr) {
  * The only minor tweak here is to adjust the reorder a few opcodes
  * to reduce dependency delays.
  */
-static inline void RansDecRenorm2(RansState* r1, RansState* r2, uint8_t** pptr) {
+static inline void RansDecRenorm2(RansState* r1, RansState* r2, const uint8_t** pptr) {
     uint32_t  x1   = *r1;
     uint32_t  x2   = *r2;
-    uint8_t  *ptr = *pptr;
+    const uint8_t  *ptr = *pptr;
 
     __asm__ ("movzbl (%0), %%eax\n\t"
              "mov    %1, %%edx\n\t"
@@ -509,14 +509,14 @@ static inline void RansDecRenorm2(RansState* r1, RansState* r2, uint8_t** pptr) 
 
 #else /* __x86_64 */
 
-static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
+static inline void RansDecRenorm(RansState* r, const uint8_t** pptr)
 {
     // renormalize
     uint32_t x = *r;
 
 #ifdef __clang__
     // Generates cmov instructions on clang, but alas not gcc
-    uint8_t* ptr = *pptr;
+    const uint8_t* ptr = *pptr;
     uint32_t y = (x << 8) | *ptr;
     uint32_t cond = x < RANS_BYTE_L;
     x    = cond ? y : x;
@@ -525,7 +525,7 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
     *pptr = ptr;
 #else
     if (x >= RANS_BYTE_L) return;
-    uint8_t* ptr = *pptr;
+    const uint8_t* ptr = *pptr;
     x = (x << 8) | *ptr++;
     if (x < RANS_BYTE_L) x = (x << 8) | *ptr++;
     *pptr = ptr;
@@ -534,17 +534,17 @@ static inline void RansDecRenorm(RansState* r, uint8_t** pptr)
     *r = x;
 }
 
-static inline void RansDecRenorm2(RansState* r1, RansState* r2, uint8_t** pptr) {
+static inline void RansDecRenorm2(RansState* r1, RansState* r2, const uint8_t** pptr) {
     RansDecRenorm(r1, pptr);
     RansDecRenorm(r2, pptr);
 }
 
 #endif /* __x86_64 */
 
-static inline void RansDecRenormSafe(RansState* r, uint8_t** pptr, uint8_t *ptr_end)
+static inline void RansDecRenormSafe(RansState* r, const uint8_t** pptr, const uint8_t *ptr_end)
 {
     uint32_t x = *r;
-    uint8_t* ptr = *pptr;
+    const uint8_t* ptr = *pptr;
     if (x >= RANS_BYTE_L || ptr >= ptr_end) return;
     x = (x << 8) | *ptr++;
     if (x < RANS_BYTE_L && ptr < ptr_end)

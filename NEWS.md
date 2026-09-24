@@ -1,3 +1,9 @@
+Bug fixes
+
+- Guarantee that input data remains constant. Change tok3_encode_names to not
+  alter input.
+
+
 Release 1.6.7: 24th June 2026
 -----------------------------
 

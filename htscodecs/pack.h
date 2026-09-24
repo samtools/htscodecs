@@ -49,7 +49,7 @@ extern "C" {
  * Returns the packed buffer on success with new length in out_len,
  *         NULL of failure
  */
-uint8_t *hts_pack(uint8_t *data, int64_t len,
+uint8_t *hts_pack(const uint8_t *data, int64_t len,
                   uint8_t *out_meta, int *out_meta_len, uint64_t *out_len);
 
 /*
@@ -63,7 +63,7 @@ uint8_t *hts_pack(uint8_t *data, int64_t len,
  * Returns number of bytes of data[] consumed on success,
  *         zero on failure.
  */
-uint8_t hts_unpack_meta(uint8_t *data, uint32_t data_len,
+uint8_t hts_unpack_meta(const uint8_t *data, uint32_t data_len,
                         uint64_t udata_len, uint8_t *map, int *nsym);
 
 /*
@@ -77,7 +77,7 @@ uint8_t hts_unpack_meta(uint8_t *data, uint32_t data_len,
  * Returns uncompressed data (out) on success,
  *         NULL on failure.
  */
-uint8_t *hts_unpack(uint8_t *data, int64_t len, uint8_t *out, uint64_t out_len, int nsym, uint8_t *map);
+uint8_t *hts_unpack(const uint8_t *data, int64_t len, uint8_t *out, uint64_t out_len, int nsym, uint8_t *map);
 
 #ifdef __cplusplus
 }

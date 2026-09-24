@@ -149,7 +149,7 @@ typedef struct {
  * @return              The compressed quality buffer on success,
  *                      NULL on failure.
  */
-char *fqz_compress(int vers, fqz_slice *s, char *in, size_t in_size,
+char *fqz_compress(int vers, fqz_slice *s, const char *in, size_t in_size,
                    size_t *out_size, int strat, fqz_gparams *gp);
 
 /** Decompress a block of quality values.

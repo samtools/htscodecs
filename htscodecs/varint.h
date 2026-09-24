@@ -237,8 +237,9 @@ int var_put_u32(uint8_t *cp, const uint8_t *endp, uint32_t i) {
 }
 
 static inline
-int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
-    uint8_t *op = cp, c;
+int var_get_u64(const uint8_t *cp, const uint8_t *endp, uint64_t *i) {
+    const uint8_t *op = cp;
+    uint8_t c;
     uint64_t j = 0;
 
     if (!endp || endp - cp >= 11) {
@@ -264,8 +265,9 @@ int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
 }
 
 static inline
-int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
-    uint8_t *op = cp, c;
+int var_get_u32(const uint8_t *cp, const uint8_t *endp, uint32_t *i) {
+    const uint8_t *op = cp;
+    uint8_t c;
     uint32_t j = 0;
 
     if (!endp || endp - cp >= 6) {
@@ -345,7 +347,7 @@ static inline int var_put_u32(uint8_t *cp, const uint8_t *endp, uint32_t i) {
     return cp-op;
 }
 
-static inline int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
+static inline int var_get_u64(const uint8_t *cp, const uint8_t *endp, uint64_t *i) {
     uint8_t *op = cp, c;
     uint64_t j = 0, s = 0;
 
@@ -374,7 +376,7 @@ static inline int var_get_u64(uint8_t *cp, const uint8_t *endp, uint64_t *i) {
     return cp-op;
 }
 
-static inline int var_get_u32(uint8_t *cp, const uint8_t *endp, uint32_t *i) {
+static inline int var_get_u32(const uint8_t *cp, const uint8_t *endp, uint32_t *i) {
     uint8_t *op = cp, c;
     uint32_t j = 0, s = 0;
 
@@ -415,12 +417,12 @@ static inline int var_put_s64(uint8_t *cp, const uint8_t *endp, int64_t i) {
     return var_put_u64(cp, endp, ((uint64_t)i << 1) ^ (i >> 63));
 }
 
-static inline int var_get_s32(uint8_t *cp, const uint8_t *endp, int32_t *i) {
+static inline int var_get_s32(const uint8_t *cp, const uint8_t *endp, int32_t *i) {
     int b = var_get_u32(cp, endp, (uint32_t *)i);
     *i = ((uint32_t)*i >> 1) ^ -(int32_t)(*i & 1);
     return b;
 }
-static inline int var_get_s64(uint8_t *cp, const uint8_t *endp, int64_t *i) {
+static inline int var_get_s64(const uint8_t *cp, const uint8_t *endp, int64_t *i) {
     int b = var_get_u64(cp, endp, (uint64_t *)i);
     *i = ((uint64_t)*i >> 1) ^ -(int64_t)(*i & 1);
     return b;

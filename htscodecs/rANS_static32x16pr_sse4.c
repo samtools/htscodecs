@@ -206,7 +206,7 @@ static inline __m128i _mm_srlv_epi32x(__m128i a, __m128i b) {
 //    return _mm_loadu_si128((__m128i *)A);
 }
 
-unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
+unsigned char *rans_compress_O0_32x16_sse4(const unsigned char *in,
                                            unsigned int in_size,
                                            unsigned char *out,
                                            unsigned int *out_size) {
@@ -459,7 +459,7 @@ unsigned char *rans_compress_O0_32x16_sse4(unsigned char *in,
 }
 #endif // disable SSE4 encoder
 
-unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
+unsigned char *rans_uncompress_O0_32x16_sse4(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -475,8 +475,9 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in;
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ] __attribute__((aligned(32))); // For TF_SHIFT <= 12
 
@@ -509,7 +510,7 @@ unsigned char *rans_uncompress_O0_32x16_sse4(unsigned char *in,
             goto err;
     }
 
-    uint8_t *sp = cp;
+    const uint8_t *sp = cp;
 
     int out_end = (out_sz&~(NX-1));
     const uint32_t mask = (1u << TF_SHIFT)-1;
@@ -1027,7 +1028,7 @@ static inline void transpose_and_copy(uint8_t *out, int iN[32],
     }
 }
 
-unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
+unsigned char *rans_uncompress_O1_32x16_sse4(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int out_sz) {
@@ -1043,7 +1044,8 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in, *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
 
     uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
@@ -1060,8 +1062,8 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -1088,7 +1090,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
         goto err;
 
     RansState R[NX];
-    uint8_t *ptr = cp, *ptr_end = in + in_size;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
         RansDecInit(&R[z], &ptr);
@@ -1105,7 +1107,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
     // loop with shift as a variable.
     if (shift == TF_SHIFT_O1) {
         // TF_SHIFT_O1 = 12
-        uint8_t *sp = ptr;
+        const uint8_t *sp = ptr;
         const uint32_t mask = ((1u << TF_SHIFT_O1)-1);
         __m128i maskv  = _mm_set1_epi32(mask); // set mask in all lanes
         uint8_t tbuf[32][32];
@@ -1475,7 +1477,7 @@ unsigned char *rans_uncompress_O1_32x16_sse4(unsigned char *in,
         }
     } else {
         // TF_SHIFT_O1 = 10
-        uint8_t *sp = ptr;
+        const uint8_t *sp = ptr;
         const uint32_t mask = ((1u << TF_SHIFT_O1_FAST)-1);
         __m128i maskv  = _mm_set1_epi32(mask); // set mask in all lanes
         uint8_t tbuf[32][32] __attribute__((aligned(32)));

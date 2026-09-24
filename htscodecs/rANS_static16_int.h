@@ -73,9 +73,9 @@
 #define TOTFREQ_O1 (1<<TF_SHIFT_O1)
 #define TOTFREQ_O1_FAST (1<<TF_SHIFT_O1_FAST)
 
-unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O0_4x16(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size);
-unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_O0_4x16(const unsigned char *in, unsigned int in_size,
                                        unsigned char *out, unsigned int out_sz);
 
 int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
@@ -188,11 +188,11 @@ static inline int encode_alphabet(uint8_t *cp, uint32_t *F) {
     return cp - op;
 }
 
-static inline int decode_alphabet(uint8_t *cp, uint8_t *cp_end, uint32_t *F) {
+static inline int decode_alphabet(const uint8_t *cp, const uint8_t *cp_end, uint32_t *F) {
     if (cp == cp_end)
         return 0;
 
-    uint8_t *op = cp;
+    const uint8_t *op = cp;
     int rle = 0;
     int j = *cp++;
     if (cp+2 >= cp_end)
@@ -251,12 +251,12 @@ static inline int encode_freq(uint8_t *cp, uint32_t *F) {
     return cp - op;
 }
 
-static inline int decode_freq(uint8_t *cp, uint8_t *cp_end, uint32_t *F,
+static inline int decode_freq(const uint8_t *cp, const uint8_t *cp_end, uint32_t *F,
                               uint32_t *fsum) {
     if (cp == cp_end)
         return 0;
 
-    uint8_t *op = cp;
+    const uint8_t *op = cp;
     cp += decode_alphabet(cp, cp_end, F);
 
     int j, tot = 0;
@@ -309,7 +309,7 @@ static inline int encode_freq_d(uint8_t *cp, uint32_t *F0, uint32_t *F) {
 // Also initialises the RansEncSymbol structs.
 //
 // Returns the desired TF_SHIFT; 10 or 12 bit, or -1 on error.
-static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
+static inline int encode_freq1(const uint8_t *in, uint32_t in_size, int Nway,
                                RansEncSymbol syms[256][256], uint8_t **cp_p) {
     int i, j, z;
     uint8_t *out = *cp_p, *cp = out;
@@ -422,12 +422,12 @@ static inline int encode_freq1(uint8_t *in, uint32_t in_size, int Nway,
 
 // Part of decode_freq1 below.  This decodes an order-1 frequency table
 // using an order-0 table to determine which stats may be stored.
-static inline int decode_freq_d(uint8_t *cp, uint8_t *cp_end, uint32_t *F0,
+static inline int decode_freq_d(const uint8_t *cp, const uint8_t *cp_end, uint32_t *F0,
                                 uint32_t *F, uint32_t *total) {
     if (cp == cp_end)
         return 0;
 
-    uint8_t *op = cp;
+    const uint8_t *op = cp;
     int j, dz, T = 0;
 
     for (j = dz = 0; j < 256 && cp < cp_end; j++) {
@@ -465,11 +465,11 @@ typedef struct {
 // been passed in.)
 //
 // Returns the number of bytes decoded.
-static inline int decode_freq1(uint8_t *cp, uint8_t *cp_end, int shift,
+static inline int decode_freq1(const uint8_t *cp, const uint8_t *cp_end, int shift,
                                uint32_t s3 [256][TOTFREQ_O1],
                                uint32_t s3F[256][TOTFREQ_O1_FAST],
                                uint8_t *sfb[256], fb_t fb[256][256]) {
-    uint8_t *cp_start = cp;
+    const uint8_t *cp_start = cp;
     int i, j, x;
     uint32_t F0[256] = {0};
     int fsz = decode_alphabet(cp, cp_end, F0);

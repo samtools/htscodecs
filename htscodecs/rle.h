@@ -66,7 +66,7 @@ extern "C" {
  *         updates rle_syms / rle_nsyms too.
  * Returns NULL of failure
  */
-uint8_t *hts_rle_encode(uint8_t *data, uint64_t data_len,
+uint8_t *hts_rle_encode(const uint8_t *data, uint64_t data_len,
                         uint8_t *run,  uint64_t *run_len,
                         uint8_t *rle_syms, int *rle_nsyms,
                         uint8_t *out, uint64_t *out_len);
@@ -82,8 +82,8 @@ uint8_t *hts_rle_encode(uint8_t *data, uint64_t data_len,
  *         NULL on failure.
  */
 uint8_t *hts_rle_decode(uint8_t *lit, uint64_t lit_len,
-                        uint8_t *run, uint64_t run_len,
-                        uint8_t *rle_syms, int rle_nsyms,
+                        const uint8_t *run, uint64_t run_len,
+                        const uint8_t *rle_syms, int rle_nsyms,
                         uint8_t *out, uint64_t *out_len);
 
 // TODO: Add rle scanning func to compute rle_syms.

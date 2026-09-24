@@ -135,7 +135,8 @@ typedef struct {
 } last_context_tok;
 
 typedef struct {
-    char *last_name;
+    const char *last_name;
+    int last_name_len;
     int last_ntok;
     last_context_tok *last; // [last_ntok]
 } last_context;
@@ -409,7 +410,7 @@ static int decode_token_int1(name_context *ctx, int ntok,
 // Maybe XOR with previous string as context?
 // This permits partial match to be encoded efficiently.
 static int encode_token_alpha(name_context *ctx, int ntok,
-                              char *str, int len) {
+                              const char *str, int len) {
     int id = (ntok<<4) | N_ALPHA;
 
     if (encode_token_type(ctx, ntok, N_ALPHA) < 0)  return -1;
@@ -474,7 +475,7 @@ static int encode_token_diff(name_context *ctx, uint32_t val) {
 //-----------------------------------------------------------------------------
 // Trie implementation for tracking common name prefixes.
 static
-int build_trie(name_context *ctx, char *data, size_t len, int n) {
+int build_trie(name_context *ctx, const char *data, size_t len, int n) {
     size_t i;
     trie_t *t;
 
@@ -587,7 +588,7 @@ void dump_trie(trie_t *t, int depth) {
 #endif
 
 static
-int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, int *is_fixed, int *fixed_len) {
+int search_trie(name_context *ctx, const char *data, size_t len, int n, int *exact, int *is_fixed, int *fixed_len) {
     size_t i;
     trie_t *t;
     int from = -1, p3 = -1;
@@ -598,7 +599,7 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
     // Horrid hack for the encoder only.
     // We optimise per known name format here.
     int prefix_len;
-    char *d = *data == '@' ? data+1 : data;
+    const char *d = *data == '@' ? data+1 : data;
     int l   = *data == '@' ? len-1  : len;
     int f = (*data == '>') ? 1 : 0;
     if (l > 70 && d[f+0] == 'm' && d[7] == '_' && d[f+14] == '_' && d[f+61] == '/') {
@@ -692,7 +693,7 @@ int search_trie(name_context *ctx, char *data, size_t len, int n, int *exact, in
  * Returns 0 on success;
  *        -1 on failure.
  */
-static int encode_name(name_context *ctx, char *name, int len, int mode) {
+static int encode_name(name_context *ctx, const char *name, int len, int mode) {
     int i, is_fixed, fixed_len;
 
     int exact;
@@ -703,14 +704,17 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
     //cnum = cnum & (MAX_NAMES-1);
     //if (pnum == cnum) {pnum = cnum ? cnum-1 : 0;}
 #ifdef ENC_DEBUG
-    fprintf(stderr, "%d: pnum=%d (%d), exact=%d\n%s\n%s\n",
-            ctx->counter, pnum, cnum-pnum, exact, ctx->lc[pnum].last_name, name);
+    fprintf(stderr, "%d: pnum=%d (%d), exact=%d\n%.*s\n%.*s\n",
+            ctx->counter, pnum, cnum-pnum, exact,
+            ctx->lc[pnum].last_name_len, ctx->lc[pnum].last_name,
+            len, name);
 #endif
 
     // Return DUP or DIFF switch, plus the distance.
     if (exact && len == strlen(ctx->lc[pnum].last_name)) {
         encode_token_dup(ctx, cnum-pnum);
         ctx->lc[cnum].last_name = name;
+        ctx->lc[cnum].last_name_len = len;
         ctx->lc[cnum].last_ntok = ctx->lc[pnum].last_ntok;
         int nc = ctx->lc[cnum].last_ntok ? ctx->lc[cnum].last_ntok : MAX_TOKENS;
         ctx->lc[cnum].last = malloc(nc * sizeof(*ctx->lc[cnum].last));
@@ -1003,6 +1007,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
     //printf("Encoded %.*s with %d tokens\n", len, name, ntok);
     
     ctx->lc[cnum].last_name = name;
+    ctx->lc[cnum].last_name_len = len;
     ctx->lc[cnum].last_ntok = ntok;
     last_context_tok *shrunk = realloc(ctx->lc[cnum].last,
                                        (ntok+1) * sizeof(*ctx->lc[cnum].last));
@@ -1018,7 +1023,7 @@ static int encode_name(name_context *ctx, char *name, int len, int mode) {
 //-----------------------------------------------------------------------------
 // Name decoder
 
-static int decode_name(name_context *ctx, char *name, int name_len) {
+static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
     int t0 = decode_token_type(ctx, 0);
     uint32_t dist;
     int pnum, cnum = ctx->counter++;
@@ -1038,11 +1043,12 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
     if (t0 == N_DUP) {
         if (pnum == cnum)
             return -1;
-
-        if (strlen(ctx->lc[pnum].last_name) +1 >= name_len) return -1;
-        strcpy(name, ctx->lc[pnum].last_name);
+        int name_length = ctx->lc[pnum].last_name_len;
+        if (name_length >= name_buffer_size) return -1;
+        memcpy(name, ctx->lc[pnum].last_name, name_length);
         // FIXME: optimise this
         ctx->lc[cnum].last_name = name;
+        ctx->lc[cnum].last_name_len = name_length;
         ctx->lc[cnum].last_ntok = ctx->lc[pnum].last_ntok;
 
         int nc = ctx->lc[cnum].last_ntok ? ctx->lc[cnum].last_ntok : MAX_TOKENS;
@@ -1052,7 +1058,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
         memcpy(ctx->lc[cnum].last, ctx->lc[pnum].last,
                ctx->lc[cnum].last_ntok * sizeof(*ctx->lc[cnum].last));
 
-        return strlen(name)+1;
+        return name_length;
     }
 
     *name = 0;
@@ -1071,7 +1077,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 
         switch (tok) {
         case N_CHAR:
-            if (len+1 >= name_len) return -1;
+            if (len+1 >= name_buffer_size) return -1;
             if (decode_token_char(ctx, ntok, &name[len]) < 0) return -1;
             //fprintf(stderr, "Tok %d CHAR %c\n", ntok, name[len]);
             ctx->lc[cnum].last[ntok].token_type = N_CHAR;
@@ -1079,7 +1085,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
             break;
 
         case N_ALPHA:
-            if ((len2 = decode_token_alpha(ctx, ntok, &name[len], name_len - len)) < 0)
+            if ((len2 = decode_token_alpha(ctx, ntok, &name[len], name_buffer_size - len)) < 0)
                 return -1;
             //fprintf(stderr, "Tok %d ALPHA %.*s\n", ntok, len2, &name[len]);
             ctx->lc[cnum].last[ntok].token_type = N_ALPHA;
@@ -1091,7 +1097,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
         case N_DIGITS0: // [0-9]*
             if (decode_token_int1(ctx, ntok, N_DZLEN, &vl) < 0) return -1;
             if (decode_token_int(ctx, ntok, N_DIGITS0, &v) < 0) return -1;
-            if (len+20+vl >= name_len) return -1;
+            if (len+20+vl >= name_buffer_size) return -1;
             len += append_uint32_fixed(&name[len], v, vl);
             //fprintf(stderr, "Tok %d DIGITS0 %0*d\n", ntok, vl, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
@@ -1103,7 +1109,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
             if (ntok >= ctx->lc[pnum].last_ntok) return -1;
             if (decode_token_int1(ctx, ntok, N_DDELTA0, &v) < 0) return -1;
             v += ctx->lc[pnum].last[ntok].token_int;
-            if (len+ctx->lc[pnum].last[ntok].token_str+1 >= name_len) return -1;
+            if (len+ctx->lc[pnum].last[ntok].token_str+1 >= name_buffer_size) return -1;
             len += append_uint32_fixed(&name[len], v, ctx->lc[pnum].last[ntok].token_str);
             //fprintf(stderr, "Tok %d DELTA0 %0*d\n", ntok, ctx->lc[pnum].last[ntok].token_str, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
@@ -1113,7 +1119,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 
         case N_DIGITS: // [1-9][0-9]*
             if (decode_token_int(ctx, ntok, N_DIGITS, &v) < 0) return -1;
-            if (len+20 >= name_len) return -1;
+            if (len+20 >= name_buffer_size) return -1;
             len += append_uint32_var(&name[len], v);
             //fprintf(stderr, "Tok %d DIGITS %d\n", ntok, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS;
@@ -1124,7 +1130,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
             if (ntok >= ctx->lc[pnum].last_ntok) return -1;
             if (decode_token_int1(ctx, ntok, N_DDELTA, &v) < 0) return -1;
             v += ctx->lc[pnum].last[ntok].token_int;
-            if (len+20 >= name_len) return -1;
+            if (len+20 >= name_buffer_size) return -1;
             len += append_uint32_var(&name[len], v);
             //fprintf(stderr, "Tok %d DELTA %d\n", ntok, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS;
@@ -1139,7 +1145,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
             if (ntok >= ctx->lc[pnum].last_ntok) return -1;
             switch (ctx->lc[pnum].last[ntok].token_type) {
             case N_CHAR:
-                if (len+1 >= name_len) return -1;
+                if (len+1 >= name_buffer_size) return -1;
                 name[len++] = ctx->lc[pnum].last[ntok].token_int;
                 //fprintf(stderr, "Tok %d MATCH CHAR %c\n", ntok, ctx->lc[pnum].last[ntok].token_int);
                 ctx->lc[cnum].last[ntok].token_type = N_CHAR;
@@ -1148,7 +1154,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 
             case N_ALPHA:
                 if (ctx->lc[pnum].last[ntok].token_int < 0 ||
-                    len+ctx->lc[pnum].last[ntok].token_int >= name_len) return -1;
+                    len+ctx->lc[pnum].last[ntok].token_int >= name_buffer_size) return -1;
                 memcpy(&name[len],
                        &ctx->lc[pnum].last_name[ctx->lc[pnum].last[ntok].token_str],
                        ctx->lc[pnum].last[ntok].token_int);
@@ -1160,7 +1166,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
                 break;
 
             case N_DIGITS:
-                if (len+20 >= name_len) return -1;
+                if (len+20 >= name_buffer_size) return -1;
                 len += append_uint32_var(&name[len], ctx->lc[pnum].last[ntok].token_int);
                 //fprintf(stderr, "Tok %d MATCH DIGITS %d\n", ntok, ctx->lc[pnum].last[ntok].token_int);
                 ctx->lc[cnum].last[ntok].token_type = N_DIGITS;
@@ -1168,7 +1174,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
                 break;
 
             case N_DIGITS0:
-                if (len+ctx->lc[pnum].last[ntok].token_str >= name_len) return -1;
+                if (len+ctx->lc[pnum].last[ntok].token_str >= name_buffer_size) return -1;
                 len += append_uint32_fixed(&name[len], ctx->lc[pnum].last[ntok].token_int, ctx->lc[pnum].last[ntok].token_str);
                 //fprintf(stderr, "Tok %d MATCH DIGITS %0*d\n", ntok, ctx->lc[pnum].last[ntok].token_str, ctx->lc[pnum].last[ntok].token_int);
                 ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
@@ -1183,11 +1189,12 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 
         default: // an elided N_END
         case N_END:
-            if (len+1 >= name_len) return -1;
+            if (len+1 >= name_buffer_size) return -1;
             name[len++] = 0;
             ctx->lc[cnum].last[ntok].token_type = N_END;
 
             ctx->lc[cnum].last_name = name;
+            ctx->lc[cnum].last_name_len = len;
             ctx->lc[cnum].last_ntok = ntok;
 
             last_context_tok *shrunk
@@ -1209,7 +1216,7 @@ static int decode_name(name_context *ctx, char *name, int name_len) {
 
 //-----------------------------------------------------------------------------
 // arith adaptive codec or static rANS 4x16pr codec
-static int arith_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len, int method) {
+static int arith_encode(const uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len, int method) {
     unsigned int olen = *out_len-6, nb;
     if (arith_compress_to(in, in_len, out+6, &olen, method) == NULL)
         return -1;
@@ -1223,7 +1230,7 @@ static int arith_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *ou
 
 // Returns number of bytes read from 'in' on success,
 //        -1 on failure.
-static int64_t arith_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
+static int64_t arith_decode(const uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
     unsigned int olen = *out_len;
 
     uint32_t clen;
@@ -1236,7 +1243,7 @@ static int64_t arith_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t
     return clen+nb;
 }
 
-static int rans_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len, int method) {
+static int rans_encode(const uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len, int method) {
     unsigned int olen = *out_len-6, nb;
     if (rans_compress_to_4x16(in, in_len, out+6, &olen, method) == NULL)
         return -1;
@@ -1250,7 +1257,7 @@ static int rans_encode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out
 
 // Returns number of bytes read from 'in' on success,
 //        -1 on failure.
-static int64_t rans_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
+static int64_t rans_decode(const uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t *out_len) {
     unsigned int olen = *out_len;
 
     uint32_t clen;
@@ -1263,7 +1270,7 @@ static int64_t rans_decode(uint8_t *in, uint64_t in_len, uint8_t *out, uint64_t 
     return clen+nb;
 }
 
-static int compress(uint8_t *in, uint64_t in_len, enum name_type type,
+static int compress(const uint8_t *in, uint64_t in_len, enum name_type type,
                     int level, int use_arith,
                     uint8_t *out, uint64_t *out_len) {
     uint64_t best_sz = UINT64_MAX;
@@ -1414,7 +1421,7 @@ static int compress(uint8_t *in, uint64_t in_len, enum name_type type,
     return ret;
 }
 
-static uint64_t uncompressed_size(uint8_t *in, uint64_t in_len) {
+static uint64_t uncompressed_size(const uint8_t *in, uint64_t in_len) {
     uint32_t clen, ulen;
 
     // in[0] in part of buffer written by us
@@ -1426,7 +1433,7 @@ static uint64_t uncompressed_size(uint8_t *in, uint64_t in_len) {
     return ulen;
 }
 
-static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
+static int uncompress(int use_arith, const uint8_t *in, uint64_t in_len,
                       uint8_t *out, uint64_t *out_len) {
     uint32_t clen;
     var_get_u32(in, in+in_len, &clen);
@@ -1446,7 +1453,7 @@ static int uncompress(int use_arith, uint8_t *in, uint64_t in_len,
  * Returns a malloced buffer holding compressed data of size *out_len,
  *         or NULL on failure
  */
-uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+uint8_t *tok3_encode_names(const char *blk, int len, int level, int use_arith,
                            int *out_len, int *last_start_p) {
     int last_start = 0, i, j, nreads;
 
@@ -1497,7 +1504,6 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
             return NULL;
         }
 
-        blk[i] = '\0';
         // try both 0 and 1 and pick best?
         if (encode_name(ctx, &blk[j], i-j, 1) < 0) {
             free_context(ctx);
@@ -1662,7 +1668,7 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
 }
 
 // Deprecated interface; to remove when we next to an ABI breakage
-uint8_t *encode_names(char *blk, int len, int level, int use_arith,
+uint8_t *encode_names(const char *blk, int len, int level, int use_arith,
                       int *out_len, int *last_start_p) {
     return tok3_encode_names(blk, len, level, use_arith, out_len,
                              last_start_p);
@@ -1674,7 +1680,7 @@ uint8_t *encode_names(char *blk, int len, int level, int use_arith,
  *
  * Returns NULL on failure.
  */
-uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+uint8_t *tok3_decode_names(const uint8_t *in, uint32_t sz, uint32_t *out_len) {
     if (sz < 9)
         return NULL;
 
@@ -1832,6 +1838,6 @@ uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
 }
 
 // Deprecated interface; to remove when we next to an ABI breakage
-uint8_t *decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len) {
+uint8_t *decode_names(const uint8_t *in, uint32_t sz, uint32_t *out_len) {
     return tok3_decode_names(in, sz, out_len);
 }

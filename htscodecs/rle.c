@@ -45,7 +45,7 @@
 
 //-----------------------------------------------------------------------------
 // Auto compute rle_syms / rle_nsyms
-static void rle_find_syms(uint8_t *data, uint64_t data_len,
+static void rle_find_syms(const uint8_t *data, uint64_t data_len,
                           int64_t *saved, // dim >= 256 
                           uint8_t *rle_syms, int *rle_nsyms) {
     int last = -1, n;
@@ -97,7 +97,7 @@ static void rle_find_syms(uint8_t *data, uint64_t data_len,
     *rle_nsyms = n;
 }
 
-uint8_t *hts_rle_encode(uint8_t *data, uint64_t data_len,
+uint8_t *hts_rle_encode(const uint8_t *data, uint64_t data_len,
                         uint8_t *run,  uint64_t *run_len,
                         uint8_t *rle_syms, int *rle_nsyms,
                         uint8_t *out, uint64_t *out_len) {
@@ -140,11 +140,11 @@ uint8_t *hts_rle_encode(uint8_t *data, uint64_t data_len,
 // On input *out_len holds the allocated size of out[].
 // On output it holds the used size of out[].
 uint8_t *hts_rle_decode(uint8_t *lit, uint64_t lit_len,
-                        uint8_t *run, uint64_t run_len,
-                        uint8_t *rle_syms, int rle_nsyms,
+                        const uint8_t *run, uint64_t run_len,
+                        const uint8_t *rle_syms, int rle_nsyms,
                         uint8_t *out, uint64_t *out_len) {
     uint64_t j;
-    uint8_t *run_end = run + run_len;
+    const uint8_t *run_end = run + run_len;
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     if (*out_len > 100000)

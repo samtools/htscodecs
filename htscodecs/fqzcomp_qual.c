@@ -1612,7 +1612,7 @@ unsigned char *uncompress_block_fqz2f(fqz_slice *s,
     return NULL;
 }
 
-char *fqz_compress(int vers, fqz_slice *s, char *in, size_t uncomp_size,
+char *fqz_compress(int vers, fqz_slice *s, const char *in, size_t uncomp_size,
                    size_t *comp_size, int strat, fqz_gparams *gp) {
     if (uncomp_size > INT_MAX) {
         *comp_size = 0;

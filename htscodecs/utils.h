@@ -143,7 +143,7 @@ static inline void unstripe(unsigned char *out, unsigned char *outN,
  * Order 0 histogram construction.  8-way unrolled to avoid cache collisions.
  */
 static inline
-int hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
+int hist8(const unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
     if (in_size > 500000) {
         uint32_t *f0 = htscodecs_tls_calloc((65536+37)*3, sizeof(*f0));
         if (f0 == NULL)
@@ -203,7 +203,7 @@ int hist8(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
 
 // Hist8 with a crude entropy (bits / byte) estimator.
 static inline
-double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
+double hist8e(const unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
     uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
     uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
     uint32_t F7[256+MAGIC] = {0};
@@ -248,7 +248,7 @@ double hist8e(unsigned char *in, unsigned int in_size, uint32_t F0[256]) {
  * than its frequency.
  */
 static inline
-void present8(unsigned char *in, unsigned int in_size,
+void present8(const unsigned char *in, unsigned int in_size,
               uint32_t F0[256]) {
     uint32_t F1[256+MAGIC] = {0}, F2[256+MAGIC] = {0}, F3[256+MAGIC] = {0};
     uint32_t F4[256+MAGIC] = {0}, F5[256+MAGIC] = {0}, F6[256+MAGIC] = {0};
@@ -277,10 +277,10 @@ void present8(unsigned char *in, unsigned int in_size,
  */
 #if 1
 static inline
-int hist1_4(unsigned char *in, unsigned int in_size,
+int hist1_4(const unsigned char *in, unsigned int in_size,
             uint32_t F0[256][256], uint32_t *T0) {
     unsigned char l = 0, c;
-    unsigned char *in_end = in + in_size;
+    const unsigned char *in_end = in + in_size;
 
     unsigned char cc[5] = {0};
     if (in_size > 500000) {
@@ -363,7 +363,7 @@ int hist1_4(unsigned char *in, unsigned int in_size,
 //
 // Kept here for posterity in case we need it again, as it's quite tricky.
 static inline
-int hist1_4(unsigned char *in, unsigned int in_size,
+int hist1_4(const unsigned char *in, unsigned int in_size,
             uint32_t F0[256][256], uint32_t *T0) {
     uint32_t f0[65536+MAGIC] = {0};
     uint32_t f1[65536+MAGIC] = {0};

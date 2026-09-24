@@ -104,7 +104,7 @@ static inline __m512i _mm512_i32gather_epi32x(__m512i idx, void *v, int size) {
 }
 
 // 32-bit indices, 8-bit quantities into 32-bit lanes
-static inline __m512i _mm512_i32gather_epi32x1(__m512i idx, void *v) {
+static inline __m512i _mm512_i32gather_epi32x1(__m512i idx, const void *v) {
     uint8_t *b = (uint8_t *)v;
     volatile int c[16] __attribute__((aligned(32)));
 
@@ -123,7 +123,7 @@ static inline __m512i _mm512_i32gather_epi32x1(__m512i idx, void *v) {
 #define _mm512_i32gather_epi32x _mm512_i32gather_epi32
 #endif
 
-unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
+unsigned char *rans_compress_O0_32x16_avx512(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int *out_size) {
@@ -205,7 +205,7 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
     LOAD512(Rv, ransN);
 
     for (i=(in_size &~(32-1)); i>0; i-=32) {
-        uint8_t *c = &in[i-32];
+        const uint8_t *c = &in[i-32];
 
         // GATHER versions
         // Much faster now we have an efficient loadu mechanism in place,
@@ -312,7 +312,7 @@ unsigned char *rans_compress_O0_32x16_avx512(unsigned char *in,
     return out;
 }
 
-unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
+unsigned char *rans_uncompress_O0_32x16_avx512(const unsigned char *in,
                                                unsigned int in_size,
                                                unsigned char *out,
                                                unsigned int out_sz) {
@@ -323,8 +323,9 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
         return NULL; // protect against some overflow cases
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size;
+    const unsigned char *cp = in;
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size;
     int i;
     uint32_t s3[TOTFREQ]  __attribute__((aligned(64))); // For TF_SHIFT <= 12
 
@@ -357,7 +358,7 @@ unsigned char *rans_uncompress_O0_32x16_avx512(unsigned char *in,
             goto err;
     }
 
-    uint8_t *sp = cp;
+    const uint8_t *sp = cp;
 
     int out_end = (out_sz&~(32-1));
     const uint32_t mask = (1u << TF_SHIFT)-1;
@@ -509,7 +510,7 @@ static inline void transpose_and_copy_avx512(uint8_t *out, int iN[32],
 }
 #endif // TBUF
 
-unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
+unsigned char *rans_compress_O1_32x16_avx512(const unsigned char *in,
                                              unsigned int in_size,
                                              unsigned char *out,
                                              unsigned int *out_size) {
@@ -771,7 +772,7 @@ unsigned char *rans_compress_O1_32x16_avx512(unsigned char *in,
 }
 
 #define NX 32
-unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
+unsigned char *rans_uncompress_O1_32x16_avx512(const unsigned char *in,
                                                unsigned int in_size,
                                                unsigned char *out,
                                                unsigned int out_sz) {
@@ -782,7 +783,8 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
         return NULL; // protect against some overflow cases
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in, *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
 
     uint32_t (*s3)[TOTFREQ_O1] = htscodecs_tls_alloc(256*TOTFREQ_O1*4);
@@ -799,8 +801,8 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -828,7 +830,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
         goto err;
 
     RansState R[NX] __attribute__((aligned(64)));
-    uint8_t *ptr = cp, *ptr_end = in + in_size;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size;
     int z;
     for (z = 0; z < NX; z++) {
         RansDecInit(&R[z], &ptr);
@@ -841,7 +843,7 @@ unsigned char *rans_uncompress_O1_32x16_avx512(unsigned char *in,
     for (z = 0; z < NX; z++)
         iN[z] = z*isz4;
 
-    uint8_t *sp = ptr;
+    const uint8_t *sp = ptr;
     const uint32_t mask = (1u << shift)-1;
 
     __m512i _maskv  = _mm512_set1_epi32(mask);

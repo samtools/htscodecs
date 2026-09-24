@@ -109,7 +109,7 @@ unsigned int rans_compress_bound_4x16(unsigned int size, int order) {
 //
 // NB: The output buffer does not hold the original size, so it is up to
 // the caller to store this.
-unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O0_4x16(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end;
     RansEncSymbol syms[256];
@@ -210,7 +210,7 @@ unsigned char *rans_compress_O0_4x16(unsigned char *in, unsigned int in_size,
     return out;
 }
 
-unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_O0_4x16(const unsigned char *in, unsigned int in_size,
                                        unsigned char *out, unsigned int out_sz) {
     if (in_size < 16) // 4-states at least
         return NULL;
@@ -224,8 +224,9 @@ unsigned char *rans_uncompress_O0_4x16(unsigned char *in, unsigned int in_size,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *out_free = NULL;
-    unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
+    const unsigned char *cp = in;
+    unsigned char *out_free = NULL;
+    const unsigned char *cp_end = in + in_size - 8; // within 8 => be extra safe
     int i, j;
     unsigned int x, y;
     uint16_t sfreq[TOTFREQ+32];
@@ -399,7 +400,7 @@ int rans_compute_shift(uint32_t *F0, uint32_t (*F)[256], uint32_t *T,
 }
 
 static
-unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_O1_4x16(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out, unsigned int *out_size) {
     unsigned char *cp, *out_end, *out_free = NULL;
     unsigned int tab_size;
@@ -501,7 +502,7 @@ unsigned char *rans_compress_O1_4x16(unsigned char *in, unsigned int in_size,
 //#define MAGIC2 0
 
 static
-unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_O1_4x16(const unsigned char *in, unsigned int in_size,
                                        unsigned char *out, unsigned int out_sz) {
     if (in_size < 16) // 4-states at least
         return NULL;
@@ -515,7 +516,9 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
 #endif
 
     /* Load in the static tables */
-    unsigned char *cp = in, *cp_end = in+in_size, *out_free = NULL;
+    const unsigned char *cp = in;
+    const unsigned char *cp_end = in+in_size;
+    unsigned char *out_free = NULL;
     unsigned char *c_freq = NULL;
     int i, j = -999;
     unsigned int x;
@@ -549,8 +552,8 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
     //fprintf(stderr, "out_sz=%d\n", out_sz);
 
     // compressed header? If so uncompress it
-    unsigned char *tab_end = NULL;
-    unsigned char *c_freq_end = cp_end;
+    const unsigned char *tab_end = NULL;
+    const unsigned char *c_freq_end = cp_end;
     unsigned int shift = *cp >> 4;
     if (*cp++ & 1) {
         uint32_t u_freq_sz, c_freq_sz;
@@ -625,7 +628,7 @@ unsigned char *rans_uncompress_O1_4x16(unsigned char *in, unsigned int in_size,
         goto err;
 
     RansState rans0, rans1, rans2, rans3;
-    uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
+    const uint8_t *ptr = cp, *ptr_end = in + in_size - 8;
     RansDecInit(&rans0, &ptr); if (rans0 < RANS_BYTE_L) goto err;
     RansDecInit(&rans1, &ptr); if (rans1 < RANS_BYTE_L) goto err;
     RansDecInit(&rans2, &ptr); if (rans2 < RANS_BYTE_L) goto err;
@@ -934,7 +937,7 @@ static void htscodecs_tls_cpu_init(void) {
 
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int *out_size) {
@@ -1008,7 +1011,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 
 static inline
 unsigned char *(*rans_dec_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int out_size) {
@@ -1101,7 +1104,7 @@ static inline int have_neon(void) {
 
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int *out_size) {
@@ -1124,7 +1127,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 
 static inline
 unsigned char *(*rans_dec_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int out_size) {
@@ -1149,7 +1152,7 @@ unsigned char *(*rans_dec_func(int do_simd, int order))
 
 static inline
 unsigned char *(*rans_enc_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int *out_size) {
@@ -1167,7 +1170,7 @@ unsigned char *(*rans_enc_func(int do_simd, int order))
 
 static inline
 unsigned char *(*rans_dec_func(int do_simd, int order))
-    (unsigned char *in,
+    (const unsigned char *in,
      unsigned int in_size,
      unsigned char *out,
      unsigned int out_size) {
@@ -1200,7 +1203,7 @@ void rans_set_cpu(int opts) {
  *
  * Smallest is method, <in_size> <input>, so worst case 2 bytes longer.
  */
-unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_to_4x16(const unsigned char *in, unsigned int in_size,
                                      unsigned char *out,unsigned int *out_size,
                                      int order) {
     if (in_size > INT_MAX || (out && *out_size == 0)) {
@@ -1269,7 +1272,7 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
         if (in_size >= N*KN) {
             for (; i < in_size-N*KN;) {
                 int k;
-                unsigned char *ink = in+i;
+                const unsigned char *ink = in+i;
                 for (j = 0; j < N; j++)
                     for (k = 0; k < KN; k++)
                         transposed[idx[j]+x+k] = ink[j+N*k];
@@ -1578,14 +1581,14 @@ unsigned char *rans_compress_to_4x16(unsigned char *in, unsigned int in_size,
     return out;
 }
 
-unsigned char *rans_compress_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_compress_4x16(const unsigned char *in, unsigned int in_size,
                                   unsigned int *out_size, int order) {
     return rans_compress_to_4x16(in, in_size, NULL, out_size, order);
 }
 
-unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
+unsigned char *rans_uncompress_to_4x16(const unsigned char *in,  unsigned int in_size,
                                        unsigned char *out, unsigned int *out_size) {
-    unsigned char *in_end = in + in_size;
+    const unsigned char *in_end = in + in_size;
     unsigned char *out_free = NULL, *tmp_free = NULL, *meta_free = NULL;
 
     if (in_size == 0)
@@ -1784,7 +1787,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
         tmp1_size = osz;
     }
 
-    uint8_t *meta = NULL;
+    const uint8_t *meta = NULL;
     uint32_t u_meta_size = 0;
     if (do_rle) {
         // Uncompress meta data
@@ -1801,7 +1804,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
             sz += var_get_u32(in+sz, in_end, &c_meta_size);
             u_meta_size /= 2;
 
-            meta_free = meta = rans_dec_func(do_simd, 0)(in+sz, in_size-sz, NULL, u_meta_size);
+            meta = meta_free = rans_dec_func(do_simd, 0)(in+sz, in_size-sz, NULL, u_meta_size);
             if (!meta)
                 goto err;
         }
@@ -1872,7 +1875,7 @@ unsigned char *rans_uncompress_to_4x16(unsigned char *in,  unsigned int in_size,
     return NULL;
 }
 
-unsigned char *rans_uncompress_4x16(unsigned char *in, unsigned int in_size,
+unsigned char *rans_uncompress_4x16(const unsigned char *in, unsigned int in_size,
                                     unsigned int *out_size) {
     return rans_uncompress_to_4x16(in, in_size, NULL, out_size);
 }

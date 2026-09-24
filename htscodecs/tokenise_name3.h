@@ -47,7 +47,7 @@ extern "C" {
  * Returns a malloced buffer holding compressed data of size *out_len,
  *         or NULL on failure
  */
-uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
+uint8_t *tok3_encode_names(const char *blk, int len, int level, int use_arith,
                            int *out_len, int *last_start_p);
 
 /*
@@ -56,7 +56,7 @@ uint8_t *tok3_encode_names(char *blk, int len, int level, int use_arith,
  *
  * Returns NULL on failure.
  */
-uint8_t *tok3_decode_names(uint8_t *in, uint32_t sz, uint32_t *out_len);
+uint8_t *tok3_decode_names(const uint8_t *in, uint32_t sz, uint32_t *out_len);
 
 #ifdef __cplusplus
 }
