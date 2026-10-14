@@ -61,7 +61,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *in, size_t in_sz) {
     char in2[8192];
 
     // 4096 is default max size for libfuzzer anyway
-    if (in_sz > 8192)
+    if (in_sz+1 > sizeof(in2)) // +1 for nul below
 	return -1;
 
     // Turn newlines to nuls so we can do round-trip testing

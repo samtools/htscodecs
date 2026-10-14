@@ -104,7 +104,7 @@ libcodecsfuzz_a_SOURCES = $(libhtscodecs_base_src)
 libcodecsfuzz_a_CFLAGS = -fsanitize=fuzzer -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
 libcodecsfuzz_a-htscodecs.$(OBJEXT): version.h
 libcodecsfuzz_sse4_a_SOURCES = rANS_static32x16pr_sse4.c
-libcodecsfuzz_sse4_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MSSE4_1@ @MSSSE3@ @MPOPCNT@
+libcodecsfuzz_sse4_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MSSE4_1@
 libcodecsfuzz_avx2_a_SOURCES = rANS_static32x16pr_avx2.c
 libcodecsfuzz_avx2_a_CFLAGS = $(libcodecsfuzz_a_CFLAGS) @MAVX2@
 libcodecsfuzz_avx512_a_SOURCES = rANS_static32x16pr_avx512.c

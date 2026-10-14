@@ -103,6 +103,10 @@ fqz_slice *fake_slice(size_t buf_len, int nrec) {
 int LLVMFuzzerTestOneInput(uint8_t *in, size_t in_size) {
     size_t c_size, u_size;
 
+    // fake_slice() may need one slice_len[] entry per input byte
+    if (in_size > MAX_REC)
+	return -1;
+
     int mode = 0;
     for (mode = 0; mode < 3; mode++) {
 	int mval[3] = {0,1,in_size};
