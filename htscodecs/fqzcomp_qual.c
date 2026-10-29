@@ -1623,7 +1623,7 @@ char *fqz_compress(int vers, fqz_slice *s, const char *in, size_t uncomp_size,
                                         uncomp_size, comp_size, gp);
 }
 
-char *fqz_decompress(char *in, size_t comp_size, size_t *uncomp_size,
+char *fqz_decompress(const char *in, size_t comp_size, size_t *uncomp_size,
                      int *lengths, int nlengths) {
     return (char *)uncompress_block_fqz2f(NULL, (unsigned char *)in,
                                           comp_size, uncomp_size, lengths, nlengths);

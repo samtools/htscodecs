@@ -163,7 +163,7 @@ char *fqz_compress(int vers, fqz_slice *s, const char *in, size_t in_size,
  * @return              The uncompressed concatenated qualities on success,
  *                      NULL on failure.
  */
-char *fqz_decompress(char *in, size_t in_size, size_t *out_size,
+char *fqz_decompress(const char *in, size_t in_size, size_t *out_size,
                      int *lengths, int nlengths);
 
 /** A utility function to analyse a quality buffer to gather statistical
