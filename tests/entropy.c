@@ -134,10 +134,12 @@ int main(int argc, char **argv) {
         int order = order_a[i];
         uint8_t *comp, *uncomp;
         for (j = 0; j < 4; j++) {
-            int chigh = 4, clow = 0, c;
+            int chigh = 16, clow = 0, c;
             uint8_t *comp0 = NULL;
             uint32_t csize0 = 0;
-            for (c = 0; c < 4; c+=(j==2)?1:4) {
+            // We only have 5 to test, but an odd number means -c 0x0202 which
+            // doesn't cross-validate with other codec implementations.
+            for (c = 0; c < 6; c+=(j==2)?1:8) {
                 struct timeval tv1, tv2, tv3, tv4;
 
                 // Test combinations of SIMD implementations

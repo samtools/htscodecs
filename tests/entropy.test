@@ -3,5 +3,5 @@
 # One copy tests the small buffer histogram variant
 ./entropy $srcdir/dat/q4
 
-# Four copies tests the large buffer histogram variant
-cat $srcdir/dat/q4 $srcdir/dat/q4 $srcdir/dat/q4 $srcdir/dat/q4 | ./entropy 
+# Large buffer testing
+gzcat $srcdir/dat/entropy4.gz | (ulimit -s 128; ./entropy)
