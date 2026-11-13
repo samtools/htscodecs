@@ -231,7 +231,7 @@ static void free_context(name_context *ctx) {
 //-----------------------------------------------------------------------------
 // Fast unsigned integer printing code.
 // Returns number of bytes written.
-static int append_uint32_fixed(char *cp, uint32_t i, uint8_t l) {
+static int append_uint32_fixed(char *cp, uint32_t i, uint8_t l, uint32_t sz) {
     switch (l) {
     case 9:*cp++ = i / 100000000 + '0', i %= 100000000; // fall-through
     case 8:*cp++ = i / 10000000  + '0', i %= 10000000;  // fall-through
@@ -242,9 +242,23 @@ static int append_uint32_fixed(char *cp, uint32_t i, uint8_t l) {
     case 3:*cp++ = i / 100       + '0', i %= 100;       // fall-through
     case 2:*cp++ = i / 10        + '0', i %= 10;        // fall-through
     case 1:*cp++ = i             + '0';                 // fall-throuhg
-    case 0:break;
+    case 0:
+        return l;
+        break;
     }
-    return l;
+
+    // Incase of any out of bounds "l" values, ensure we can still decode
+    int len = snprintf(cp, sz, "%0*u", (int)l, i);
+
+    // Avoid errors leading to decrementing our buffer index, even though the
+    // output will be incorrect (on malformed data streams only).
+    // Similarly check for attempted overflow for the same reasons.
+    // Note snprintf could return -1 on non-C99 conformant implementations
+    // for overflow, such as glibc pre-2.1.
+    if (len >= 0)
+        return len <= l ? len : l;
+    else
+        return 0;
 }
 
 static int append_uint32_var(char *cp, uint32_t i) {
@@ -1098,7 +1112,7 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
             if (decode_token_int1(ctx, ntok, N_DZLEN, &vl) < 0) return -1;
             if (decode_token_int(ctx, ntok, N_DIGITS0, &v) < 0) return -1;
             if (len+20+vl >= name_buffer_size) return -1;
-            len += append_uint32_fixed(&name[len], v, vl);
+            len += append_uint32_fixed(&name[len], v, vl, name_buffer_size-len);
             //fprintf(stderr, "Tok %d DIGITS0 %0*d\n", ntok, vl, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
             ctx->lc[cnum].last[ntok].token_int = v;
@@ -1110,7 +1124,9 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
             if (decode_token_int1(ctx, ntok, N_DDELTA0, &v) < 0) return -1;
             v += ctx->lc[pnum].last[ntok].token_int;
             if (len+ctx->lc[pnum].last[ntok].token_str+1 >= name_buffer_size) return -1;
-            len += append_uint32_fixed(&name[len], v, ctx->lc[pnum].last[ntok].token_str);
+            len += append_uint32_fixed(&name[len], v,
+                                       ctx->lc[pnum].last[ntok].token_str,
+                                       name_buffer_size - len);
             //fprintf(stderr, "Tok %d DELTA0 %0*d\n", ntok, ctx->lc[pnum].last[ntok].token_str, v);
             ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
             ctx->lc[cnum].last[ntok].token_int = v;
@@ -1175,7 +1191,10 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
 
             case N_DIGITS0:
                 if (len+ctx->lc[pnum].last[ntok].token_str >= name_buffer_size) return -1;
-                len += append_uint32_fixed(&name[len], ctx->lc[pnum].last[ntok].token_int, ctx->lc[pnum].last[ntok].token_str);
+                len += append_uint32_fixed(&name[len],
+                                           ctx->lc[pnum].last[ntok].token_int,
+                                           ctx->lc[pnum].last[ntok].token_str,
+                                           name_buffer_size - len);
                 //fprintf(stderr, "Tok %d MATCH DIGITS %0*d\n", ntok, ctx->lc[pnum].last[ntok].token_str, ctx->lc[pnum].last[ntok].token_int);
                 ctx->lc[cnum].last[ntok].token_type = N_DIGITS0;
                 ctx->lc[cnum].last[ntok].token_int = ctx->lc[pnum].last[ntok].token_int;
