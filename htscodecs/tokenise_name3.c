@@ -123,7 +123,6 @@ enum name_type {N_ERR = -1, N_TYPE = 0, N_ALPHA, N_CHAR, N_DIGITS0, N_DZLEN, N_D
 
 typedef struct trie {
     struct trie *next, *sibling;
-    int count;
     uint32_t c:8;
     uint32_t n:24; // Nth line
 } trie_t;
@@ -487,54 +486,6 @@ static int encode_token_diff(name_context *ctx, uint32_t val) {
 
 //-----------------------------------------------------------------------------
 // Trie implementation for tracking common name prefixes.
-static
-int build_trie(name_context *ctx, const char *data, size_t len, int n) {
-    size_t i;
-    trie_t *t;
-
-    if (!ctx->t_head) {
-        ctx->t_head = calloc(1, sizeof(*ctx->t_head));
-        if (!ctx->t_head)
-            return -1;
-    }
-
-    // Build our trie, also counting input lines
-    for (i = 0; i < len; i++) {
-        t = ctx->t_head;
-        t->count++;
-        while (i < len && (unsigned char)data[i] > '\n') {
-            unsigned char c = data[i++];
-            if (c & 0x80)
-                //fprintf(stderr, "8-bit ASCII is unsupported\n");
-                return -1;
-            c &= 127;
-
-
-            trie_t *x = t->next, *l = NULL;
-            while (x && x->c != c) {
-                l = x; x = x->sibling;
-            }
-            if (!x) {
-                if (!ctx->pool)
-                    ctx->pool = pool_create(sizeof(trie_t));
-                if (!(x = (trie_t *)pool_alloc(ctx->pool)))
-                    return -1;
-                memset(x, 0, sizeof(*x));
-                if (!l)
-                    x = t->next    = x;
-                else
-                    x = l->sibling = x;
-                x->n = n;
-                x->c = c;
-            }
-            t = x;
-            t->c = c;
-            t->count++;
-        }
-    }
-
-    return 0;
-}
 
 #if 0
 void dump_trie(trie_t *t, int depth) {
@@ -672,9 +623,25 @@ int search_trie(name_context *ctx, const char *data, size_t len, int n, int *exa
                 return -1;
             c &= 127;
 
-            trie_t *x = t->next;
-            while (x && x->c != c)
-                x = x->sibling;
+            trie_t *x = t->next, *l = NULL;
+            while (x && x->c != c) {
+                l = x; x = x->sibling;
+            }
+            if (!x) {
+                // First name with this prefix: add the node as we go,
+                // so the trie is built and searched in one pass.
+                if (!ctx->pool)
+                    ctx->pool = pool_create(sizeof(trie_t));
+                if (!ctx->pool || !(x = (trie_t *)pool_alloc(ctx->pool)))
+                    return -2; // out of memory, unlike -1 (no match)
+                memset(x, 0, sizeof(*x));
+                if (!l)
+                    t->next = x;
+                else
+                    l->sibling = x;
+                x->n = n;
+                x->c = c;
+            }
             t = x;
 
             from = t->n;
@@ -712,6 +679,7 @@ static int encode_name(name_context *ctx, const char *name, int len, int mode) {
     int exact;
     int cnum = ctx->counter++;
     int pnum = search_trie(ctx, name, len, cnum, &exact, &is_fixed, &fixed_len);
+    if (pnum < -1) return -1;
     if (pnum < 0) pnum = cnum ? cnum-1 : 0;
     //pnum = pnum & (MAX_NAMES-1);
     //cnum = cnum & (MAX_NAMES-1);
@@ -1489,25 +1457,18 @@ uint8_t *tok3_encode_names(const char *blk, int len, int level, int use_arith,
     if (!ctx)
         return NULL;
 
-    // Construct trie
-    int ctr = 0;
+    // Find the end of the last complete name
     for (i = j = 0; i < len; j=++i) {
         while (i < len && blk[i] > '\n')
             i++;
         if (i >= len)
             break;
 
-        //blk[i] = '\0';
         last_start = i+1;
-        if (build_trie(ctx, &blk[j], i-j, ctr++) < 0) {
-            free_context(ctx);
-            return NULL;
-        }
     }
     if (last_start_p)
         *last_start_p = last_start;
 
-    //fprintf(stderr, "Processed %d of %d in block, line %d\n", last_start, len, ctr);
 
     // Encode name
     for (i = j = 0; i < len; j=++i) {
