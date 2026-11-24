@@ -595,6 +595,15 @@ unsigned char *rans_compress_O1(const unsigned char *in, unsigned int in_size,
     return out_buf;
 }
 
+// 16-bit entries halve the order-1 table, which helps on AArch64 when many
+// symbols are in use.  On x86 they are slower: imul/sub can no longer take
+// the 32-bit table entry as a memory operand, so each field needs its own load.
+#if defined(__aarch64__)
+typedef RansDecSymbol RansDecSymbolO1;
+#else
+typedef RansDecSymbol32 RansDecSymbolO1;
+#endif
+
 static
 unsigned char *rans_uncompress_O1(const unsigned char *in, unsigned int in_size,
                                   unsigned int *out_size) {
@@ -631,13 +640,13 @@ unsigned char *rans_uncompress_O1(const unsigned char *in, unsigned int in_size,
 #endif
 
     // Allocate decoding lookup tables
-    RansDecSymbol32 (*syms)[256];
+    RansDecSymbolO1 (*syms)[256];
     uint8_t *mem = htscodecs_tls_calloc(256, sizeof(ari_decoder)
                                         + sizeof(*syms));
     if (!mem)
         return NULL;
     ari_decoder *const D = (ari_decoder *)mem;
-    syms = (RansDecSymbol32 (*)[256])(mem + 256*sizeof(ari_decoder));
+    syms = (RansDecSymbolO1 (*)[256])(mem + 256*sizeof(ari_decoder));
     int16_t map[256], map_i = 0;
     
     memset(map, -1, 256*sizeof(*map));
@@ -680,7 +689,8 @@ unsigned char *rans_uncompress_O1(const unsigned char *in, unsigned int in_size,
             if (unlikely(!F))
                 F = TOTFREQ;
 
-            RansDecSymbolInit32(&syms[m_i][j], C, F);
+            syms[m_i][j].start = C;
+            syms[m_i][j].freq = F;
 
             /* Build reverse lookup table */
             //if (!D[i].R) D[i].R = (unsigned char *)malloc(TOTFREQ);
@@ -770,7 +780,7 @@ unsigned char *rans_uncompress_O1(const unsigned char *in, unsigned int in_size,
         out_buf[i4[2]] = cc2;
         out_buf[i4[3]] = cc3;
 
-        RansDecSymbol32 s[4] = {
+        RansDecSymbolO1 s[4] = {
             syms[l0][cc0],
             syms[l1][cc1],
             syms[l2][cc2],
