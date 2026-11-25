@@ -1,5 +1,5 @@
 # A faster alternative to AppVeyor
-name: Windows/MinGW-W64
+name: Windows/MinGW-W64 UCRT64
 on: [push, pull_request]
 
 jobs:
@@ -8,30 +8,28 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Set up MSYS2 MinGW-W64
+    - name: Set up MSYS2 MinGW-W64 UCRT64
       uses: msys2/setup-msys2@v2
       with:
-        msystem: mingw64
+        msystem: UCRT64
         update: false
         install: >-
           zlib-devel
           libbz2-devel
           liblzma-devel
-          mingw-w64-x86_64-toolchain
-          mingw-w64-x86_64-autotools
-          mingw-w64-x86_64-tools-git
+          mingw-w64-ucrt-x86_64-toolchain
+          mingw-w64-ucrt-x86_64-autotools
+          mingw-w64-ucrt-x86_64-tools
     - name: Compile htscodecs
       shell: msys2 {0}
       run: |
-        export PATH=/mingw64/bin:$PATH
-        export MSYSTEM=MINGW64
+        export MSYSTEM=UCRT64
         autoreconf -i
         ./configure --disable-shared CFLAGS='-g -O3 -D_XOPEN_SOURCE=600 -Wall -Werror'
         make -j8
     - name: Check htscodecs
       shell: msys2 {0}
       run: |
-        export PATH=/mingw64/bin:$PATH
-        export MSYSTEM=MINGW64
+        export MSYSTEM=UCRT64
         make check || (cat tests/test-suite.log; false)
 
