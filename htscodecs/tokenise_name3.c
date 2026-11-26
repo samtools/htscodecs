@@ -148,8 +148,18 @@ typedef struct {
     int dup_from;
 } descriptor;
 
+// Token arrays for all names come from these chunks, freed together,
+// instead of a malloc and realloc per name.
+#define TOK_CHUNK (64*MAX_TOKENS)
+typedef struct tok_chunk {
+    struct tok_chunk *next;
+    size_t used;
+    last_context_tok t[TOK_CHUNK];
+} tok_chunk;
+
 typedef struct {
     last_context *lc;
+    tok_chunk *toks;
 
     // For finding entire line dups
     int counter;
@@ -197,6 +207,7 @@ static name_context *create_context(int max_names) {
 
     ctx->lc = (last_context *)(((char *)ctx) + sizeof(*ctx));
     ctx->pool = NULL;
+    ctx->toks = NULL;
 
      memset(&ctx->desc[0], 0, 2*16 * sizeof(ctx->desc[0]));
      memset(&ctx->token_dcount[0], 0, sizeof(int));
@@ -222,10 +233,35 @@ static void free_context(name_context *ctx) {
     for (i = 0; i < ctx->max_tok*16; i++)
         free(ctx->desc[i].buf);
 
-    for (i = 0; i < ctx->max_names; i++)
-        free(ctx->lc[i].last);
+    while (ctx->toks) {
+        tok_chunk *next = ctx->toks->next;
+        free(ctx->toks);
+        ctx->toks = next;
+    }
 
     htscodecs_tls_free(ctx);
+}
+
+// Returns room for n (<= MAX_TOKENS) tokens, or NULL.
+static last_context_tok *tok_alloc(name_context *ctx, int n) {
+    if (!ctx->toks || ctx->toks->used + n > TOK_CHUNK) {
+        tok_chunk *c = malloc(sizeof(*c));
+        if (!c)
+            return NULL;
+        c->next = ctx->toks;
+        c->used = 0;
+        ctx->toks = c;
+    }
+    last_context_tok *p = &ctx->toks->t[ctx->toks->used];
+    ctx->toks->used += n;
+    return p;
+}
+
+// Gives back the end of the last tok_alloc(ctx, n_old) result p.
+static void tok_shrink(name_context *ctx, last_context_tok *p,
+                       int n_old, int n_new) {
+    if (n_new < n_old && p + n_old == &ctx->toks->t[ctx->toks->used])
+        ctx->toks->used -= n_old - n_new;
 }
 
 //-----------------------------------------------------------------------------
@@ -730,7 +766,7 @@ static int encode_name(name_context *ctx, const char *name, int len, int mode) {
         ctx->lc[cnum].last_name_len = len;
         ctx->lc[cnum].last_ntok = ctx->lc[pnum].last_ntok;
         int nc = ctx->lc[cnum].last_ntok ? ctx->lc[cnum].last_ntok : MAX_TOKENS;
-        ctx->lc[cnum].last = malloc(nc * sizeof(*ctx->lc[cnum].last));
+        ctx->lc[cnum].last = tok_alloc(ctx, nc);
         if (!ctx->lc[cnum].last)
             return -1;
         memcpy(ctx->lc[cnum].last, ctx->lc[pnum].last,
@@ -738,7 +774,7 @@ static int encode_name(name_context *ctx, const char *name, int len, int mode) {
         return 0;
     }
 
-    ctx->lc[cnum].last = malloc(MAX_TOKENS * sizeof(*ctx->lc[cnum].last));
+    ctx->lc[cnum].last = tok_alloc(ctx, MAX_TOKENS);
     if (!ctx->lc[cnum].last)
         return -1;
     encode_token_diff(ctx, cnum-pnum);
@@ -1022,13 +1058,7 @@ static int encode_name(name_context *ctx, const char *name, int len, int mode) {
     ctx->lc[cnum].last_name = name;
     ctx->lc[cnum].last_name_len = len;
     ctx->lc[cnum].last_ntok = ntok;
-    last_context_tok *shrunk = realloc(ctx->lc[cnum].last,
-                                       (ntok+1) * sizeof(*ctx->lc[cnum].last));
-    if (shrunk)
-        ctx->lc[cnum].last = shrunk;
-
-    if (!ctx->lc[cnum].last)
-        return -1;
+    tok_shrink(ctx, ctx->lc[cnum].last, MAX_TOKENS, ntok+1);
 
     return 0;
 }
@@ -1065,7 +1095,7 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
         ctx->lc[cnum].last_ntok = ctx->lc[pnum].last_ntok;
 
         int nc = ctx->lc[cnum].last_ntok ? ctx->lc[cnum].last_ntok : MAX_TOKENS;
-        ctx->lc[cnum].last = malloc(nc * sizeof(*ctx->lc[cnum].last));
+        ctx->lc[cnum].last = tok_alloc(ctx, nc);
         if (!ctx->lc[cnum].last)
             return -1;
         memcpy(ctx->lc[cnum].last, ctx->lc[pnum].last,
@@ -1076,7 +1106,7 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
 
     *name = 0;
     int ntok, len = 0, len2;
-    ctx->lc[cnum].last = malloc(MAX_TOKENS * sizeof(*ctx->lc[cnum].last));
+    ctx->lc[cnum].last = tok_alloc(ctx, MAX_TOKENS);
     if (!ctx->lc[cnum].last)
         return -1;
 
@@ -1215,14 +1245,7 @@ static int decode_name(name_context *ctx, char *name, int name_buffer_size) {
             ctx->lc[cnum].last_name_len = len;
             ctx->lc[cnum].last_ntok = ntok;
 
-            last_context_tok *shrunk
-                = realloc(ctx->lc[cnum].last,
-                          (ntok+1) * sizeof(*ctx->lc[cnum].last));
-            if (shrunk)
-                ctx->lc[cnum].last = shrunk;
-
-            if (!ctx->lc[cnum].last)
-                return -1;
+            tok_shrink(ctx, ctx->lc[cnum].last, MAX_TOKENS, ntok+1);
 
             return len;
         }
